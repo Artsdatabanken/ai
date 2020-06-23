@@ -121,8 +121,8 @@ app.post("/", upload.array("image"), async (req, res) => {
     res.status(200).json(json);
   } catch (error) {
     console.log(error);
-    throw new Error(error);
     res.status(500).end(error);
+    throw new Error(error);
   }
 });
 
