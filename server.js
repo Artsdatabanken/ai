@@ -5,6 +5,10 @@ const express = require("express");
 const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
+    
+let appInsights = require("applicationinsights");
+appInsights.setup(process.env.IKEY).start();
+
 
 dotenv.config({ path: "./config/config.env" });
 
