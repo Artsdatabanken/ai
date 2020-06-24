@@ -3,7 +3,7 @@ const FormData = require("form-data");
 const fs = require("fs");
 const express = require("express");
 const multer = require("multer");
-const cors = require("cors");
+// const cors = require("cors");
 const dotenv = require("dotenv");
 
 let appInsights = require("applicationinsights");
@@ -17,7 +17,7 @@ dotenv.config({ path: "./config/config.env" });
 const app = express();
 const port = process.env.PORT;
 
-app.use(cors());
+// app.use(cors());
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
