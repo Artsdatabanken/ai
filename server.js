@@ -108,6 +108,8 @@ let getId = async (images) => {
     throw new Error(error);
   }
 
+  recognition.data.predictions = recognition.data.predictions.slice(0, 5);
+
   for (let pred of recognition.data.predictions) {
     try {
       let nameResult = await getName(pred.taxon.name);
