@@ -18,11 +18,13 @@ const app = express();
 const port = process.env.PORT;
 
 var corsOptions = {
-  origin: ['https://orakel.test.artsdatabanken.no', 'https://orakel.artsdatabanken.no']
-}
+  origin: [
+    "https://orakel.test.artsdatabanken.no",
+    "https://orakel.artsdatabanken.no",
+  ],
+};
 
-
-  app.use(cors(corsOptions));
+app.use(cors(corsOptions));
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
