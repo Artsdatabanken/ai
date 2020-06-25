@@ -21,6 +21,7 @@ var corsOptions = {
   origin: [
     "https://orakel.test.artsdatabanken.no",
     "https://orakel.artsdatabanken.no",
+    "http://localhost:3000",
   ],
 };
 
@@ -56,6 +57,7 @@ let getName = async (sciName) => {
     if (!taxon.data.length) {
       return nameResult;
     } else {
+      nameResult.scientificNameID = taxon.data[0].scientificNameID;
       name = await axios.get(
         "https://artsdatabanken.no/Api/Taxon/" + taxon.data[0].taxonID
       );
