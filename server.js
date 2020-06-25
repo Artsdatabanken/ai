@@ -117,6 +117,7 @@ let getId = async (images) => {
       let nameResult = await getName(pred.taxon.name);
       pred.taxon.vernacularName = nameResult.vernacularName;
       pred.taxon.groupName = nameResult.groupName;
+      pred.taxon.scientificNameID = nameResult.scientificNameID;
     } catch (error) {
       console.log(error);
       throw new Error(error);
