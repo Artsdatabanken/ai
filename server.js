@@ -6,6 +6,9 @@ const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
 
+const taxonMapper = require("./taxonMapping")
+
+
 let appInsights = require("applicationinsights");
 
 if (process.env.IKEY) {
@@ -45,7 +48,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 let getName = async (sciName) => {
-  let nameResult = { vernacularName: sciName, groupName: "" };
+  let nameResult = { vernacularName: sciName, groupName: "", scientificName: sciName };
   let name;
 
   try {
@@ -55,9 +58,23 @@ let getName = async (sciName) => {
     );
 
     if (!taxon.data.length) {
-      return nameResult;
+      let mapped = taxonMapper.taxa[sciName];
+      if(mapped) {
+        let mappedNameResult = await getName(mapped);
+        return mappedNameResult;
+      }
+      else {
+        return nameResult;
+      }
     } else {
-      nameResult.scientificNameID = taxon.data[0].scientificNameID;
+      if(taxon.data[0].acceptedNameUsage) {
+        nameResult.scientificName = taxon.data[0].acceptedNameUsage.scientificName;
+        nameResult.scientificNameID = taxon.data[0].acceptedNameUsage.scientificNameID;  
+      }
+      else {
+        nameResult.scientificNameID = taxon.data[0].scientificNameID;
+      }
+      
       name = await axios.get(
         "https://artsdatabanken.no/Api/Taxon/" + taxon.data[0].taxonID
       );
@@ -118,6 +135,7 @@ let getId = async (images) => {
       pred.taxon.vernacularName = nameResult.vernacularName;
       pred.taxon.groupName = nameResult.groupName;
       pred.taxon.scientificNameID = nameResult.scientificNameID;
+      pred.taxon.name = nameResult.scientificName;
     } catch (error) {
       console.log(error);
       throw new Error(error);
