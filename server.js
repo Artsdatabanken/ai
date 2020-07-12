@@ -39,7 +39,7 @@ const storage = multer.diskStorage({
 
     if (!ext) {
       console.log("Wrong file type");
-      throw new Error("Wrong file type");
+      throw new Error({response: {status: 415, statusText: "Wrong file type"}});
     }
     cb(null, Date.now() + "." + ext); //Appending extension
   },
@@ -80,8 +80,8 @@ let getName = async (sciName) => {
       );
     }
   } catch (error) {
-    console.log(error);
-    throw new Error(error);
+    // console.log(error);
+    throw error;
   }
 
   if (name && name.data.AcceptedName.dynamicProperties) {
@@ -123,8 +123,8 @@ let getId = async (images) => {
       }
     );
   } catch (error) {
-    console.log(error);
-    throw new Error(error);
+    // console.log(error);
+    throw error;
   }
 
   recognition.data.predictions = recognition.data.predictions.slice(0, 5);
@@ -137,8 +137,8 @@ let getId = async (images) => {
       pred.taxon.scientificNameID = nameResult.scientificNameID;
       pred.taxon.name = nameResult.scientificName;
     } catch (error) {
-      console.log(error);
-      throw new Error(error);
+      // console.log(error);
+      throw error;
     }
   }
 
@@ -156,9 +156,8 @@ app.post("/", upload.array("image"), async (req, res) => {
     json = await getId(files);
     res.status(200).json(json);
   } catch (error) {
-    console.log(error);
-    res.status(500).end(error);
-    throw new Error(error);
+    res.status(error.response.status).end(error.response.statusText);
+    console.log("Error", error.response.status);
   }
 });
 
