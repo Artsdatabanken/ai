@@ -6,8 +6,7 @@ const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
 
-const taxonMapper = require("./taxonMapping")
-
+const taxonMapper = require("./taxonMapping");
 
 let appInsights = require("applicationinsights");
 
@@ -21,11 +20,7 @@ const app = express();
 const port = process.env.PORT;
 
 var corsOptions = {
-  origin: [
-    "https://orakel.test.artsdatabanken.no",
-    "https://orakel.artsdatabanken.no",
-    "http://localhost:3000",
-  ],
+  origin: "*",
 };
 
 app.use(cors(corsOptions));
@@ -39,7 +34,9 @@ const storage = multer.diskStorage({
 
     if (!ext) {
       console.log("Wrong file type");
-      throw new Error({response: {status: 415, statusText: "Wrong file type"}});
+      throw new Error({
+        response: { status: 415, statusText: "Wrong file type" },
+      });
     }
     cb(null, Date.now() + "." + ext); //Appending extension
   },
@@ -48,7 +45,11 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 let getName = async (sciName) => {
-  let nameResult = { vernacularName: sciName, groupName: "", scientificName: sciName };
+  let nameResult = {
+    vernacularName: sciName,
+    groupName: "",
+    scientificName: sciName,
+  };
   let name;
 
   try {
@@ -59,22 +60,22 @@ let getName = async (sciName) => {
 
     if (!taxon.data.length) {
       let mapped = taxonMapper.taxa[sciName];
-      if(mapped) {
+      if (mapped) {
         let mappedNameResult = await getName(mapped);
         return mappedNameResult;
-      }
-      else {
+      } else {
         return nameResult;
       }
     } else {
-      if(taxon.data[0].acceptedNameUsage) {
-        nameResult.scientificName = taxon.data[0].acceptedNameUsage.scientificName;
-        nameResult.scientificNameID = taxon.data[0].acceptedNameUsage.scientificNameID;  
-      }
-      else {
+      if (taxon.data[0].acceptedNameUsage) {
+        nameResult.scientificName =
+          taxon.data[0].acceptedNameUsage.scientificName;
+        nameResult.scientificNameID =
+          taxon.data[0].acceptedNameUsage.scientificNameID;
+      } else {
         nameResult.scientificNameID = taxon.data[0].scientificNameID;
       }
-      
+
       name = await axios.get(
         "https://artsdatabanken.no/Api/Taxon/" + taxon.data[0].taxonID
       );
