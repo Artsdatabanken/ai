@@ -7,6 +7,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 
 const taxonMapper = require("./taxonMapping");
+const taxonPics = require("./taxonPictures");
 
 let appInsights = require("applicationinsights");
 
@@ -43,6 +44,14 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ storage: storage });
+
+let getPicture = (sciName) => {
+  let pic = taxonPics.media[sciName];
+  if (pic) {
+    return `https://artsdatabanken.no/Media/${pic}?mode=128x128`;
+  }
+  return null;
+};
 
 let getName = async (sciName) => {
   let nameResult = {
@@ -137,6 +146,7 @@ let getId = async (images) => {
       pred.taxon.groupName = nameResult.groupName;
       pred.taxon.scientificNameID = nameResult.scientificNameID;
       pred.taxon.name = nameResult.scientificName;
+      pred.taxon.picture = getPicture(nameResult.scientificName);
     } catch (error) {
       // console.log(error);
       throw error;
