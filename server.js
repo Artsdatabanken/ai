@@ -63,25 +63,35 @@ let getName = async (sciName) => {
 
   try {
     let taxon = await axios.get(
-      "https://artsdatabanken.no/Api/Taxon/ScientificName?ScientificName=" +
+      "https://artsdatabanken.no/api/Resource/?Keywords=" +
+        // "https://artsdatabanken.no/Api/Taxon/ScientificName?ScientificName=" +
         sciName
     );
 
     if (!taxon.data.length) {
       return nameResult;
     } else {
-      if (taxon.data[0].acceptedNameUsage) {
-        nameResult.scientificName =
-          taxon.data[0].acceptedNameUsage.scientificName;
-        nameResult.scientificNameID =
-          taxon.data[0].acceptedNameUsage.scientificNameID;
+      taxon.data = taxon.data.find(
+        (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
+      );
+
+      nameResult.scientificName = taxon.data.AcceptedNameUsage.ScientificName;
+      nameResult.scientificNameID =
+        taxon.data.AcceptedNameUsage.ScientificNameId;
+
+      nameResult.vernacularName =
+        taxon.data["RecommendedVernacularName_nb-NO"] || taxon.data["RecommendedVernacularName_nn-NO"] || sciName;
+
+      if (taxon.data.Description) {
+        nameResult.infoUrl = taxon.data.Description[0].Id.replace(
+          "Nodes/",
+          "https://artsdatabanken.no/Pages/"
+        );
       } else {
-        nameResult.scientificNameID = taxon.data[0].scientificNameID;
+        nameResult.infoUrl = "https://artsdatabanken.no/" + taxon.data.Id;
       }
 
-      name = await axios.get(
-        "https://artsdatabanken.no/Api/Taxon/" + taxon.data[0].taxonID
-      );
+      name = await axios.get("https://artsdatabanken.no/Api/" + taxon.data.Id);
     }
   } catch (error) {
     // console.log(error);
@@ -96,10 +106,6 @@ let getName = async (sciName) => {
     ).Value;
   }
 
-  if (name && name.data.PreferredVernacularName) {
-    nameResult.vernacularName =
-      name.data.PreferredVernacularName.vernacularName;
-  }
   return nameResult;
 };
 
@@ -148,6 +154,7 @@ let getId = async (images) => {
       pred.taxon.groupName = nameResult.groupName;
       pred.taxon.scientificNameID = nameResult.scientificNameID;
       pred.taxon.name = nameResult.scientificName;
+      pred.taxon.infoUrl = nameResult.infoUrl;
       pred.taxon.picture = getPicture(nameResult.scientificName);
     } catch (error) {
       // console.log(error);
