@@ -134,50 +134,11 @@ let getId = async (images) => {
   // get the best 5
   recognition.data.predictions = recognition.data.predictions.slice(0, 5);
 
-  // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
-  // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja that are handled manually until more are
-  // found, as the method below takes quite some time
-
   // Check against list of misspellings and unknown synonyms
   recognition.data.predictions = recognition.data.predictions.map((pred) => {
     pred.taxon.name = taxonMapper.taxa[pred.taxon.name] || pred.taxon.name;
     return pred;
   });
-
-  if (
-    recognition.data.predictions.some(
-      (p) => p.taxon.name === "Argynnis aglaja"
-    ) &&
-    recognition.data.predictions.some((p) => p.taxon.name === "Speyeria aglaja")
-  ) {
-    recognition.data.predictions.map((p) => {
-      if (p.taxon.name === "Argynnis aglaja") {
-        p.taxon.name = "Speyeria aglaja";
-      }
-      return p;
-    });
-
-    // if there are duplicates, add the probabilities and delete the duplicates
-    for (let pred of recognition.data.predictions) {
-      let totalProbability = recognition.data.predictions
-        .filter((p) => p.taxon.name === pred.taxon.name)
-        .reduce((total, p) => total + p.probability, 0);
-
-      if (totalProbability !== pred.probability) {
-        pred.probability = totalProbability;
-        recognition.data.predictions = recognition.data.predictions.filter(
-          (p) => p.taxon.name !== pred.taxon.name
-        );
-        recognition.data.predictions.unshift(pred);
-      }
-    }
-
-    // sort by the new probabilities
-    recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
-      return b.probability - a.probability;
-    });
-  }
-  // -------------- end of duplicate checking code
 
   // Get the data from the APIs (including accepted names of synonyms)
   for (let pred of recognition.data.predictions) {
@@ -193,6 +154,30 @@ let getId = async (images) => {
       throw error;
     }
   }
+
+  // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
+  // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
+
+  // if there are duplicates, add the probabilities and delete the duplicates
+  for (let pred of recognition.data.predictions) {
+    let totalProbability = recognition.data.predictions
+      .filter((p) => p.taxon.name === pred.taxon.name)
+      .reduce((total, p) => total + p.probability, 0);
+
+    if (totalProbability !== pred.probability) {
+      pred.probability = totalProbability;
+      recognition.data.predictions = recognition.data.predictions.filter(
+        (p) => p.taxon.name !== pred.taxon.name
+      );
+      recognition.data.predictions.unshift(pred);
+    }
+  }
+
+  // sort by the new probabilities
+  recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
+    return b.probability - a.probability;
+  });
+  // -------------- end of duplicate checking code
 
   return recognition.data;
 };
