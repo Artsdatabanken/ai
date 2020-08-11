@@ -63,36 +63,39 @@ let getName = async (sciName) => {
 
   try {
     let taxon = await axios.get(
-      "https://artsdatabanken.no/api/Resource/?Keywords=" +
-        // "https://artsdatabanken.no/Api/Taxon/ScientificName?ScientificName=" +
-        sciName
+      "https://artsdatabanken.no/api/Resource/?Keywords=" + sciName
     );
 
     if (!taxon.data.length) {
       return nameResult;
-    } else {
-      taxon.data = taxon.data.find(
-        (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
-      );
-
-      nameResult.scientificName = taxon.data.AcceptedNameUsage.ScientificName;
-      nameResult.scientificNameID =
-        taxon.data.AcceptedNameUsage.ScientificNameId;
-
-      nameResult.vernacularName =
-        taxon.data["RecommendedVernacularName_nb-NO"] || taxon.data["RecommendedVernacularName_nn-NO"] || sciName;
-
-      if (taxon.data.Description) {
-        nameResult.infoUrl = taxon.data.Description[0].Id.replace(
-          "Nodes/",
-          "https://artsdatabanken.no/Pages/"
-        );
-      } else {
-        nameResult.infoUrl = "https://artsdatabanken.no/" + taxon.data.Id;
-      }
-
-      name = await axios.get("https://artsdatabanken.no/Api/" + taxon.data.Id);
     }
+
+    taxon.data = taxon.data.find(
+      (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
+    );
+
+    if (!taxon.data) {
+      return nameResult;
+    }
+
+    nameResult.scientificName = taxon.data.AcceptedNameUsage.ScientificName;
+    nameResult.scientificNameID = taxon.data.AcceptedNameUsage.ScientificNameId;
+
+    nameResult.vernacularName =
+      taxon.data["RecommendedVernacularName_nb-NO"] ||
+      taxon.data["RecommendedVernacularName_nn-NO"] ||
+      sciName;
+
+    if (taxon.data.Description) {
+      nameResult.infoUrl = taxon.data.Description[0].Id.replace(
+        "Nodes/",
+        "https://artsdatabanken.no/Pages/"
+      );
+    } else {
+      nameResult.infoUrl = "https://artsdatabanken.no/" + taxon.data.Id;
+    }
+
+    name = await axios.get("https://artsdatabanken.no/Api/" + taxon.data.Id);
   } catch (error) {
     // console.log(error);
     throw error;
