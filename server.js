@@ -72,11 +72,7 @@ let getName = async (sciName) => {
     }
 
     taxon.data = taxon.data.find(
-      (t) =>
-        t.Name ===
-          (sciName ||
-            (Array.isArray(t.Name) && t.Name.includes(sciName))) &&
-        t.AcceptedNameUsage
+      (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
     );
 
     if (!taxon.data) {
