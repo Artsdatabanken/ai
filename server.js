@@ -63,7 +63,7 @@ let getName = async (sciName) => {
 
   try {
     let taxon = await axios.get(
-      "https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Keywords=" +
+      "https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=" +
         sciName
     );
 
@@ -73,9 +73,9 @@ let getName = async (sciName) => {
 
     taxon.data = taxon.data.find(
       (t) =>
-        t.Keywords ===
+        t.Name ===
           (sciName ||
-            (Array.isArray(t.Keywords) && t.Keywords.includes(sciName))) &&
+            (Array.isArray(t.Name) && t.Name.includes(sciName))) &&
         t.AcceptedNameUsage
     );
 
