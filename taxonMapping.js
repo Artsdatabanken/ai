@@ -362,5 +362,6 @@ module.exports = {
     "Lophoziopsis longidens": "Lophozia longidens",
     "Panzeria rudis": "Ernestia rudis",
     "Coprinopsis patouillardii": "Coprinus patouillardii",
+    "Setophaga striata": "Muscicapa striata",
   },
 };
