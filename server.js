@@ -206,6 +206,15 @@ app.post("/", upload.array("image"), async (req, res) => {
   } catch (error) {
     res.status(error.response.status).end(error.response.statusText);
     console.log("Error", error.response.status);
+  } finally {
+    for (const file of files) {
+      fs.unlinkSync(file.path, (err) => {
+        if (err) {
+          console.error(err);
+          return;
+        }
+      });
+    }
   }
 });
 
