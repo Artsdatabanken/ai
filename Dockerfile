@@ -15,6 +15,7 @@ RUN npm install
 # Bundle app source
 
 RUN groupadd --gid 1007 dockerrunner && useradd -r --uid 1007 -g dockerrunner dockerrunner
+RUN mkdir -p log && touch log/log.txt && chown dockerrunner log/log.txt
 #USER dockerrunner
 
 COPY . .
