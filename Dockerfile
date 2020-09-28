@@ -14,8 +14,8 @@ RUN npm install
 
 # Bundle app source
 
-RUN groupadd -r --gid 1007 dockerrunner && useradd -r -g dockerrunner dockerrunner
-USER dockerrunner
+RUN groupadd --gid 1007 dockerrunner && useradd -r --uid 1007 -g dockerrunner dockerrunner
+#USER dockerrunner
 
 COPY . .
 
