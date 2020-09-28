@@ -202,20 +202,28 @@ app.post("/", upload.array("image"), async (req, res) => {
 
   try {
     json = await getId(files);
-    fs.appendFileSync('./log/log.txt', "Id received\n");
+    fs.appendFileSync("./log/log.txt", "Id received\n");
     res.status(200).json(json);
   } catch (error) {
     res.status(error.response.status).end(error.response.statusText);
     console.log("Error", error.response.status);
-    fs.appendFileSync('./log/log.txt', "Error identifying: " + error.response.status + "\n");
+    fs.appendFileSync(
+      "./log/log.txt",
+      "Error identifying: " + error.response.status + "\n"
+    );
   } finally {
     for (const file of files) {
-      fs.appendFileSync('./log/log.txt', "Deleting " + file.path + "\n");
-      fs.unlinkSync(file.path, (err) => {
+      fs.appendFileSync(
+        "./log/log.txt",
+        "Deleting " + file.path + "\n"
+      );
+      fs.unlink(file.path, (err) => {
         if (err) {
-          fs.appendFileSync('./log/log.txt', "Error deleting file: " + err + "\n");
+          fs.appendFileSync(
+            "./log/log.txt",
+            "Error deleting file: " + err + "\n"
+          );
           console.error(err);
-          return;
         }
       });
     }

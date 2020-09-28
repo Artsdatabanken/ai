@@ -18,3 +18,4 @@ yarn-debug.log*
 yarn-error.log*
 .~lock.*
 TaxonExtractor.ods
+log/log.txt
