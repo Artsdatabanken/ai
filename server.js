@@ -10,7 +10,7 @@ const taxonMapper = require("./taxonMapping");
 const taxonPics = require("./taxonPictures");
 
 let appInsights = require("applicationinsights");
-
+let feilLog = require("./log/log.txt");
 if (process.env.IKEY) {
   appInsights.setup(process.env.IKEY).start();
 }
@@ -210,7 +210,8 @@ app.post("/", upload.array("image"), async (req, res) => {
     for (const file of files) {
       fs.unlinkSync(file.path, (err) => {
         if (err) {
-          console.error(err);
+          //console.error(err);
+          fs.writeFileSync(feilLog,err)
           return;
         }
       });
