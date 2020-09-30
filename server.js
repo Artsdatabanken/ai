@@ -217,7 +217,8 @@ app.post("/", upload.array("image"), async (req, res) => {
         "./log/log.txt",
         "Deleting " + file.path + "\n"
       );
-      fs.close(file.fd);
+
+      file.destroy();
       fs.unlink(file.path, (err) => {
         if (err) {
           fs.appendFileSync(
