@@ -197,7 +197,7 @@ app.post("/", upload.array("image"), async (req, res) => {
   files = [];
 
   for (let file of req.files) {
-    files = [...files, fs.createReadStream(file.path)];
+    files = [...files, fs.createReadStream(file.path,)];
   }
 
   try {
@@ -217,6 +217,7 @@ app.post("/", upload.array("image"), async (req, res) => {
         "./log/log.txt",
         "Deleting " + file.path + "\n"
       );
+      fs.close(file.fd);
       fs.unlink(file.path, (err) => {
         if (err) {
           fs.appendFileSync(
