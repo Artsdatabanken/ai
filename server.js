@@ -26,23 +26,7 @@ var corsOptions = {
 
 app.use(cors(corsOptions));
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/");
-  },
-  filename: function (req, file, cb) {
-    let ext = file.mimetype.split("image/").pop(); //Get extension
-
-    if (!ext) {
-      console.log("Wrong file type");
-      throw new Error({
-        response: { status: 415, statusText: "Wrong file type" },
-      });
-    }
-    cb(null, Date.now() + "." + ext); //Appending extension
-  },
-});
-
+const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 let getPicture = (sciName) => {
@@ -113,13 +97,19 @@ let getName = async (sciName) => {
   return nameResult;
 };
 
-let getId = async (images) => {
+let getId = async (req) => {
   const form = new FormData();
   const formHeaders = form.getHeaders();
 
-  images.forEach((image) => {
-    form.append("image", image);
-  });
+  var stream = require("stream");
+
+  for (const file of req.files) {
+    var bufferStream = new stream.PassThrough();
+    bufferStream.end(file.buffer);
+    form.append("image", bufferStream, {
+      filename: "" + Date.now() + "." + file.mimetype.split("image/").pop(),
+    });
+  }
 
   let recognition;
 
@@ -194,15 +184,9 @@ let getId = async (images) => {
 };
 
 app.post("/", upload.array("image"), async (req, res) => {
-  files = [];
-
-  for (let file of req.files) {
-    files = [...files, fs.createReadStream(file.path,)];
-  }
-
   try {
-    json = await getId(files);
-    fs.appendFileSync("./log/log.txt", "Id received\n");
+    json = await getId(req);
+
     res.status(200).json(json);
   } catch (error) {
     res.status(error.response.status).end(error.response.statusText);
@@ -211,24 +195,6 @@ app.post("/", upload.array("image"), async (req, res) => {
       "./log/log.txt",
       "Error identifying: " + error.response.status + "\n"
     );
-  } finally {
-    for (const file of files) {
-      fs.appendFileSync(
-        "./log/log.txt",
-        "Deleting " + file.path + "\n"
-      );
-
-      file.destroy();
-      fs.unlink(file.path, (err) => {
-        if (err) {
-          fs.appendFileSync(
-            "./log/log.txt",
-            "Error deleting file: " + err + "\n"
-          );
-          console.error(err);
-        }
-      });
-    }
   }
 });
 
