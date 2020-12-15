@@ -5,9 +5,47 @@ const express = require("express");
 const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
-
 const taxonMapper = require("./taxonMapping");
 const taxonPics = require("./taxonPictures");
+
+const crypto = require('crypto');
+const path = require('path');
+const zlib = require('zlib');
+
+var cron = require('node-cron');
+
+//const AppendInitVect = require('./appendInitVect');
+
+function getCipherKey(password) {
+  return crypto.createHash('sha256').update(password).digest();
+}
+
+function encrypt( file, password ) {
+  // TO COME, no encrypt 4 now
+  return file;
+  /*
+  // Generate a secure, pseudo random initialization vector.
+  const initVect = crypto.randomBytes(16);
+  
+  // Generate a cipher key from the password.
+  const CIPHER_KEY = getCipherKey(password);
+  let readStream = file;
+
+  //const readStream = fs.createReadStream(file);
+
+  const gzip = zlib.createGzip();
+  const cipher = crypto.createCipheriv('aes256', CIPHER_KEY, initVect);
+  const appendInitVect = new AppendInitVect(initVect);
+  // Create a write stream with a different file extension.
+  const writeStream = fs.createWriteStream(path.join(file + ".enc"));
+
+  /*
+  readStream
+    .pipe(gzip)
+    .pipe(cipher)
+    .pipe(appendInitVect)
+    .pipe(writeStream);*/
+}
 
 let appInsights = require("applicationinsights");
 
@@ -96,6 +134,56 @@ let getName = async (sciName) => {
 
   return nameResult;
 };
+
+// Check if there are old files to be deleted every X minute:
+cron.schedule('* 30 * * *', () => {
+  console.log('running a task every 30th minute');
+  // Loop over all files in uploads/ (fs.readdir
+  // Check timestamp vs. time now
+  // If more than threshold (1 hour)
+  // Delete the file (fs.unlink)
+});
+
+function makeRandomHash() {
+  var current_date = (new Date()).valueOf().toString();
+  var random = Math.random().toString();
+  crypto.createHash('sha1').update(current_date + random).digest('hex');
+
+  // TODO check that this is not used. To do this, loop over uploads folder
+}
+
+let saveImagesAndGetToken = async(req) => {
+  console.log("running on server")
+  let images = req.files;
+  // Create random, unused id & password
+
+  let id = makeRandomHash();
+  let password = makeRandomHash();
+
+    for (let image of req.files) {
+
+    console.log(image)
+
+    let timestamp = Math.round((new Date()).getTime() / 1000);
+
+    // Encrypt file with password
+
+    let encrypted_file = encrypt(image,password);
+    
+    // Save encrypted file to disk and put id & date (unix timestamp, et heltall) in filename
+    console.log("time to upload")
+    console.log(encrypted_file);
+    fs.writeFile('./uploads/' + id + '_' + timestamp + '.jpg', encrypted_file.buffer, (err) => {
+      if (err) throw err;
+      console.log('The file has been saved!');
+    });
+  
+  }
+
+  return ("yo")
+
+  //return id, password;
+}
 
 let getId = async (req) => {
   const form = new FormData();
@@ -195,6 +283,18 @@ app.post("/", upload.array("image"), async (req, res) => {
       "./log/log.txt",
       "Error identifying: " + error.response.status + "\n"
     );
+  }
+});
+
+app.post("/save", upload.array("image"), async (req, res) => {
+  console.log("i exist")
+  try {
+    json = await saveImagesAndGetToken(req);
+
+    res.status(200).json(json);
+  } catch (error) {
+    
+    console.log("Error", error);
   }
 });
 
