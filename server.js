@@ -136,7 +136,7 @@ let getName = async (sciName) => {
 };
 
 // Check if there are old files to be deleted every X minute:
-cron.schedule('* 30 * * * *', () => {
+cron.schedule('30 * * * *', () => {
   //console.log("running task every 20th second")
   console.log('Running cleanup every 30th minute');
   
