@@ -21,7 +21,7 @@ function getCipherKey(password) {
 }
 
 function encrypt( file, password ) {
-  // TO COME, no encrypt 4 now
+  // TODO, no encrypt 4 now
   return file;
   /*
   // Generate a secure, pseudo random initialization vector.
@@ -136,53 +136,56 @@ let getName = async (sciName) => {
 };
 
 // Check if there are old files to be deleted every X minute:
-cron.schedule('* 30 * * *', () => {
-  console.log('running a task every 30th minute');
-  // Loop over all files in uploads/ (fs.readdir
-  // Check timestamp vs. time now
-  // If more than threshold (1 hour)
-  // Delete the file (fs.unlink)
+cron.schedule('* 30 * * * *', () => {
+  //console.log("running task every 20th second")
+  console.log('Running cleanup every 30th minute');
+  
+  // Loop over all files in uploads/ 
+  fs.readdir('./uploads/', (err, files) => {
+    files.forEach(file => {
+        // gets timestamp from filename
+        let filename = file.split("_")[1]; 
+        // gets current timestamp
+        let timestamp = Math.round((new Date()).getTime() / 1000);
+        // Check timestamp vs. time now
+        let time_between = timestamp - filename;
+        let survival_length = 3600 // 1 hr in seconds
+        // If more than survival_length 
+        if(time_between >= survival_length){
+          // Delete the file 
+          fs.unlink('./uploads/'+file, (err) => {
+            if (err){console.log("could not delete file")};
+            console.log('The file has been deleted!');
+          });
+        }
+    });
+  });
 });
 
 function makeRandomHash() {
-  var current_date = (new Date()).valueOf().toString();
-  var random = Math.random().toString();
-  crypto.createHash('sha1').update(current_date + random).digest('hex');
-
+  let current_date = (new Date()).valueOf().toString();
+  let random = Math.random().toString();
   // TODO check that this is not used. To do this, loop over uploads folder
+  return crypto.createHash('sha1').update(current_date + random).digest('hex');
+  
 }
 
 let saveImagesAndGetToken = async(req) => {
-  console.log("running on server")
-  let images = req.files;
   // Create random, unused id & password
-
   let id = makeRandomHash();
   let password = makeRandomHash();
-
-    for (let image of req.files) {
-
-    console.log(image)
-
+  console.log("time to upload image wih id: ", id)
+  for (let image of req.files) {
     let timestamp = Math.round((new Date()).getTime() / 1000);
-
     // Encrypt file with password
-
     let encrypted_file = encrypt(image,password);
-    
     // Save encrypted file to disk and put id & date (unix timestamp, et heltall) in filename
-    console.log("time to upload")
-    console.log(encrypted_file);
-    fs.writeFile('./uploads/' + id + '_' + timestamp + '.jpg', encrypted_file.buffer, (err) => {
+    fs.writeFile('./uploads/' + id + '_' + timestamp + '_.jpg', encrypted_file.buffer, (err) => {
       if (err) throw err;
       console.log('The file has been saved!');
     });
-  
   }
-
-  return ("yo")
-
-  //return id, password;
+  return {'id':id, 'password':password};
 }
 
 let getId = async (req) => {
@@ -287,13 +290,10 @@ app.post("/", upload.array("image"), async (req, res) => {
 });
 
 app.post("/save", upload.array("image"), async (req, res) => {
-  console.log("i exist")
   try {
     json = await saveImagesAndGetToken(req);
-
     res.status(200).json(json);
   } catch (error) {
-    
     console.log("Error", error);
   }
 });
