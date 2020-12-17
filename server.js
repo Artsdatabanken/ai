@@ -7,44 +7,42 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const taxonMapper = require("./taxonMapping");
 const taxonPics = require("./taxonPictures");
-
 const crypto = require('crypto');
-const path = require('path');
+//const path = require('path');
 const zlib = require('zlib');
-
 var cron = require('node-cron');
-
-//const AppendInitVect = require('./appendInitVect');
-
-function getCipherKey(password) {
-  return crypto.createHash('sha256').update(password).digest();
-}
 
 function encrypt( file, password ) {
   // TODO, no encrypt 4 now
-  return file;
-  /*
+
   // Generate a secure, pseudo random initialization vector.
   const initVect = crypto.randomBytes(16);
-  
-  // Generate a cipher key from the password.
-  const CIPHER_KEY = getCipherKey(password);
-  let readStream = file;
 
-  //const readStream = fs.createReadStream(file);
+  // Generate a cipher key from the password.
+  //const key = crypto.createHash('sha256').update(password).digest();
+  const key = crypto.createHash('sha256').update(password).digest('base64').substr(0, 32);
+
+  // Create a new cipher using the algorithm, key, and iv
+  const cipher = crypto.createCipheriv('aes-256-ctr', key, initVect);
+  //const cipher = crypto.createCipheriv('aes256', key, initVect);
 
   const gzip = zlib.createGzip();
-  const cipher = crypto.createCipheriv('aes256', CIPHER_KEY, initVect);
-  const appendInitVect = new AppendInitVect(initVect);
-  // Create a write stream with a different file extension.
-  const writeStream = fs.createWriteStream(path.join(file + ".enc"));
 
+  return file;
   /*
-  readStream
-    .pipe(gzip)
-    .pipe(cipher)
-    .pipe(appendInitVect)
-    .pipe(writeStream);*/
+  // so this is obtained from different sources, but seem to handle text and not images. 
+  // must research more the best approach.
+  
+  // Create the new (encrypted) buffer
+    const result = Buffer.concat([initVect, cipher.update(buffer), cipher.final()]);   
+    return result;
+  
+  // let readStream = file;
+  // const readStream = fs.createReadStream(file);
+  // const appendInitVect = new AppendInitVect(initVect);
+  // Create a write stream with a different file extension.
+  // const writeStream = fs.createWriteStream(path.join(file + ".enc"));
+  */
 }
 
 let appInsights = require("applicationinsights");
