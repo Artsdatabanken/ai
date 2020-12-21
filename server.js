@@ -300,4 +300,44 @@ app.get("/", (req, res) => {
   res.status(200).end("Aiai!");
 });
 
+app.get("/image/*", (req, res) => {
+    //console.log("req",req.originalUrl )
+    let url = req.originalUrl.replace('/image/','');
+    let image_to_fetch;
+    // Loop over all files in uploads/ 
+    
+    fs.readdir('./uploads/', (err, files) => {
+      //console.log("reading files")
+      files.forEach(file => {
+          let fileid = file.split('_')[0]; 
+          //console.log(fileid)
+
+          if(fileid === url){
+            console.log("we have a match!");
+            image_to_fetch = "./uploads/"+file;
+            //console.log(image_to_fetch)
+
+            // read the file
+            const file_buffer  = fs.readFileSync(image_to_fetch);
+            //console.log(file_buffer)
+
+            // encode contents into base64
+            const contents_in_base64 = file_buffer.toString('base64');
+            //console.log(contents_in_base64)
+            console.log("status",res.status.code)
+            let json = {image:contents_in_base64}
+            try {
+              res.status(200).json(json);
+            } catch (error) {
+              console.log("Error", error);
+            }
+          }
+          
+      });
+    })
+    // returner bildet på noe vis 
+    //res.status(200).end("henter bilde hvis det finnes");
+  // STØTTE FOR FLER BILDER HAR VI IKKE TENKT PÅ LOLS
+});
+
 app.listen(port, console.log(`Server running on port ${port}`));
