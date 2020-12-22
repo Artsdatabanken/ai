@@ -172,13 +172,19 @@ let saveImagesAndGetToken = async(req) => {
   // Create random, unused id & password
   let id = makeRandomHash();
   let password = makeRandomHash();
-  console.log("time to upload image wih id: ", id)
+  let counter = 0;
+
   for (let image of req.files) {
+    
     let timestamp = Math.round((new Date()).getTime() / 1000);
     // Encrypt file with password
     let encrypted_file = encrypt(image,password);
     // Save encrypted file to disk and put id & date (unix timestamp, et heltall) in filename
-    fs.writeFile('./uploads/' + id + '_' + timestamp + '_.jpg', encrypted_file.buffer, (err) => {
+    let filename = id + '_' + counter + '_' + timestamp + '_';
+    counter += 1;
+
+    console.log("time to upload image wih id: ", filename)
+    fs.writeFile('./uploads/' + filename + '.jpg', encrypted_file.buffer, (err) => {
       if (err) throw err;
       console.log('The file has been saved!');
     });
@@ -303,18 +309,20 @@ app.get("/", (req, res) => {
 app.get("/image/*", (req, res) => {
     //console.log("req",req.originalUrl )
     let url = req.originalUrl.replace('/image/','');
-    let image_to_fetch;
+
     // Loop over all files in uploads/ 
     
     fs.readdir('./uploads/', (err, files) => {
       //console.log("reading files")
+      let image_list = [];
+
       files.forEach(file => {
           let fileid = file.split('_')[0]; 
           //console.log(fileid)
 
           if(fileid === url){
             console.log("we have a match!");
-            image_to_fetch = "./uploads/"+file;
+            let image_to_fetch = "./uploads/"+file;
             //console.log(image_to_fetch)
 
             // read the file
@@ -324,16 +332,19 @@ app.get("/image/*", (req, res) => {
             // encode contents into base64
             const contents_in_base64 = file_buffer.toString('base64');
             //console.log(contents_in_base64)
-            console.log("status",res.status.code)
-            let json = {image:contents_in_base64}
-            try {
-              res.status(200).json(json);
-            } catch (error) {
-              console.log("Error", error);
-            }
+            //console.log("status",res.status.code)
+            image_list.push(contents_in_base64);
           }
           
       });
+      //console.log(image_list);
+      let json = {image:image_list}
+      try {
+        res.status(200).json(json);
+      } catch (error) {
+        console.log("Error", error);
+      }
+      // send list
     })
     // returner bildet på noe vis 
     //res.status(200).end("henter bilde hvis det finnes");
