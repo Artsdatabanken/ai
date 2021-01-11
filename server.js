@@ -259,7 +259,8 @@ app.post("/", upload.array("image"), async (req, res) => {
   try {
     json = await getId(req);
 
-    writelog(req, json);
+    // Write to the log
+    // writelog(req, json);
     
 
     res.status(200).json(json);
