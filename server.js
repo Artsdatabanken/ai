@@ -37,6 +37,62 @@ let getPicture = (sciName) => {
   return null;
 };
 
+let writelog = (req, json) => {
+  let today = new Date();
+  let year = today.getFullYear();
+  let month = ("0" + (today.getMonth() + 1)).slice(-2);
+  let day = ("0" + today.getDate()).slice(-2);
+  let hours = ("0" + today.getHours()).slice(-2);
+  let minutes = ("0" + today.getMinutes()).slice(-2);
+  let seconds = ("0" + today.getSeconds()).slice(-2);
+
+  let date =
+    year +
+    "-" +
+    month +
+    "-" +
+    day +
+    " " +
+    hours +
+    ":" +
+    minutes +
+    ":" +
+    seconds;
+
+  if (!fs.existsSync("./log/" + year + "-" + month + ".csv")) {
+    fs.appendFileSync(
+      "./log/" + year + "-" + month + ".csv",
+      "Datetime\t" +
+        "Number_of_pictures\t" +
+        "Result_1_name\tResult_1_group\tResult_1_probability\t" +
+        "Result_2_name\tResult_2_group\tResult_2_probability\t" +
+        "Result_3_name\tResult_3_group\tResult_3_probability\t" +
+        "Result_4_name\tResult_4_group\tResult_4_probability\t" +
+        "Result_5_name\tResult_5_group\tResult_5_probability\n"
+    );
+  }
+
+  let row = date + "\t" + req.files.length;
+  for (let i = 0; i < json.predictions.length; i++) {
+    const prediction = json.predictions[i];
+    row +=
+      "\t" +
+      prediction.taxon.name +
+      "\t" +
+      prediction.taxon.groupName +
+      "\t" +
+      prediction.probability;
+  }
+  row += "\n";
+
+  fs.appendFileSync(
+    "./log/" + year + "-" + month + ".csv",
+    row
+  );
+}
+
+
+
 let getName = async (sciName) => {
   let nameResult = {
     vernacularName: sciName,
@@ -183,9 +239,28 @@ let getId = async (req) => {
   return recognition.data;
 };
 
+// --- Alternative endpoint returning a "down for maintenance" message as the "predition". A bit of a hack but it works for all UIs.
+// app.post("/", upload.array("image"), async (req, res) => {
+//   try {
+//     json = {'predictions': [{'probability': .0, 'taxon': {'name': 'Orakelet er nede akkurat nå grunnet planlagt vedlikehold. Prøv igjen i løpet av dagen.', 'vernacularName': 'Vedlikehold'}}]};
+
+//     res.status(200).json(json);
+//   } catch (error) {
+//     res.status(error.response.status).end(error.response.statusText);
+//     console.log("Error", error.response.status);
+//     fs.appendFileSync(
+//       "./log/log.txt",
+//       "Error identifying: " + error.response.status + "\n"
+//     );
+//   }
+// });
+
 app.post("/", upload.array("image"), async (req, res) => {
   try {
     json = await getId(req);
+
+    writelog(req, json);
+    
 
     res.status(200).json(json);
   } catch (error) {
