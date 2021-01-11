@@ -178,13 +178,18 @@ let saveImagesAndGetToken = async(req) => {
     
     let timestamp = Math.round((new Date()).getTime() / 1000);
     // Encrypt file with password
-    let encrypted_file = encrypt(image,password);
+
+    let base64image = image.buffer.toString('base64')
+    //console.log(base64image)
+
+    let encrypted_file = encrypt(base64image,password);
     // Save encrypted file to disk and put id & date (unix timestamp, et heltall) in filename
+    
     let filename = id + '_' + counter + '_' + timestamp + '_';
     counter += 1;
 
     console.log("time to upload image wih id: ", filename)
-    fs.writeFile('./uploads/' + filename + '.jpg', encrypted_file.buffer, (err) => {
+    fs.writeFile('./uploads/' + filename , encrypted_file, (err) => {
       if (err) throw err;
       console.log('The file has been saved!');
     });
@@ -328,12 +333,9 @@ app.get("/image/*", (req, res) => {
             // read the file
             const file_buffer  = fs.readFileSync(image_to_fetch);
             //console.log(file_buffer)
-
-            // encode contents into base64
-            const contents_in_base64 = file_buffer.toString('base64');
-            //console.log(contents_in_base64)
+            console.log(file_buffer)
             //console.log("status",res.status.code)
-            image_list.push(contents_in_base64);
+            image_list.push(file_buffer.toString());
           }
           
       });
