@@ -85,13 +85,8 @@ let writelog = (req, json) => {
   }
   row += "\n";
 
-  fs.appendFileSync(
-    "./log/" + year + "-" + month + ".csv",
-    row
-  );
-}
-
-
+  fs.appendFileSync("./log/" + year + "-" + month + ".csv", row);
+};
 
 let getName = async (sciName) => {
   let nameResult = {
@@ -260,8 +255,7 @@ app.post("/", upload.array("image"), async (req, res) => {
     json = await getId(req);
 
     // Write to the log
-    // writelog(req, json);
-    
+    writelog(req, json);
 
     res.status(200).json(json);
   } catch (error) {
