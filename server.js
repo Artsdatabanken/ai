@@ -11,39 +11,32 @@ const crypto = require('crypto');
 //const path = require('path');
 const zlib = require('zlib');
 var cron = require('node-cron');
+const encryption_algorithm = 'aes-256-ctr';
+// Generate a secure, pseudo random initialization vector.
+const initVect = crypto.randomBytes(16);
 
 function encrypt( file, password ) {
-  // TODO, no encrypt 4 now
-
-  // Generate a secure, pseudo random initialization vector.
-  const initVect = crypto.randomBytes(16);
-
+  console.log("encrypting")
   // Generate a cipher key from the password.
   //const key = crypto.createHash('sha256').update(password).digest();
   const key = crypto.createHash('sha256').update(password).digest('base64').substr(0, 32);
 
   // Create a new cipher using the algorithm, key, and iv
-  const cipher = crypto.createCipheriv('aes-256-ctr', key, initVect);
-  //const cipher = crypto.createCipheriv('aes256', key, initVect);
+  const cipher = crypto.createCipheriv(encryption_algorithm, key, initVect);
 
-  const gzip = zlib.createGzip();
+  // file is already a string - base64
+  const encrypted = Buffer.concat([cipher.update(file), cipher.final()]);
 
-  return file;
-  /*
-  // so this is obtained from different sources, but seem to handle text and not images. 
-  // must research more the best approach.
-  
-  // Create the new (encrypted) buffer
-    const result = Buffer.concat([initVect, cipher.update(buffer), cipher.final()]);   
-    return result;
-  
-  // let readStream = file;
-  // const readStream = fs.createReadStream(file);
-  // const appendInitVect = new AppendInitVect(initVect);
-  // Create a write stream with a different file extension.
-  // const writeStream = fs.createWriteStream(path.join(file + ".enc"));
-  */
+  return encrypted;
 }
+
+const decrypt = (encrypted_content,password) => {
+  console.log("decrypting")
+  const key = crypto.createHash('sha256').update(password).digest('base64').substr(0, 32);
+  const decipher = crypto.createDecipheriv(encryption_algorithm, key, initVect);
+  const decrpyted = Buffer.concat([decipher.update(encrypted_content), decipher.final()]);
+  return decrpyted.toString();
+};
 
 let appInsights = require("applicationinsights");
 
@@ -183,8 +176,12 @@ let saveImagesAndGetToken = async(req) => {
     //console.log(base64image)
 
     let encrypted_file = encrypt(base64image,password);
-    // Save encrypted file to disk and put id & date (unix timestamp, et heltall) in filename
+    encrypted_file = decrypt(encrypted_file,password);
+    encrypted_file = encrypted_file;
     
+
+    // Save encrypted file to disk and put id & date (unix timestamp, et heltall) in filename
+
     let filename = id + '_' + counter + '_' + timestamp + '_';
     counter += 1;
 
