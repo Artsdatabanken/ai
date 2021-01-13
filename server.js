@@ -7,36 +7,13 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const taxonMapper = require("./taxonMapping");
 const taxonPics = require("./taxonPictures");
+const cron = require('node-cron');
+
+// Use the crypto library for encryption and decryption
 const crypto = require('crypto');
-//const path = require('path');
-const zlib = require('zlib');
-var cron = require('node-cron');
 const encryption_algorithm = 'aes-256-ctr';
-// Generate a secure, pseudo random initialization vector.
+// Generate a secure, pseudo random initialization vector for encryption
 const initVect = crypto.randomBytes(16);
-
-function encrypt( file, password ) {
-  console.log("encrypting")
-  // Generate a cipher key from the password.
-  //const key = crypto.createHash('sha256').update(password).digest();
-  const key = crypto.createHash('sha256').update(password).digest('base64').substr(0, 32);
-
-  // Create a new cipher using the algorithm, key, and iv
-  const cipher = crypto.createCipheriv(encryption_algorithm, key, initVect);
-
-  // file is already a string - base64
-  const encrypted = Buffer.concat([cipher.update(file), cipher.final()]);
-
-  return encrypted;
-}
-
-const decrypt = (encrypted_content,password) => {
-  console.log("decrypting")
-  const key = crypto.createHash('sha256').update(password).digest('base64').substr(0, 32);
-  const decipher = crypto.createDecipheriv(encryption_algorithm, key, initVect);
-  const decrpyted = Buffer.concat([decipher.update(encrypted_content), decipher.final()]);
-  return decrpyted.toString();
-};
 
 let appInsights = require("applicationinsights");
 
@@ -128,8 +105,7 @@ let getName = async (sciName) => {
 
 // Check if there are old files to be deleted every X minute:
 cron.schedule('30 * * * *', () => {
-  //console.log("running task every 20th second")
-  console.log('Running cleanup every 30th minute');
+  //console.log('Running cleanup every 30th minute');
   
   // Loop over all files in uploads/ 
   fs.readdir('./uploads/', (err, files) => {
@@ -140,6 +116,7 @@ cron.schedule('30 * * * *', () => {
         let timestamp = Math.round((new Date()).getTime() / 1000);
         // Check timestamp vs. time now
         let time_between = timestamp - filename;
+        // Image Survival length, if change this - ensure to change in artsobs-mobile too...
         let survival_length = 3600 // 1 hr in seconds
         // If more than survival_length 
         if(time_between >= survival_length){
@@ -153,39 +130,53 @@ cron.schedule('30 * * * *', () => {
   });
 });
 
-function makeRandomHash() {
+function encrypt( file, password ) {  
+  // Create a new cipher using the algorithm, key, and initVect
+  const cipher = crypto.createCipheriv(encryption_algorithm, password, initVect);
+  // file is already a string - base64
+  const encrypted = Buffer.concat([cipher.update(file), cipher.final()]);
+  return encrypted;
+}
+
+const decrypt = (encrypted_content,password) => {
+  // Use the same things to create the decipher vector
+  const decipher = crypto.createDecipheriv(encryption_algorithm, password, initVect);
+  // Apply the deciphering
+  const decrypted = Buffer.concat([decipher.update(encrypted_content), decipher.final()]);
+  return decrypted.toString();
+};
+
+function makeRandomHash() {  
+  // TODO check that this is not used. To do this, loop over uploads folder
+  // It would be shocking if it is used considering we use the current date as input, and 
+  // clean out images every 30 minutes. But you never know.
   let current_date = (new Date()).valueOf().toString();
   let random = Math.random().toString();
-  // TODO check that this is not used. To do this, loop over uploads folder
   return crypto.createHash('sha1').update(current_date + random).digest('hex');
-  
 }
 
 let saveImagesAndGetToken = async(req) => {
-  // Create random, unused id & password
+  // Create random, unused id & password, password must be a certain length
   let id = makeRandomHash();
-  let password = makeRandomHash();
+  let password = makeRandomHash().substring(0,32);
   let counter = 0;
 
-  for (let image of req.files) {
-    
+  for (let image of req.files) {    
     let timestamp = Math.round((new Date()).getTime() / 1000);
-    // Encrypt file with password
-
-    let base64image = image.buffer.toString('base64')
-    //console.log(base64image)
-
-    let encrypted_file = encrypt(base64image,password);
-    encrypted_file = decrypt(encrypted_file,password);
-    encrypted_file = encrypted_file;
     
+    // Turn image into base64 to allow both encryption and future transfer
+    let base64image = image.buffer.toString('base64');
 
-    // Save encrypted file to disk and put id & date (unix timestamp, et heltall) in filename
+    // Perform encryption
+    let encrypted_file = encrypt(base64image,password);    
 
-    let filename = id + '_' + counter + '_' + timestamp + '_';
-    counter += 1;
+    // Save encrypted file to disk and put id & date (unix timestamp) in filename
+    let filename = id + '_' + counter + '_' + timestamp + '_'; 
 
-    console.log("time to upload image wih id: ", filename)
+    // ensure uniqueness in case the other factors end up the same (unlikely)
+    counter += 1; 
+
+    // Upload to uploads folder
     fs.writeFile('./uploads/' + filename , encrypted_file, (err) => {
       if (err) throw err;
       console.log('The file has been saved!');
@@ -296,6 +287,7 @@ app.post("/", upload.array("image"), async (req, res) => {
 });
 
 app.post("/save", upload.array("image"), async (req, res) => {
+  // image saving request from the orakel service
   try {
     json = await saveImagesAndGetToken(req);
     res.status(200).json(json);
@@ -309,45 +301,50 @@ app.get("/", (req, res) => {
 });
 
 app.get("/image/*", (req, res) => {
-    //console.log("req",req.originalUrl )
+    // image request from the orakel service
+    // On the form /image/id&password
+
+    // Url used to arrive here from outside
     let url = req.originalUrl.replace('/image/','');
 
-    // Loop over all files in uploads/ 
-    
+    // Obtain password from the end of the url
+    let password = url.split('&')[1].toString();
+
+    // Obtain the image id's from the url
+    url = url.split('&')[0]
+
+    // Loop over all files in uploads/     
     fs.readdir('./uploads/', (err, files) => {
-      //console.log("reading files")
       let image_list = [];
 
       files.forEach(file => {
-          let fileid = file.split('_')[0]; 
-          //console.log(fileid)
+          // The id's in upload are of the format:
+          // sessionid_number_timestamp this to ensure unique id's
+          // to get all entries from one session, we use only the first of these
+          const fileid = file.split('_')[0]; 
 
           if(fileid === url){
-            console.log("we have a match!");
-            let image_to_fetch = "./uploads/"+file;
-            //console.log(image_to_fetch)
+            // If the request has a match in the database (it should unless the user was too slow)
+            const image_to_fetch = "./uploads/"+file;
 
             // read the file
             const file_buffer  = fs.readFileSync(image_to_fetch);
-            //console.log(file_buffer)
-            console.log(file_buffer)
-            //console.log("status",res.status.code)
-            image_list.push(file_buffer.toString());
+
+            // decrypt the file
+            let decrypted_file = decrypt(file_buffer,password);
+
+            // add the file to the return list
+            image_list.push(decrypted_file);
           }
-          
       });
-      //console.log(image_list);
+      // generate json object to return at request
       let json = {image:image_list}
       try {
         res.status(200).json(json);
       } catch (error) {
-        console.log("Error", error);
+        console.error("Error", error);
       }
-      // send list
     })
-    // returner bildet på noe vis 
-    //res.status(200).end("henter bilde hvis det finnes");
-  // STØTTE FOR FLER BILDER HAR VI IKKE TENKT PÅ LOLS
 });
 
 app.listen(port, console.log(`Server running on port ${port}`));
