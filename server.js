@@ -166,8 +166,9 @@ let getId = async (req) => {
 
   try {
     recognition = await axios.post(
-      "http://artsdatabanken.demo.naturalis.io/v1/observation/identify/noall/auth",
+      "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
       form,
+      
       {
         headers: {
           ...formHeaders,
