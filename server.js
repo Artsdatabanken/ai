@@ -68,26 +68,20 @@ let writelog = (req, json) => {
   if (!fs.existsSync("./log/" + year + "-" + month + ".csv")) {
     fs.appendFileSync(
       "./log/" + year + "-" + month + ".csv",
-      "Datetime\t" +
-        "Number_of_pictures\t" +
-        "Result_1_name\tResult_1_group\tResult_1_probability\t" +
-        "Result_2_name\tResult_2_group\tResult_2_probability\t" +
-        "Result_3_name\tResult_3_group\tResult_3_probability\t" +
-        "Result_4_name\tResult_4_group\tResult_4_probability\t" +
-        "Result_5_name\tResult_5_group\tResult_5_probability\n"
+      "Datetime," +
+        "Number_of_pictures," +
+        "Result_1_name,Result_1_group,Result_1_probability," +
+        "Result_2_name,Result_2_group,Result_2_probability," +
+        "Result_3_name,Result_3_group,Result_3_probability," +
+        "Result_4_name,Result_4_group,Result_4_probability," +
+        "Result_5_name,Result_5_group,Result_5_probability,"
     );
   }
 
-  let row = date + "\t" + req.files.length;
+  let row = `${date},${req.files.length}`;
   for (let i = 0; i < json.predictions.length; i++) {
     const prediction = json.predictions[i];
-    row +=
-      "\t" +
-      prediction.taxon.name +
-      "\t" +
-      prediction.taxon.groupName +
-      "\t" +
-      prediction.probability;
+    row += `,${prediction.taxon.name},${prediction.taxon.groupName},${prediction.probability}`;
   }
   row += "\n";
 
