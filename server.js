@@ -81,7 +81,7 @@ let writelog = (req, json) => {
   let row = `${date},${req.files.length}`;
   for (let i = 0; i < json.predictions.length; i++) {
     const prediction = json.predictions[i];
-    row += `,${prediction.taxon.name},${prediction.taxon.groupName},${prediction.probability}`;
+    row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
   }
   row += "\n";
 
@@ -133,7 +133,8 @@ let getName = async (sciName) => {
 
     name = await axios.get("https://artsdatabanken.no/Api/" + taxon.data.Id);
   } catch (error) {
-    console.log(error);
+    date = new Date().toISOString()
+    console.log(date, error);
     throw error;
   }
 
@@ -261,7 +262,8 @@ let getId = async (req) => {
       }
     );
   } catch (error) {
-    console.log(error);
+    date = new Date().toISOString()
+    console.log(date, error);
     throw error;
   }
 
@@ -285,7 +287,8 @@ let getId = async (req) => {
       pred.taxon.infoUrl = nameResult.infoUrl;
       pred.taxon.picture = getPicture(nameResult.scientificName);
     } catch (error) {
-      console.log(error);
+      date = new Date().toISOString()
+      console.log(date, error);
       throw error;
     }
   }
@@ -343,7 +346,9 @@ app.post("/", upload.array("image"), async (req, res) => {
     res.status(200).json(json);
   } catch (error) {
     res.status(error.response.status).end(error.response.statusText);
-    console.log("Error", error.response.status);
+    date = new Date().toISOString()
+
+    console.log(date, "Error", error.response.status);
     fs.appendFileSync(
       "./log/log.txt",
       "Error identifying: " + error.response.status + "\n"
@@ -357,7 +362,8 @@ app.post("/save", upload.array("image"), async (req, res) => {
     json = await saveImagesAndGetToken(req);
     res.status(200).json(json);
   } catch (error) {
-    console.log("Error", error);
+    date = new Date().toISOString()
+    console.log(date, "Error", error);
   }
 });
 
@@ -407,9 +413,11 @@ app.get("/image/*", (req, res) => {
       try {
         res.status(200).json(json);
       } catch (error) {
-        console.error("Error", error);
+        date = new Date().toISOString()
+        console.error(date, "Error", error);
       }
     })
 });
 
-app.listen(port, console.log(`Server running on port ${port}`));
+date = new Date().toISOString()
+app.listen(port, console.log(date, `Server running on port ${port}`));
