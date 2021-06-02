@@ -133,7 +133,7 @@ let getName = async (sciName) => {
 
     name = await axios.get("https://artsdatabanken.no/Api/" + taxon.data.Id);
   } catch (error) {
-    // console.log(error);
+    console.log(error);
     throw error;
   }
 
@@ -261,7 +261,7 @@ let getId = async (req) => {
       }
     );
   } catch (error) {
-    // console.log(error);
+    console.log(error);
     throw error;
   }
 
@@ -285,7 +285,7 @@ let getId = async (req) => {
       pred.taxon.infoUrl = nameResult.infoUrl;
       pred.taxon.picture = getPicture(nameResult.scientificName);
     } catch (error) {
-      // console.log(error);
+      console.log(error);
       throw error;
     }
   }
