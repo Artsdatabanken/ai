@@ -420,4 +420,4 @@ app.get("/image/*", (req, res) => {
 });
 
 date = new Date().toISOString()
-app.listen(port, console.log(date, `Server running on port ${port}`));
+app.listen(port, console.log(date, `Dev server running on port ${port}`));
