@@ -249,16 +249,20 @@ let getId = async (req) => {
 
   try {
     recognition = await axios.post(
-      "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
+      // "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
+      "http://artsdatabanken.demo.naturalis.io/v1/observation/identify/noall/auth",
       form,
-      
       {
         headers: {
           ...formHeaders,
-          Authorization: "Basic " + process.env.NATURALIS_TOKEN,
+          // Authorization: "Basic " + process.env.NATURALIS_TOKEN,
         },
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
+        auth: {
+          username: process.env.NATURALIS_TEST_USER,
+          password: process.env.NATURALIS_TEST_PW
+        }
       }
     );
   } catch (error) {
@@ -319,22 +323,6 @@ let getId = async (req) => {
 
   return recognition.data;
 };
-
-// --- Alternative endpoint returning a "down for maintenance" message as the "predition". A bit of a hack but it works for all UIs.
-// app.post("/", upload.array("image"), async (req, res) => {
-//   try {
-//     json = {'predictions': [{'probability': .0, 'taxon': {'name': 'Orakelet er nede akkurat nå grunnet planlagt vedlikehold. Prøv igjen i løpet av dagen.', 'vernacularName': 'Vedlikehold'}}]};
-
-//     res.status(200).json(json);
-//   } catch (error) {
-//     res.status(error.response.status).end(error.response.statusText);
-//     console.log("Error", error.response.status);
-//     fs.appendFileSync(
-//       "./log/log.txt",
-//       "Error identifying: " + error.response.status + "\n"
-//     );
-//   }
-// });
 
 app.post("/", upload.array("image"), async (req, res) => {
   try {
