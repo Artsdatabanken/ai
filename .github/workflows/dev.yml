@@ -29,3 +29,5 @@ jobs:
         password: ${{ secrets.DOCKER_PASSWORD }}
         repository: artsdatabanken/ai
         tags: dev
+    - name: Post to slack
+      run: .github/workflows/slack.sh ${{ secrets.POST_SLACK }}
