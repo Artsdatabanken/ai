@@ -427,18 +427,44 @@ app.get("/image/*", (req, res) => {
 // Code for the NTNU experiment
 // ---------------------------------------------------------------------------
 
-app.post("/experiment", upload.array("image"), async (req, res) => {
-  try {
-    console.log(req);
-    json = await getIdExperiment(req);
 
-    // Write to the log
-    // writelog(req, json);
+let isValidUser = (username) => {
+  console.log("./log/ntnu_experiment/users/" + username);
+  console.log(fs.existsSync("./log/ntnu_experiment/users/" + username));
+
+
+  return fs.existsSync("./log/ntnu_experiment/users/" + username)
+}
+
+let userHasAI = (username) => {
+  return (Math.random() < .5)
+}
+
+app.post("/experiment", upload.array("image"), async (req, res) => {
+
+  const user = req.body.user;
+  
+  if(!isValidUser(user)) {
+    res.status(200).json('Invalid user');
+    return;
+  }
+
+  try {
+    id = await saveImages(req);
+
+    if(userHasAI(user)) {
+      json = await getIdExperiment(req);
+    }
+    else {
+      json = {'predictions': []}
+    }
+
+    json["obsid"] = id;
 
     res.status(200).json(json);
   } catch (error) {
     res.status(error.response.status).end(error.response.statusText);
-    date = new Date().toISOString()
+    date = new Date().toISOString();
 
     console.log(date, "Error", error.response.status);
     fs.appendFileSync(
@@ -447,6 +473,26 @@ app.post("/experiment", upload.array("image"), async (req, res) => {
     );
   }
 });
+
+let saveImages = async (req) => {
+  let counter = 0;
+  let id = makeRandomHash().substr(0, 5);
+  while (fs.existsSync("./log/ntnu_experiment/img/" + id + "_0.jpg")) {
+    id = makeRandomHash().substr(0, 5);
+  }
+
+  for (let image of req.files) {
+    fs.writeFile(
+      "./log/ntnu_experiment/img/" + id + "_" + counter + ".jpg",
+      image.buffer,
+      (err) => {
+        if (err) throw err;
+      }
+    );
+    counter += 1;
+  }
+  return id;
+};
 
 let getIdExperiment = async (req) => {
   const form = new FormData();
@@ -482,6 +528,23 @@ let getIdExperiment = async (req) => {
     console.log(date, error);
     throw error;
   }
+
+  // try {
+  //   console.log("Sent to Wallace");
+  //   wallace = await axios.post("http://vm-srv-wallace.vm.ntnu.no:5000", form, {
+  //     headers: {
+  //       ...formHeaders,
+  //     },
+  //     maxContentLength: Infinity,
+  //     maxBodyLength: Infinity,
+  //   });
+  //   console.log(wallace);
+
+  // } catch (error) {
+  //   date = new Date().toISOString();
+  //   console.log("Wallace:", date, error);
+  //   throw error;
+  // }
 
   // get the best 5
   recognition.data.predictions = recognition.data.predictions.slice(0, 5);
