@@ -428,9 +428,6 @@ app.get("/image/*", (req, res) => {
 // ---------------------------------------------------------------------------
 
 let isValidUser = (username) => {
-  console.log("./log/ntnu_experiment/users/" + username);
-  console.log(fs.existsSync("./log/ntnu_experiment/users/" + username));
-
   return fs.existsSync("./log/ntnu_experiment/users/" + username);
 };
 
@@ -472,7 +469,7 @@ app.post("/experiment", upload.array("image"), async (req, res) => {
 
 let saveImages = async (req) => {
   const user = req.body.user;
-  imgdir = "./log/ntnu_experiment/" + user + "/img/"
+  imgdir = "./log/ntnu_experiment/users/" + user + "/img/"
 
   if (!fs.existsSync(imgdir)){
     fs.mkdirSync(imgdir);
