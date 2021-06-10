@@ -427,36 +427,32 @@ app.get("/image/*", (req, res) => {
 // Code for the NTNU experiment
 // ---------------------------------------------------------------------------
 
-
 let isValidUser = (username) => {
   console.log("./log/ntnu_experiment/users/" + username);
   console.log(fs.existsSync("./log/ntnu_experiment/users/" + username));
 
-
-  return fs.existsSync("./log/ntnu_experiment/users/" + username)
-}
+  return fs.existsSync("./log/ntnu_experiment/users/" + username);
+};
 
 let userHasAI = (username) => {
-  return (Math.random() < .5)
-}
+  return Math.random() < 0.5;
+};
 
 app.post("/experiment", upload.array("image"), async (req, res) => {
-
   const user = req.body.user;
-  
-  if(!isValidUser(user)) {
-    res.status(200).json('Invalid user');
+
+  if (!isValidUser(user)) {
+    res.status(200).json("Invalid user");
     return;
   }
 
   try {
     id = await saveImages(req);
 
-    if(userHasAI(user)) {
+    if (userHasAI(user)) {
       json = await getIdExperiment(req);
-    }
-    else {
-      json = {'predictions': []}
+    } else {
+      json = { predictions: [] };
     }
 
     json["obsid"] = id;
@@ -475,15 +471,25 @@ app.post("/experiment", upload.array("image"), async (req, res) => {
 });
 
 let saveImages = async (req) => {
+  const user = req.body.user;
+  imgdir = "./log/ntnu_experiment/" + user + "/img/"
+
+  if (!fs.existsSync(imgdir)){
+    fs.mkdirSync(imgdir);
+}
+
+
   let counter = 0;
   let id = makeRandomHash().substr(0, 5);
-  while (fs.existsSync("./log/ntnu_experiment/img/" + id + "_0.jpg")) {
+  while (
+    fs.existsSync(imgdir + id + "_0.jpg")
+  ) {
     id = makeRandomHash().substr(0, 5);
   }
 
   for (let image of req.files) {
     fs.writeFile(
-      "./log/ntnu_experiment/img/" + id + "_" + counter + ".jpg",
+      imgdir + id + "_" + counter + ".jpg",
       image.buffer,
       (err) => {
         if (err) throw err;
