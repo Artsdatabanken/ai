@@ -30,7 +30,7 @@ const upload = multer({ storage: storage });
 
 app.use(cors(corsOptions));
 app.use(express.json());
-app.use(express.urlencoded());
+app.use(express.urlencoded({"extended": false}));
 
 let getPicture = (sciName) => {
   let pic = taxonPics.media[sciName];
@@ -151,15 +151,42 @@ app.post("/report", express.static("public"), async (req, res) => {
     fs.mkdirSync(reportdir);
   }
 
+  let csvRow = "";
 
+  if (!fs.existsSync(reportdir + "/reports.csv")) {
+    csvRow +=
+      "date,user,obsId,ai,species,certainty,knowledgeSource,usedTools,comment\n";
+  }
 
+  csvRow +=
+    '"' +
+    new Date().toISOString() +
+    '","' +
+    req.body.user +
+    '","' +
+    req.body.obsId +
+    '","' +
+    req.body.ai +
+    '","' +
+    req.body.species +
+    '",' +
+    req.body.certainty +
+    ',"' +
+    req.body.knowledgeSource +
+    '","' +
+    req.body.usedTools +
+    '","' +
+    req.body.comment +
+    '"\n';
+
+  fs.appendFileSync(reportdir + "/reports.csv", csvRow);
   res.status(200).json("success");
 });
 
 app.post("/", upload.array("image"), async (req, res) => {
   const user = req.body.user;
 
-  if (!isValidUser(user)) {
+  if (!user || !isValidUser(user)) {
     res.status(200).json("Invalid user");
     return;
   }
