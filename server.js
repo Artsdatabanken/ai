@@ -122,11 +122,11 @@ app.get("/", (req, res) => {
 // ---------------------------------------------------------------------------
 
 let isValidUser = (username) => {
-  return fs.existsSync("./log/ntnu_experiment/users/" + username);
+  return fs.existsSync("./log/users/" + username);
 };
 
 let userHasAI = (username) => {
-  const jsonfile = "./log/ntnu_experiment/users/" + username + "/settings.json";
+  const jsonfile = "./log/users/" + username + "/settings.json";
   var obj = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
 
   let now = new Date().getTime();
@@ -139,7 +139,7 @@ let userHasAI = (username) => {
 };
 
 app.post("/report", express.static("public"), async (req, res) => {
-  const reportdir = "./log/ntnu_experiment/users/" + req.body.user + "/reports";
+  const reportdir = "./log/users/" + req.body.user + "/reports";
   if (!fs.existsSync(reportdir)) {
     fs.mkdirSync(reportdir);
   }
@@ -217,7 +217,7 @@ app.post("/", upload.array("image"), async (req, res) => {
 
 let saveImages = async (req) => {
   const user = req.body.user;
-  imgdir = "./log/ntnu_experiment/users/" + user + "/img/";
+  imgdir = "./log/users/" + user + "/img/";
 
   if (!fs.existsSync(imgdir)) {
     fs.mkdirSync(imgdir);
