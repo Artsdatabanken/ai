@@ -186,6 +186,8 @@ app.post("/report", express.static("public"), async (req, res) => {
 app.post("/", upload.array("image"), async (req, res) => {
   const user = req.body.user;
 
+  console.log(user, "sent some data");
+
   if (!user || !isValidUser(user)) {
     res.status(200).json("Invalid user");
     return;
@@ -328,5 +330,4 @@ let getIdExperiment = async (req) => {
 
 // ---------------------------------------------------------------------------
 
-date = new Date().toISOString();
-app.listen(port, console.log(date, `Dev server now running on port ${port}`));
+app.listen(port, console.log(`Research server now running on port ${port}`));
