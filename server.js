@@ -155,7 +155,7 @@ app.post("/report", express.static("public"), async (req, res) => {
 
   if (!fs.existsSync(reportdir + "/reports.csv")) {
     csvRow +=
-      "date,user,obsId,ai,species,certainty,knowledgeSource,usedTools,comment\n";
+      "date,user,obsId,ai,hasReadMore,species,certainty,knowledgeSource,usedTools,comment\n";
   }
 
   csvRow +=
@@ -167,6 +167,8 @@ app.post("/report", express.static("public"), async (req, res) => {
     req.body.obsId +
     '","' +
     req.body.ai +
+    '","' +
+    req.body.hasReadMore +
     '","' +
     req.body.species +
     '",' +
