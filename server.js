@@ -196,6 +196,7 @@ app.post("/", upload.array("image"), async (req, res) => {
   try {
     id = await saveImages(req);
 
+
     if (userHasAI(user)) {
       json = await getIdExperiment(req);
     } else {
@@ -220,6 +221,8 @@ app.post("/", upload.array("image"), async (req, res) => {
 let saveImages = async (req) => {
   const user = req.body.user;
   imgdir = "./log/users/" + user + "/img/";
+
+  console.log('creating', imgdir);
 
   if (!fs.existsSync(imgdir)) {
     fs.mkdirSync(imgdir);
