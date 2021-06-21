@@ -120,6 +120,7 @@ let getName = async (sciName) => {
     nameResult.vernacularName =
       taxon.data["RecommendedVernacularName_nb-NO"] ||
       taxon.data["RecommendedVernacularName_nn-NO"] ||
+      nameResult.scientificName ||
       sciName;
 
     if (taxon.data.Description) {
