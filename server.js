@@ -13,6 +13,19 @@ const crypto = require("crypto");
 
 let appInsights = require("applicationinsights");
 
+const colors = [
+  { name: "rød", h: "0", s: "100%", l: "30%" },
+  { name: "oransj", h: "35", s: "100%", l: "40%" },
+  { name: "gul", h: "55", s: "100%", l: "40%" },
+  { name: "grønn", h: "115", s: "100%", l: "30%" },
+  { name: "turkis", h: "175", s: "100%", l: "30%" },
+  { name: "blå", h: "210", s: "100%", l: "30%" },
+  { name: "fiolett", h: "275", s: "100%", l: "30%" },
+  { name: "rosa", h: "300", s: "100%", l: "40%" },
+  { name: "svart", h: "0", s: "0%", l: "0%" },
+  { name: "grå", h: "0", s: "0%", l: "50%" },
+];
+
 if (process.env.IKEY) {
   appInsights.setup(process.env.IKEY).start();
 }
@@ -30,7 +43,7 @@ const upload = multer({ storage: storage });
 
 app.use(cors(corsOptions));
 app.use(express.json());
-app.use(express.urlencoded({"extended": false}));
+app.use(express.urlencoded({ extended: false }));
 
 let getPicture = (sciName) => {
   let pic = taxonPics.media[sciName];
@@ -122,6 +135,7 @@ app.get("/", (req, res) => {
 // ---------------------------------------------------------------------------
 
 let isValidUser = (username) => {
+  console.log("./log/users/" + username);
   return fs.existsSync("./log/users/" + username);
 };
 
@@ -129,12 +143,20 @@ let userHasAI = (username) => {
   const jsonfile = "./log/users/" + username + "/settings.json";
   var obj = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
 
-  let now = new Date().getTime();
-  for (aitime of obj.aitimes) {
-    if (Date.parse(aitime.from) < now && Date.parse(aitime.to) > now) {
-      return true;
+  if (obj.aitimes) {
+    let now = new Date().getTime();
+    for (aitime of obj.aitimes) {
+      if (Date.parse(aitime.from) < now && Date.parse(aitime.to) > now) {
+        return true;
+      }
     }
   }
+
+  if (obj.ai) {
+    const now = parseInt(new Date().getTime() / (1000 * 60 * 60 * 24)); // Days since 1970-1-1
+    return (now + obj.ai.offset) % obj.ai.days == 0;
+  }
+
   return false;
 };
 
@@ -185,6 +207,98 @@ app.post("/report", express.static("public"), async (req, res) => {
   res.status(200).json("success");
 });
 
+app.post("/newProject", express.static("public"), async (req, res) => {
+  let id = makeRandomHash().substr(0, 5);
+  let projectDir = "./log/projects/" + id;
+
+  while (fs.existsSync(projectDir)) {
+    id = makeRandomHash().substr(0, 5);
+    projectDir = "./log/projects/" + id;
+  }
+  fs.mkdirSync(projectDir);
+
+  let data = {
+    id: id,
+    name: req.body.name,
+    contact: req.body.contact,
+    ai: req.body.ai,
+    reportFirst: req.body.reportFirst,
+    dailyRegime: req.body.dailyRegime,
+    users: [],
+  };
+  let colorlist = colors.sort(() => (Math.random() > 0.5 ? 1 : -1));
+
+  for (let i = 0; i < parseInt(req.body.users); i++) {
+    let user = {
+      id: makeRandomHash().substr(0, 3),
+      project: id,
+      color: { ...colorlist[i % colors.length] },
+      ai: {
+        offset: i,
+      },
+      reportFirst: {},
+    };
+
+    if (parseInt(req.body.users) > colors.length) {
+      user.color.name =
+        user.color.name + " " + (parseInt(i / colors.length) + 1);
+    }
+
+    if (parseFloat(req.body.ai) == 0) {
+      user.ai.days = 32 + parseInt(req.body.users);
+    } else {
+      user.ai.days = req.body.dailyRegime ? 1 / parseFloat(req.body.ai) : 1;
+    }
+
+    user.reportFirst.offset = i + parseInt(user.ai.days / 2);
+    if (parseFloat(req.body.reportFirst) == 0) {
+      user.reportFirst.days = 32 + parseInt(req.body.users);
+    } else {
+      user.reportFirst.days = req.body.dailyRegime
+        ? 1 / parseFloat(req.body.reportFirst)
+        : 1;
+    }
+
+    while (fs.existsSync("./log/users/" + user.id)) {
+      user.id = makeRandomHash().substr(0, 3);
+    }
+    fs.mkdirSync("./log/users/" + user.id);
+
+    data["users"].push(user);
+    fs.writeFileSync(
+      "./log/users/" + user.id + "/settings.json",
+      JSON.stringify(user)
+    );
+  }
+
+  fs.writeFileSync(projectDir + "/settings.json", JSON.stringify(data));
+  res.status(201).json(id);
+});
+
+app.post("/auth", express.static("public"), async (req, res) => {
+  const user = req.body.user;
+  if (!user || !isValidUser(user)) {
+    res.status(401).json("Invalid user");
+  } else {
+    const jsonfile = "./log/users/" + user + "/settings.json";
+    var obj = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
+
+    res.status(200).json(obj);
+  }
+});
+
+app.post("/getProject", express.static("public"), async (req, res) => {
+  const project = req.body.project;
+  if (!project || !fs.existsSync("./log/projects/" + project)) {
+    res.status(401).json("Invalid project");
+  } else {
+    const jsonfile = "./log/projects/" + project + "/settings.json";
+    var obj = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
+
+    res.status(200).json(obj);
+  }
+});
+
 app.post("/", upload.array("image"), async (req, res) => {
   const user = req.body.user;
 
@@ -198,7 +312,6 @@ app.post("/", upload.array("image"), async (req, res) => {
   try {
     id = await saveImages(req);
 
-
     if (userHasAI(user)) {
       json = await getIdExperiment(req);
     } else {
@@ -209,6 +322,8 @@ app.post("/", upload.array("image"), async (req, res) => {
 
     res.status(200).json(json);
   } catch (error) {
+    console.log(error);
+
     res.status(error.response.status).end(error.response.statusText);
     date = new Date().toISOString();
 
@@ -224,7 +339,7 @@ let saveImages = async (req) => {
   const user = req.body.user;
   imgdir = "./log/users/" + user + "/img/";
 
-  console.log('creating', imgdir);
+  console.log("creating", imgdir);
 
   if (!fs.existsSync(imgdir)) {
     fs.mkdirSync(imgdir);
