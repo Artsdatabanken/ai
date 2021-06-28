@@ -275,6 +275,56 @@ app.post("/newProject", express.static("public"), async (req, res) => {
   res.status(201).json(id);
 });
 
+app.post("/addUser", express.static("public"), async (req, res) => {
+  const projectDir = "./log/projects/" + req.body.project;
+  const jsonfile = projectDir + "/settings.json";
+  const project = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
+  const i = project.users.length;
+
+  let user = {
+    id: makeRandomHash().substr(0, 3),
+    customName: req.body.username,
+    project: project.id,
+    color: { ...colors[i % colors.length] },
+    ai: {
+      offset: i,
+    },
+    reportFirst: {},
+  };
+
+  if (parseFloat(req.body.ai) == 0) {
+    user.ai.days = -1;
+  } else {
+    user.ai.days = project.dailyRegime ? 1 / parseFloat(project.ai) : 1;
+  }
+
+  user.reportFirst.offset = i + parseInt(user.ai.days / 2);
+  if (parseFloat(project.reportFirst) == 0) {
+    user.reportFirst.days = -1;
+  } else {
+    user.reportFirst.days = project.dailyRegime
+      ? 1 / parseFloat(project.reportFirst)
+      : 1;
+  }
+
+  while (fs.existsSync("./log/users/" + user.id)) {
+    user.id = makeRandomHash().substr(0, 3);
+  }
+  fs.mkdirSync("./log/users/" + user.id);
+
+  project["users"].push(user);
+  fs.writeFileSync(projectDir + "/settings.json", JSON.stringify(project));
+  fs.writeFileSync(
+    "./log/users/" + user.id + "/settings.json",
+    JSON.stringify(user)
+  );
+  res.status(201).json(user.id);
+});
+
+
+
+
+
 app.post("/auth", express.static("public"), async (req, res) => {
   const user = req.body.user;
   if (!user || !isValidUser(user)) {
@@ -298,6 +348,10 @@ app.post("/getProject", express.static("public"), async (req, res) => {
     res.status(200).json(obj);
   }
 });
+
+
+
+
 
 app.post("/", upload.array("image"), async (req, res) => {
   const user = req.body.user;
