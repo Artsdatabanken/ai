@@ -5,6 +5,8 @@ const express = require("express");
 const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const path = require("path");
+
 const taxonMapper = require("./taxonMapping");
 const taxonPics = require("./taxonPictures");
 
@@ -135,7 +137,6 @@ app.get("/", (req, res) => {
 // ---------------------------------------------------------------------------
 
 let isValidUser = (username) => {
-  console.log("./log/users/" + username);
   return fs.existsSync("./log/users/" + username);
 };
 
@@ -162,6 +163,10 @@ let userHasAI = (username) => {
 
 app.post("/report", express.static("public"), async (req, res) => {
   const reportdir = "./log/users/" + req.body.user + "/reports";
+  const jsonfile = "./log/users/" + req.body.user + "/settings.json";
+  var user = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
+  const projectdir = "./log/projects/" + user.project;
+
   if (!fs.existsSync(reportdir)) {
     fs.mkdirSync(reportdir);
   }
@@ -173,29 +178,40 @@ app.post("/report", express.static("public"), async (req, res) => {
     fs.mkdirSync(reportdir);
   }
 
-  let csvRow = "";
-
   if (!fs.existsSync(reportdir + "/reports.csv")) {
-    csvRow +=
-      "date,user,obsId,ai,hasReadMore,species,certainty,knowledgeSource,usedTools,comment\n";
+    fs.appendFileSync(
+      reportdir + "/reports.csv",
+      "date,user,username,obsId,ai,reportFirst,hasReadMore,species,certainty,knowledgeSource,usedTools,comment\n"
+    );
   }
 
-  csvRow +=
+  if (!fs.existsSync(projectdir + "/observations.csv")) {
+    fs.appendFileSync(
+      projectdir + "/observations.csv",
+      "date,user,username,obsId,ai,reportFirst,hasReadMore,species,certainty,knowledgeSource,usedTools,comment\n"
+    );
+  }
+
+  let csvRow =
     '"' +
     new Date().toISOString() +
     '","' +
     req.body.user +
     '","' +
+    req.body.username +
+    '","' +
     req.body.obsId +
     '","' +
     req.body.ai +
     '","' +
+    req.body.reportFirst +
+    '","' +
     req.body.hasReadMore +
     '","' +
     req.body.species +
-    '",' +
+    '","' +
     req.body.certainty +
-    ',"' +
+    '","' +
     req.body.knowledgeSource +
     '","' +
     req.body.usedTools +
@@ -204,6 +220,8 @@ app.post("/report", express.static("public"), async (req, res) => {
     '"\n';
 
   fs.appendFileSync(reportdir + "/reports.csv", csvRow);
+  fs.appendFileSync(projectdir + "/observations.csv", csvRow);
+
   res.status(200).json("success");
 });
 
@@ -321,9 +339,36 @@ app.post("/addUser", express.static("public"), async (req, res) => {
   res.status(201).json(user.id);
 });
 
+app.post("/getObs", express.static("public"), async (req, res) => {
+  const csvfile = "./log/projects/" + req.body.project + "/observations.csv";
+
+  if (!fs.existsSync("./log/projects/" + req.body.project + "/observations.csv")) {
+    res.status(200).json([]);
+    return;
+  }
 
 
+  let data = fs.readFileSync(csvfile, "utf8").split("\n");
+  const headers = data.slice(0, 1)[0].split(",");
+  data = data.slice(1);
 
+  if (!data.slice(-1)[0]) {
+    data = data.slice(0, -1);
+  }
+
+  let observations = [];
+
+  for (let obs of data) {
+    obs = obs.slice(1, -1).split('","');
+    let obj = {};
+    for (let i = 0; i < headers.length; i++) {
+      obj[headers[i]] = obs[i];
+    }
+    observations.push(obj)
+  }
+
+  res.status(200).json(observations);
+});
 
 app.post("/auth", express.static("public"), async (req, res) => {
   const user = req.body.user;
@@ -349,14 +394,8 @@ app.post("/getProject", express.static("public"), async (req, res) => {
   }
 });
 
-
-
-
-
 app.post("/", upload.array("image"), async (req, res) => {
   const user = req.body.user;
-
-  console.log(user, "sent some data");
 
   if (!user || !isValidUser(user)) {
     res.status(200).json("Invalid user");
@@ -432,7 +471,8 @@ let getIdExperiment = async (req) => {
 
   try {
     recognition = await axios.post(
-      "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
+      // "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
+      "https://artsdatabanken-d.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
       form,
       {
         headers: {
