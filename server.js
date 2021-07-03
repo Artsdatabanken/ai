@@ -291,6 +291,13 @@ app.post("/newProject", express.static("public"), async (req, res) => {
 
   fs.writeFileSync(projectDir + "/settings.json", JSON.stringify(data));
   res.status(201).json(id);
+}); 
+
+app.get('/getImg/:user/:obsId', function (req, res) {
+  console.log(user);
+
+  const file = `./log/users/${user}/img/${obsId}_0.jpg`;
+  res.sendFile(file);
 });
 
 app.post("/addUser", express.static("public"), async (req, res) => {
@@ -342,11 +349,12 @@ app.post("/addUser", express.static("public"), async (req, res) => {
 app.post("/getObs", express.static("public"), async (req, res) => {
   const csvfile = "./log/projects/" + req.body.project + "/observations.csv";
 
-  if (!fs.existsSync("./log/projects/" + req.body.project + "/observations.csv")) {
+  if (
+    !fs.existsSync("./log/projects/" + req.body.project + "/observations.csv")
+  ) {
     res.status(200).json([]);
     return;
   }
-
 
   let data = fs.readFileSync(csvfile, "utf8").split("\n");
   const headers = data.slice(0, 1)[0].split(",");
@@ -364,7 +372,7 @@ app.post("/getObs", express.static("public"), async (req, res) => {
     for (let i = 0; i < headers.length; i++) {
       obj[headers[i]] = obs[i];
     }
-    observations.push(obj)
+    observations.push(obj);
   }
 
   res.status(200).json(observations);
@@ -472,7 +480,7 @@ let getIdExperiment = async (req) => {
   try {
     recognition = await axios.post(
       // "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
-      "https://artsdatabanken-d.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
+      "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
       form,
       {
         headers: {
