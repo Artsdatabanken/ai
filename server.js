@@ -291,9 +291,9 @@ app.post("/newProject", express.static("public"), async (req, res) => {
 
   fs.writeFileSync(projectDir + "/settings.json", JSON.stringify(data));
   res.status(201).json(id);
-}); 
+});
 
-app.get('/getImg/:user/:obsId', function (req, res) {
+app.get("/getImg/:user/:obsId", function (req, res) {
   console.log(user);
 
   const file = `./log/users/${user}/img/${obsId}_0.jpg`;
@@ -306,9 +306,18 @@ app.post("/addUser", express.static("public"), async (req, res) => {
   const project = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
   const i = project.users.length;
 
+  const existingUser = project.users.find(
+    (user) => user.customName.trim().toLowerCase() === req.body.username.trim().toLowerCase()
+  );
+
+  if (existingUser) {
+    res.status(202).json(existingUser.id);
+    return;
+  }
+
   let user = {
     id: makeRandomHash().substr(0, 3),
-    customName: req.body.username,
+    customName: req.body.username.trim(),
     project: project.id,
     color: { ...colors[i % colors.length] },
     ai: {
