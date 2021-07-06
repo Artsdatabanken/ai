@@ -293,10 +293,11 @@ app.post("/newProject", express.static("public"), async (req, res) => {
   res.status(201).json(id);
 });
 
-app.get("/getImg/:user/:obsId", function (req, res) {
-  console.log(user);
-
-  const file = `./log/users/${user}/img/${obsId}_0.jpg`;
+app.get("/img/:user/:obs", function (req, res) {
+  const file = path.join(
+    process.cwd(),
+    `log/users/${req.params.user}/img/${req.params.obs}_0.jpg`
+  );
   res.sendFile(file);
 });
 
@@ -307,7 +308,9 @@ app.post("/addUser", express.static("public"), async (req, res) => {
   const i = project.users.length;
 
   const existingUser = project.users.find(
-    (user) => user.customName.trim().toLowerCase() === req.body.username.trim().toLowerCase()
+    (user) =>
+      user.customName.trim().toLowerCase() ===
+      req.body.username.trim().toLowerCase()
   );
 
   if (existingUser) {
