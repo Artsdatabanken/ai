@@ -7,11 +7,11 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const taxonMapper = require("./taxonMapping");
 const taxonPics = require("./taxonPictures");
-const cron = require('node-cron');
+const cron = require("node-cron");
 
 // Use the crypto library for encryption and decryption
-const crypto = require('crypto');
-const encryption_algorithm = 'aes-256-ctr';
+const crypto = require("crypto");
+const encryption_algorithm = "aes-256-ctr";
 // Generate a secure, pseudo random initialization vector for encryption
 const initVect = crypto.randomBytes(16);
 
@@ -124,7 +124,15 @@ let getName = async (sciName) => {
       sciName;
 
     if (taxon.data.Description) {
-      nameResult.infoUrl = taxon.data.Description[0].Id.replace(
+      const description =
+        taxon.data.Description.find(
+          (desc) =>
+            desc.Language == "nb" ||
+            desc.Language == "no" ||
+            desc.Language == "nn"
+        ) || taxon.data.Description[0];
+
+      nameResult.infoUrl = description.Id.replace(
         "Nodes/",
         "https://artsdatabanken.no/Pages/"
       );
@@ -134,7 +142,7 @@ let getName = async (sciName) => {
 
     name = await axios.get("https://artsdatabanken.no/Api/" + taxon.data.Id);
   } catch (error) {
-    date = new Date().toISOString()
+    date = new Date().toISOString();
     console.log(date, error);
     throw error;
   }
@@ -151,86 +159,102 @@ let getName = async (sciName) => {
 };
 
 // Check if there are old files to be deleted every X minute:
-cron.schedule('30 * * * *', () => {
+cron.schedule("30 * * * *", () => {
   //console.log('Running cleanup every 30th minute');
-  
-  // Loop over all files in uploads/ 
-  fs.readdir('./uploads/', (err, files) => {
-    files.forEach(file => {
-        // gets timestamp from filename
-        let filename = file.split("_")[1]; 
-        // gets current timestamp
-        let timestamp = Math.round((new Date()).getTime() / 1000);
-        // Check timestamp vs. time now
-        let time_between = timestamp - filename;
-        // Image Survival length, if change this - ensure to change in artsobs-mobile too...
-        let survival_length = 3600 // 1 hr in seconds
-        // If more than survival_length 
-        if(time_between >= survival_length){
-          // Delete the file 
-          fs.unlink('./uploads/'+file, (err) => {
-            if (err){console.log("could not delete file")};
-            console.log('The file has been deleted!');
-          });
-        }
+
+  // Loop over all files in uploads/
+  fs.readdir("./uploads/", (err, files) => {
+    files.forEach((file) => {
+      // gets timestamp from filename
+      let filename = file.split("_")[1];
+      // gets current timestamp
+      let timestamp = Math.round(new Date().getTime() / 1000);
+      // Check timestamp vs. time now
+      let time_between = timestamp - filename;
+      // Image Survival length, if change this - ensure to change in artsobs-mobile too...
+      let survival_length = 3600; // 1 hr in seconds
+      // If more than survival_length
+      if (time_between >= survival_length) {
+        // Delete the file
+        fs.unlink("./uploads/" + file, (err) => {
+          if (err) {
+            console.log("could not delete file");
+          }
+          console.log("The file has been deleted!");
+        });
+      }
     });
   });
 });
 
-function encrypt( file, password ) {  
+function encrypt(file, password) {
   // Create a new cipher using the algorithm, key, and initVect
-  const cipher = crypto.createCipheriv(encryption_algorithm, password, initVect);
+  const cipher = crypto.createCipheriv(
+    encryption_algorithm,
+    password,
+    initVect
+  );
   // file is already a string - base64
   const encrypted = Buffer.concat([cipher.update(file), cipher.final()]);
   return encrypted;
 }
 
-const decrypt = (encrypted_content,password) => {
+const decrypt = (encrypted_content, password) => {
   // Use the same things to create the decipher vector
-  const decipher = crypto.createDecipheriv(encryption_algorithm, password, initVect);
+  const decipher = crypto.createDecipheriv(
+    encryption_algorithm,
+    password,
+    initVect
+  );
   // Apply the deciphering
-  const decrypted = Buffer.concat([decipher.update(encrypted_content), decipher.final()]);
+  const decrypted = Buffer.concat([
+    decipher.update(encrypted_content),
+    decipher.final(),
+  ]);
   return decrypted.toString();
 };
 
-function makeRandomHash() {  
+function makeRandomHash() {
   // TODO check that this is not used. To do this, loop over uploads folder
-  // It would be shocking if it is used considering we use the current date as input, and 
+  // It would be shocking if it is used considering we use the current date as input, and
   // clean out images every 30 minutes. But you never know.
-  let current_date = (new Date()).valueOf().toString();
+  let current_date = new Date().valueOf().toString();
   let random = Math.random().toString();
-  return crypto.createHash('sha1').update(current_date + random).digest('hex');
+  return crypto
+    .createHash("sha1")
+    .update(current_date + random)
+    .digest("hex");
 }
 
-let saveImagesAndGetToken = async(req) => {
+let saveImagesAndGetToken = async (req) => {
   // Create random, unused id & password, password must be a certain length
   let id = makeRandomHash();
-  let password = makeRandomHash().substring(0,32);
+  let password = makeRandomHash().substring(0, 32);
   let counter = 0;
 
-  for (let image of req.files) {    
-    let timestamp = Math.round((new Date()).getTime() / 1000);
-    
+  for (let image of req.files) {
+    let timestamp = Math.round(new Date().getTime() / 1000);
+
     // Turn image into base64 to allow both encryption and future transfer
-    let base64image = image.buffer.toString('base64');
+    let base64image = image.buffer.toString("base64");
 
     // Perform encryption
-    let encrypted_file = encrypt(base64image,password);    
+    let encrypted_file = encrypt(base64image, password);
 
     // Save encrypted file to disk and put id & date (unix timestamp) in filename
-    let filename = id + '_' + counter + '_' + timestamp + '_'; 
+    let filename = id + "_" + counter + "_" + timestamp + "_";
 
     // ensure uniqueness in case the other factors end up the same (unlikely)
-    counter += 1; 
+    counter += 1;
 
     // Upload to uploads folder
-    fs.writeFile('./uploads/' + filename , encrypted_file, (err) => {
+    fs.writeFile("./uploads/" + filename, encrypted_file, (err) => {
       if (err) throw err;
-      console.log('The file has been saved!');
+      console.log("The file has been saved!");
     });
   }
-  return {'id':id, 'password':password};
-}
+  return { id: id, password: password };
+};
 
 let getId = async (req) => {
   const form = new FormData();
@@ -252,7 +276,7 @@ let getId = async (req) => {
     recognition = await axios.post(
       "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
       form,
-      
+
       {
         headers: {
           ...formHeaders,
@@ -263,7 +287,7 @@ let getId = async (req) => {
       }
     );
   } catch (error) {
-    date = new Date().toISOString()
+    date = new Date().toISOString();
     console.log(date, error);
     throw error;
   }
@@ -288,7 +312,7 @@ let getId = async (req) => {
       pred.taxon.infoUrl = nameResult.infoUrl;
       pred.taxon.picture = getPicture(nameResult.scientificName);
     } catch (error) {
-      date = new Date().toISOString()
+      date = new Date().toISOString();
       console.log(date, error);
       throw error;
     }
@@ -347,7 +371,7 @@ app.post("/", upload.array("image"), async (req, res) => {
     res.status(200).json(json);
   } catch (error) {
     res.status(error.response.status).end(error.response.statusText);
-    date = new Date().toISOString()
+    date = new Date().toISOString();
 
     console.log(date, "Error", error.response.status);
     fs.appendFileSync(
@@ -363,7 +387,7 @@ app.post("/save", upload.array("image"), async (req, res) => {
     json = await saveImagesAndGetToken(req);
     res.status(200).json(json);
   } catch (error) {
-    date = new Date().toISOString()
+    date = new Date().toISOString();
     console.log(date, "Error", error);
   }
 });
@@ -373,52 +397,52 @@ app.get("/", (req, res) => {
 });
 
 app.get("/image/*", (req, res) => {
-    // image request from the orakel service
-    // On the form /image/id&password
+  // image request from the orakel service
+  // On the form /image/id&password
 
-    // Url used to arrive here from outside
-    let url = req.originalUrl.replace('/image/','');
+  // Url used to arrive here from outside
+  let url = req.originalUrl.replace("/image/", "");
 
-    // Obtain password from the end of the url
-    let password = url.split('&')[1].toString();
+  // Obtain password from the end of the url
+  let password = url.split("&")[1].toString();
 
-    // Obtain the image id's from the url
-    url = url.split('&')[0]
+  // Obtain the image id's from the url
+  url = url.split("&")[0];
 
-    // Loop over all files in uploads/     
-    fs.readdir('./uploads/', (err, files) => {
-      let image_list = [];
+  // Loop over all files in uploads/
+  fs.readdir("./uploads/", (err, files) => {
+    let image_list = [];
 
-      files.forEach(file => {
-          // The id's in upload are of the format:
-          // sessionid_number_timestamp this to ensure unique id's
-          // to get all entries from one session, we use only the first of these
-          const fileid = file.split('_')[0]; 
+    files.forEach((file) => {
+      // The id's in upload are of the format:
+      // sessionid_number_timestamp this to ensure unique id's
+      // to get all entries from one session, we use only the first of these
+      const fileid = file.split("_")[0];
 
-          if(fileid === url){
-            // If the request has a match in the database (it should unless the user was too slow)
-            const image_to_fetch = "./uploads/"+file;
+      if (fileid === url) {
+        // If the request has a match in the database (it should unless the user was too slow)
+        const image_to_fetch = "./uploads/" + file;
 
-            // read the file
-            const file_buffer  = fs.readFileSync(image_to_fetch);
+        // read the file
+        const file_buffer = fs.readFileSync(image_to_fetch);
 
-            // decrypt the file
-            let decrypted_file = decrypt(file_buffer,password);
+        // decrypt the file
+        let decrypted_file = decrypt(file_buffer, password);
 
-            // add the file to the return list
-            image_list.push(decrypted_file);
-          }
-      });
-      // generate json object to return at request
-      let json = {image:image_list}
-      try {
-        res.status(200).json(json);
-      } catch (error) {
-        date = new Date().toISOString()
-        console.error(date, "Error", error);
+        // add the file to the return list
+        image_list.push(decrypted_file);
       }
-    })
+    });
+    // generate json object to return at request
+    let json = { image: image_list };
+    try {
+      res.status(200).json(json);
+    } catch (error) {
+      date = new Date().toISOString();
+      console.error(date, "Error", error);
+    }
+  });
 });
 
-date = new Date().toISOString()
+date = new Date().toISOString();
 app.listen(port, console.log(date, `Dev server now running on port ${port}`));
