@@ -144,6 +144,12 @@ let getName = async (sciName) => {
   } catch (error) {
     date = new Date().toISOString();
     console.log(date, error);
+
+    fs.appendFileSync(
+      "./log/log.txt",
+      "Error getting names: " + error.response.status + " (" + date + ")\n"
+    );
+
     throw error;
   }
 
@@ -377,7 +383,7 @@ app.post("/", upload.array("image"), async (req, res) => {
 
     fs.appendFileSync(
       "./log/log.txt",
-      "Error identifying: " + error.response.status + "(" + date + ")\n"
+      "Error identifying: " + error.response.status + " (" + date + ")\n"
     );
   }
 });
