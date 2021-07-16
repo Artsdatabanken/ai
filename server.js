@@ -374,9 +374,10 @@ app.post("/", upload.array("image"), async (req, res) => {
     date = new Date().toISOString();
 
     console.log(date, "Error", error.response.status);
+
     fs.appendFileSync(
       "./log/log.txt",
-      "Error identifying: " + error.response.status + "\n"
+      "Error identifying: " + error.response.status + "(" + date + ")\n"
     );
   }
 });
