@@ -328,7 +328,7 @@ app.get("/csv/:project", function (req, res) {
     return b.modified - a.modified;
   });
 
-  let csv = `Bilder,Tidspunkt,Spiller,Spiller sier,AI,Kilde,Appen sier,Treff,Konklusjon,Kommentar\n`;
+  let csv = `Bilder,Tidspunkt,Spiller,Spiller sier,AI,Kilde,Appen sier,AI treff posisjon,Konklusjon,Kommentar\n`;
 
   observations.forEach((observation) => {
     let predictions = "";
@@ -501,7 +501,7 @@ app.get("/html/:project", function (req, res) {
     <th>AI</th>
     <th>Kilde</th>
     <th>Appen sier</th>
-    <th>Treff</th>
+    <th>AI treff posisjon</th>
     <th>Konklusjon</th>
     <th>Kommentar</th>
   </tr>`;
