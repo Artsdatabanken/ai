@@ -295,7 +295,14 @@ app.post("/newProject", express.static("public"), async (req, res) => {
 });
 
 app.get("/csv/:project", function (req, res) {
-  const thisUrl = req.get("host");
+  let thisUrl = req.get("host");
+  if (thisUrl.slice(-4) === ":443" || req.protocol === "https") {
+    thisUrl = "https://" + thisUrl;
+  }
+  else {
+    thisUrl = "http://" + thisUrl;
+  }
+
   const jsonfile = `./log/projects/${req.params.project}/settings.json`;
   const project = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
   let observations = [];
