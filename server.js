@@ -14,6 +14,7 @@ const taxonPics = require("./taxonPictures");
 const crypto = require("crypto");
 
 let appInsights = require("applicationinsights");
+const { exit } = require("process");
 
 const colors = [
   { name: "rød", h: "0", s: "100%", l: "30%" },
@@ -293,10 +294,284 @@ app.post("/newProject", express.static("public"), async (req, res) => {
   res.status(201).json(id);
 });
 
+app.get("/csv/:project", function (req, res) {
+  const thisUrl = req.protocol + "://" + req.get("host");
+  const jsonfile = `./log/projects/${req.params.project}/settings.json`;
+  const project = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
+  let observations = [];
+
+  project.users.forEach((user) => {
+    let reportsdir = `./log/users/${user.id}/reports`;
+    if (fs.existsSync(reportsdir)) {
+      fs.readdirSync(reportsdir).forEach((file) => {
+        if (file.slice(-5) === ".json") {
+          let obs = JSON.parse(
+            fs.readFileSync(path.join(reportsdir, file), "utf8")
+          );
+
+          const { mtime } = fs.statSync(path.join(reportsdir, file));
+          obs["modified"] = mtime;
+          observations.push(obs);
+        }
+      });
+    }
+  });
+
+  observations = observations.sort((a, b) => {
+    return b.modified - a.modified;
+  });
+
+  let csv = `Bilder,Tidspunkt,Spiller,Spiller sier,AI,Kilde,Appen sier,Treff,Konklusjon,Kommentar\n`;
+
+  observations.forEach((observation) => {
+    let predictions = "";
+    observation.predictions.forEach((prediction) => {
+      predictions += `${prediction.taxon.name} (${parseInt(
+        prediction.probability * 100
+      )}%)\n`;
+    });
+
+    predictions = "\"" + predictions.slice(0, -1) + "\"";
+
+    let images = "";
+    let imgdir = `./log/users/${observation.user}/img`;
+    let imgindex = 0;
+    let img = path.join(imgdir, `${observation.obsId}_${imgindex}.jpg`);
+    while (fs.existsSync(img)) {
+      images += `${thisUrl}/img/${observation.user}/${observation.obsId}/${imgindex}\n`;
+      img = path.join(imgdir, `${observation.obsId}_${++imgindex}.jpg`);
+    }
+
+    images = "\"" + images.slice(0, -1) + "\"";
+
+    const resultIndex =
+      observation.predictions.findIndex(
+        (p) => p.taxon.name === observation.species
+      ) + 1;
+
+    csv += `${images},`;
+    csv += `${new Date(observation.modified)
+      .toISOString()
+      .slice(0, 19)
+      .replace("T", " ")},`;
+    csv += `${observation.username},`;
+    csv += `${observation.species} (${observation.certainty}%),`;
+    csv += `${observation.reportFirst ? "" : "✓"},`;
+    csv += `"${observation.knowledgeSource
+      .replace("prior", "Min egen forkunnskap")
+      .replace("app", "Denne appen")
+      .replace("other", "Ekstern kilde")
+      .replace(", ", "\n")}",`;
+    csv += `${predictions},`;
+    csv += `${resultIndex ? resultIndex : ""},`;
+    csv += `${
+      observation.species === observation.predictions[0].taxon.name
+        ? "✓"
+        : observation.WhoIsRight
+        ? observation.WhoIsRight.replace("IDontKnow", "\"✗ Jeg vet ikke\"")
+            .replace("IAmRight", "✗ Appen tar feil")
+            .replace("AppIsRight", "✗ Jeg tror appen har rett")
+        : "✗ Overstyrt av spiller"
+    },`;
+    csv += `"${observation.comment}"\n`;
+  });
+
+  res.header("Content-Type", "text/csv");
+  res.attachment(`project_${req.params.project}.csv`);
+  return res.send(csv);
+});
+
+app.get("/html/:project", function (req, res) {
+  const thisUrl = req.protocol + "://" + req.get("host");
+  const jsonfile = `./log/projects/${req.params.project}/settings.json`;
+  const project = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
+
+  let html = `<!DOCTYPE html><html lang="en">
+  <head><meta charset="utf-8"><title>${project.name}</title>
+    <style>
+      h1 {
+        color: maroon;
+      }
+
+      table {
+        border-collapse: collapse;
+      }
+    
+      th {
+        background: #333;
+        color: white;
+      }
+
+      td, th {
+        padding: .5em 2em .5em .5em;
+        vertical-align: top;
+        text-align: left;
+      }
+
+      ul {
+        margin: 0;
+      }
+
+      #obstable tr:nth-child(even) {
+        background: #ffe
+      }
+
+      #obstable td {
+        border: 1px solid #ccc;
+      }
+
+      #usertable td {
+        border: 1px solid #666;
+      }
+
+      .thumbnail {
+        width: 100px;
+      }
+
+    </style>
+  </head><body>`;
+
+  html += `<h1>${project.name}</h1>`;
+  html += `<p><b>Kontaktperson:</b> ${project.contact}</p>`;
+
+  html += `<h3>Spillere (${project.users.length})</h3>`;
+  html += `<table id="usertable">`;
+  html += `<tr>
+  <th></th>
+  <th>Navn</th>
+  <th>Observasjoner</th>
+</tr>`;
+
+  let observations = [];
+
+  project.users.forEach((user) => {
+    let reportsdir = `./log/users/${user.id}/reports`;
+    let userObsCount = 0;
+    if (fs.existsSync(reportsdir)) {
+      fs.readdirSync(reportsdir).forEach((file) => {
+        if (file.slice(-5) === ".json") {
+          let obs = JSON.parse(
+            fs.readFileSync(path.join(reportsdir, file), "utf8")
+          );
+
+          const { mtime } = fs.statSync(path.join(reportsdir, file));
+          obs["modified"] = mtime;
+          observations.push(obs);
+          userObsCount++;
+        }
+      });
+    }
+
+    html += `<tr>
+    <td style="background-color: hsl(${user.color.h}, ${user.color.s}, ${
+      user.color.l
+    });"> </td>
+    <td style="background-color: hsl(${user.color.h}, ${user.color.s}, ${
+      user.color.l
+    }, .15);">${user.customName}</td>
+    <td style="background-color: hsl(${user.color.h}, ${user.color.s}, ${
+      user.color.l
+    }, .15);">${userObsCount ? userObsCount : "-"}</td>
+    </tr>`;
+  });
+  html += `</table>`;
+
+  observations = observations.sort((a, b) => {
+    return b.modified - a.modified;
+  });
+
+  html += `<H3>Observasjoner (${observations.length})</H3>`;
+  html += `<table id="obstable">`;
+
+  html += `<tr>
+    <th>Bilder</th>
+    <th>Tidspunkt</th>
+    <th>Spiller</th>
+    <th>Spiller sier</th>
+    <th>AI</th>
+    <th>Kilde</th>
+    <th>Appen sier</th>
+    <th>Treff</th>
+    <th>Konklusjon</th>
+    <th>Kommentar</th>
+  </tr>`;
+
+  observations.forEach((observation) => {
+    let predictions = "<ul>";
+    observation.predictions.forEach((prediction) => {
+      predictions += `<li>${prediction.taxon.name} (${parseInt(
+        prediction.probability * 100
+      )}%)</li>`;
+    });
+    predictions += "</ul>";
+
+    let images = "";
+
+    let imgdir = `./log/users/${observation.user}/img`;
+    let imgindex = 0;
+    let img = path.join(imgdir, `${observation.obsId}_${imgindex}.jpg`);
+    while (fs.existsSync(img)) {
+      images += `<a href="${thisUrl}/img/${observation.user}/${observation.obsId}/${imgindex}" target="_blank"><img class="thumbnail" src="${thisUrl}/img/${observation.user}/${observation.obsId}/${imgindex}"/></a>`;
+      img = path.join(imgdir, `${observation.obsId}_${++imgindex}.jpg`);
+    }
+
+    const resultIndex =
+      observation.predictions.findIndex(
+        (p) => p.taxon.name === observation.species
+      ) + 1;
+
+    html += `<tr>
+      <td>${images}</td>
+
+      <td>${new Date(observation.modified)
+        .toISOString()
+        .slice(0, 19)
+        .replace("T", " ")}</td>
+      <td>${observation.username}</td>
+      <td>${observation.species} (${observation.certainty}%)</td>
+      <td>${observation.reportFirst ? "" : "✓"}</td>
+      <td><ul><li>${observation.knowledgeSource
+        .replace("prior", "Min egen forkunnskap")
+        .replace("app", "Denne appen")
+        .replace("other", "Ekstern kilde")
+        .replace(",", "</li><li>")}</li></ul></td>
+      <td>${predictions}</td>
+      <td>${resultIndex ? resultIndex : ""}</td>
+
+
+
+      <td>${
+        observation.species === observation.predictions[0].taxon.name
+          ? "✓"
+          : observation.WhoIsRight
+          ? observation.WhoIsRight.replace("IDontKnow", "✗ Jeg vet ikke")
+              .replace("IAmRight", "✗ Appen tar feil")
+              .replace("AppIsRight", "✗ Jeg tror appen har rett")
+          : "✗ Overstyrt av spiller"
+      }</td>
+      <td>${observation.comment}</td>
+    </tr>`;
+  });
+  html += `</table>`;
+
+  html += `</body>
+      </html>`;
+  res.header("Content-Type", "text/html");
+  return res.send(html);
+});
+
 app.get("/img/:user/:obs", function (req, res) {
   const file = path.join(
     process.cwd(),
     `log/users/${req.params.user}/img/${req.params.obs}_0.jpg`
+  );
+  res.sendFile(file);
+});
+
+app.get("/img/:user/:obs/:index", function (req, res) {
+  const file = path.join(
+    process.cwd(),
+    `log/users/${req.params.user}/img/${req.params.obs}_${req.params.index}.jpg`
   );
   res.sendFile(file);
 });
