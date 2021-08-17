@@ -298,8 +298,7 @@ app.get("/csv/:project", function (req, res) {
   let thisUrl = req.get("host");
   if (thisUrl.slice(-4) === ":443" || req.protocol === "https") {
     thisUrl = "https://" + thisUrl;
-  }
-  else {
+  } else {
     thisUrl = "http://" + thisUrl;
   }
 
@@ -338,7 +337,7 @@ app.get("/csv/:project", function (req, res) {
       )}%)\n`;
     });
 
-    predictions = "\"" + predictions.slice(0, -1) + "\"";
+    predictions = '"' + predictions.slice(0, -1) + '"';
 
     let images = "";
     let imgdir = `./log/users/${observation.user}/img`;
@@ -349,7 +348,7 @@ app.get("/csv/:project", function (req, res) {
       img = path.join(imgdir, `${observation.obsId}_${++imgindex}.jpg`);
     }
 
-    images = "\"" + images.slice(0, -1) + "\"";
+    images = '"' + images.slice(0, -1) + '"';
 
     const resultIndex =
       observation.predictions.findIndex(
@@ -375,7 +374,7 @@ app.get("/csv/:project", function (req, res) {
       observation.species === observation.predictions[0].taxon.name
         ? "✓"
         : observation.WhoIsRight
-        ? observation.WhoIsRight.replace("IDontKnow", "\"✗ Jeg vet ikke\"")
+        ? observation.WhoIsRight.replace("IDontKnow", '"✗ Jeg vet ikke"')
             .replace("IAmRight", "✗ Appen tar feil")
             .replace("AppIsRight", "✗ Jeg tror appen har rett")
         : "✗ Overstyrt av spiller"
@@ -388,10 +387,7 @@ app.get("/csv/:project", function (req, res) {
   return res.send(csv);
 });
 
-app.get("/html/:project", function (req, res) {
-
-
-
+app.get("/html/:project", async function (req, res) {
   const thisUrl = "//" + req.get("host");
   const jsonfile = `./log/projects/${req.params.project}/settings.json`;
   const project = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
@@ -506,10 +502,14 @@ app.get("/html/:project", function (req, res) {
     <th>Kommentar</th>
   </tr>`;
 
-  observations.forEach((observation) => {
+  for (let observation of observations) {
+    let nameResult = await getName(observation.species);
+    observation.vernacularName = nameResult.vernacularName[0].toUpperCase() + nameResult.vernacularName.slice(1).toLowerCase();
+
     let predictions = "<ul>";
     observation.predictions.forEach((prediction) => {
-      predictions += `<li>${prediction.taxon.name} (${parseInt(
+      prediction.taxon.vernacularName = prediction.taxon.vernacularName[0].toUpperCase() + prediction.taxon.vernacularName.slice(1).toLowerCase();
+      predictions += `<li>${prediction.taxon.vernacularName !== prediction.taxon.name ? prediction.taxon.vernacularName : ""} <i>${prediction.taxon.name}</i> (${parseInt(
         prediction.probability * 100
       )}%)</li>`;
     });
@@ -538,7 +538,7 @@ app.get("/html/:project", function (req, res) {
         .slice(0, 19)
         .replace("T", " ")}</td>
       <td>${observation.username}</td>
-      <td>${observation.species} (${observation.certainty}%)</td>
+      <td>${observation.vernacularName !== observation.species ? observation.vernacularName : ""} <i>${observation.species}</i> (${observation.certainty}%)</td>
       <td>${observation.reportFirst ? "" : "✓"}</td>
       <td><ul><li>${observation.knowledgeSource
         .replace("prior", "Min egen forkunnskap")
@@ -561,7 +561,9 @@ app.get("/html/:project", function (req, res) {
       }</td>
       <td>${observation.comment}</td>
     </tr>`;
-  });
+  }
+
+  observations.forEach((observation) => {});
   html += `</table>`;
 
   html += `</body>
