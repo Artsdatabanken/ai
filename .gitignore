@@ -18,6 +18,6 @@ yarn-debug.log*
 yarn-error.log*
 .~lock.*
 TaxonExtractor.ods
-log/*
+log
 secrets
 docker-compose.yml
