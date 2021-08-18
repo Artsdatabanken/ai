@@ -504,12 +504,20 @@ app.get("/html/:project", async function (req, res) {
 
   for (let observation of observations) {
     let nameResult = await getName(observation.species);
-    observation.vernacularName = nameResult.vernacularName[0].toUpperCase() + nameResult.vernacularName.slice(1).toLowerCase();
+    observation.vernacularName =
+      nameResult.vernacularName[0].toUpperCase() +
+      nameResult.vernacularName.slice(1).toLowerCase();
 
     let predictions = "<ul>";
     observation.predictions.forEach((prediction) => {
-      prediction.taxon.vernacularName = prediction.taxon.vernacularName[0].toUpperCase() + prediction.taxon.vernacularName.slice(1).toLowerCase();
-      predictions += `<li>${prediction.taxon.vernacularName !== prediction.taxon.name ? prediction.taxon.vernacularName : ""} <i>${prediction.taxon.name}</i> (${parseInt(
+      prediction.taxon.vernacularName =
+        prediction.taxon.vernacularName[0].toUpperCase() +
+        prediction.taxon.vernacularName.slice(1).toLowerCase();
+      predictions += `<li>${
+        prediction.taxon.vernacularName !== prediction.taxon.name
+          ? prediction.taxon.vernacularName
+          : ""
+      } <i>${prediction.taxon.name}</i> (${parseInt(
         prediction.probability * 100
       )}%)</li>`;
     });
@@ -538,7 +546,11 @@ app.get("/html/:project", async function (req, res) {
         .slice(0, 19)
         .replace("T", " ")}</td>
       <td>${observation.username}</td>
-      <td>${observation.vernacularName !== observation.species ? observation.vernacularName : ""} <i>${observation.species}</i> (${observation.certainty}%)</td>
+      <td>${
+        observation.vernacularName !== observation.species
+          ? observation.vernacularName
+          : ""
+      } <i>${observation.species}</i> (${observation.certainty}%)</td>
       <td>${observation.reportFirst ? "" : "✓"}</td>
       <td><ul><li>${observation.knowledgeSource
         .replace("prior", "Min egen forkunnskap")
@@ -608,6 +620,7 @@ app.post("/addUser", express.static("public"), async (req, res) => {
   let user = {
     id: makeRandomHash().substr(0, 3),
     customName: req.body.username.trim(),
+    isTeacher: req.body.isTeacher,
     project: project.id,
     color: { ...colors[i % colors.length] },
     ai: {
