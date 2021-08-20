@@ -503,10 +503,16 @@ app.get("/html/:project", async function (req, res) {
   </tr>`;
 
   for (let observation of observations) {
-    let nameResult = await getName(observation.species);
-    observation.vernacularName =
-      nameResult.vernacularName[0].toUpperCase() +
-      nameResult.vernacularName.slice(1).toLowerCase();
+    if (!observation.vernacular) {
+      let nameResult = await getName(observation.species);
+      observation.vernacular = nameResult.vernacularName;
+    }
+
+    console.log(observation);
+
+    observation.vernacular =
+      observation.vernacular[0].toUpperCase() +
+      observation.vernacular.slice(1).toLowerCase();
 
     let predictions = "<ul>";
     observation.predictions.forEach((prediction) => {
@@ -548,7 +554,7 @@ app.get("/html/:project", async function (req, res) {
       <td>${observation.username}</td>
       <td>${
         observation.vernacularName !== observation.species
-          ? observation.vernacularName
+          ? observation.vernacular
           : ""
       } <i>${observation.species}</i> (${observation.certainty}%)</td>
       <td>${observation.reportFirst ? "" : "✓"}</td>
@@ -582,6 +588,65 @@ app.get("/html/:project", async function (req, res) {
       </html>`;
   res.header("Content-Type", "text/html");
   return res.send(html);
+});
+
+app.get("/json/:project", async function (req, res) {
+  const thisUrl = "//" + req.get("host");
+  const jsonfile = `./log/projects/${req.params.project}/settings.json`;
+  const project = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
+
+  project.observations = [];
+
+  project.users.forEach((user) => {
+    let reportsdir = `./log/users/${user.id}/reports`;
+    let userObsCount = 0;
+    if (fs.existsSync(reportsdir)) {
+      fs.readdirSync(reportsdir).forEach((file) => {
+        if (file.slice(-5) === ".json") {
+          let obs = JSON.parse(
+            fs.readFileSync(path.join(reportsdir, file), "utf8")
+          );
+
+          const { mtime } = fs.statSync(path.join(reportsdir, file));
+          obs["modified"] = mtime;
+          project.observations.push(obs);
+          userObsCount++;
+        }
+      });
+    }
+
+    user.observationCount = userObsCount;
+  });
+
+  project.observations = project.observations.sort((a, b) => {
+    return b.modified - a.modified;
+  });
+
+  for (let index = 0; index < project.observations.length; index++) {
+    const observation = project.observations[index];
+
+    if (!observation.vernacular) {
+      let nameResult = await getName(observation.species);
+      observation.vernacular = nameResult.vernacularName;
+    }
+
+    observation.images = [];
+
+    let imgdir = `./log/users/${observation.user}/img`;
+    let imgindex = 0;
+    let img = path.join(imgdir, `${observation.obsId}_${imgindex}.jpg`);
+
+    while (fs.existsSync(img)) {
+      observation.images.push(
+        `${thisUrl}/img/${observation.user}/${observation.obsId}/${imgindex}`
+      );
+      img = path.join(imgdir, `${observation.obsId}_${imgindex++}.jpg`);
+    }
+
+    project.observations[index] = observation;
+  }
+  JSON.stringify(project);
+  res.status(201).json(project);
 });
 
 app.get("/img/:user/:obs", function (req, res) {
