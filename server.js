@@ -782,15 +782,20 @@ app.post("/getProject", express.static("public"), async (req, res) => {
 app.post("/", upload.array("image"), async (req, res) => {
   const user = req.body.user;
 
-  if (!user || !isValidUser(user)) {
+  if (user && !isValidUser(user)) {
     res.status(200).json("Invalid user");
     return;
   }
 
   try {
-    id = await saveImages(req);
+    if(user) {
+      id = await saveImages(req);
+    }
+    else {
+      id = 0;
+    }
 
-    if (userHasAI(user)) {
+    if (!user || userHasAI(user)) {
       json = await getIdExperiment(req);
     } else {
       json = { predictions: [] };
