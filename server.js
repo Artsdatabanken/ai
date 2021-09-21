@@ -788,10 +788,9 @@ app.post("/", upload.array("image"), async (req, res) => {
   }
 
   try {
-    if(user) {
+    if (user) {
       id = await saveImages(req);
-    }
-    else {
+    } else {
       id = 0;
     }
 
@@ -826,6 +825,7 @@ let saveImages = async (req) => {
 
   if (!fs.existsSync(imgdir)) {
     fs.mkdirSync(imgdir);
+    fs.appendFileSync("./log/log.txt", "Creating: " + imgdir + "\n");
   }
 
   let counter = 0;
@@ -836,7 +836,22 @@ let saveImages = async (req) => {
 
   for (let image of req.files) {
     fs.writeFile(imgdir + id + "_" + counter + ".jpg", image.buffer, (err) => {
-      if (err) throw err;
+      if (err) {
+        fs.appendFileSync(
+          "./log/log.txt",
+          "Error saving " +
+            imgdir +
+            id +
+            "_" +
+            counter +
+            ".jpg" +
+            ": " +
+            err +
+            "\n"
+        );
+
+        throw err;
+      }
     });
     counter += 1;
   }
