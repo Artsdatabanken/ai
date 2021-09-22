@@ -17,6 +17,7 @@ let appInsights = require("applicationinsights");
 const { exit } = require("process");
 
 const colors = [
+  { name: "svart", h: "0", s: "0%", l: "0%" },
   { name: "rød", h: "0", s: "100%", l: "30%" },
   { name: "oransj", h: "35", s: "100%", l: "40%" },
   { name: "gul", h: "55", s: "100%", l: "40%" },
@@ -25,7 +26,6 @@ const colors = [
   { name: "blå", h: "210", s: "100%", l: "30%" },
   { name: "fiolett", h: "275", s: "100%", l: "30%" },
   { name: "rosa", h: "300", s: "100%", l: "40%" },
-  { name: "svart", h: "0", s: "0%", l: "0%" },
   { name: "grå", h: "0", s: "0%", l: "50%" },
 ];
 
@@ -243,52 +243,56 @@ app.post("/newProject", express.static("public"), async (req, res) => {
     ai: req.body.ai,
     reportFirst: req.body.reportFirst,
     dailyRegime: req.body.dailyRegime,
+    teams: parseInt(req.body.teams),
     users: [],
   };
-  let colorlist = colors.sort(() => (Math.random() > 0.5 ? 1 : -1));
 
-  for (let i = 0; i < parseInt(req.body.users); i++) {
-    let user = {
-      id: makeRandomHash().substr(0, 3),
-      project: id,
-      color: { ...colorlist[i % colors.length] },
-      ai: {
-        offset: i,
-      },
-      reportFirst: {},
-    };
+  // *** Not relevant as we're currently not pre-generating users ***
 
-    if (parseInt(req.body.users) > colors.length) {
-      user.color.name =
-        user.color.name + " " + (parseInt(i / colors.length) + 1);
-    }
+  // let colorlist = colors.sort(() => (Math.random() > 0.5 ? 1 : -1));
 
-    if (parseFloat(req.body.ai) == 0) {
-      user.ai.days = 32 + parseInt(req.body.users);
-    } else {
-      user.ai.days = req.body.dailyRegime ? 1 / parseFloat(req.body.ai) : 1;
-    }
+  // for (let i = 0; i < parseInt(req.body.users); i++) {
+  //   let user = {
+  //     id: makeRandomHash().substr(0, 3),
+  //     project: id,
+  //     color: { ...colorlist[i % colors.length] },
+  //     ai: {
+  //       offset: i,
+  //     },
+  //     reportFirst: {},
+  //   };
 
-    user.reportFirst.offset = i + parseInt(user.ai.days / 2);
-    if (parseFloat(req.body.reportFirst) == 0) {
-      user.reportFirst.days = 32 + parseInt(req.body.users);
-    } else {
-      user.reportFirst.days = req.body.dailyRegime
-        ? 1 / parseFloat(req.body.reportFirst)
-        : 1;
-    }
+  //   if (parseInt(req.body.users) > colors.length) {
+  //     user.color.name =
+  //       user.color.name + " " + (parseInt(i / colors.length) + 1);
+  //   }
 
-    while (fs.existsSync("./log/users/" + user.id)) {
-      user.id = makeRandomHash().substr(0, 3);
-    }
-    fs.mkdirSync("./log/users/" + user.id);
+  //   if (parseFloat(req.body.ai) == 0) {
+  //     user.ai.days = 32 + parseInt(req.body.users);
+  //   } else {
+  //     user.ai.days = req.body.dailyRegime ? 1 / parseFloat(req.body.ai) : 1;
+  //   }
 
-    data["users"].push(user);
-    fs.writeFileSync(
-      "./log/users/" + user.id + "/settings.json",
-      JSON.stringify(user)
-    );
-  }
+  //   user.reportFirst.offset = i + parseInt(user.ai.days / 2);
+  //   if (parseFloat(req.body.reportFirst) == 0) {
+  //     user.reportFirst.days = 32 + parseInt(req.body.users);
+  //   } else {
+  //     user.reportFirst.days = req.body.dailyRegime
+  //       ? 1 / parseFloat(req.body.reportFirst)
+  //       : 1;
+  //   }
+
+  //   while (fs.existsSync("./log/users/" + user.id)) {
+  //     user.id = makeRandomHash().substr(0, 3);
+  //   }
+  //   fs.mkdirSync("./log/users/" + user.id);
+
+  //   data["users"].push(user);
+  //   fs.writeFileSync(
+  //     "./log/users/" + user.id + "/settings.json",
+  //     JSON.stringify(user)
+  //   );
+  // }
 
   fs.writeFileSync(projectDir + "/settings.json", JSON.stringify(data));
   res.status(201).json(id);
@@ -669,7 +673,7 @@ app.post("/addUser", express.static("public"), async (req, res) => {
   const projectDir = "./log/projects/" + req.body.project;
   const jsonfile = projectDir + "/settings.json";
   const project = JSON.parse(fs.readFileSync(jsonfile, "utf8"));
-  const i = project.users.length;
+  const i = project.users.filter((u) => !u.isTeacher).length;
 
   const existingUser = project.users.find(
     (user) =>
@@ -694,13 +698,36 @@ app.post("/addUser", express.static("public"), async (req, res) => {
     reportFirst: {},
   };
 
+  if (!!user.isTeacher) {
+    user.color = { ...colors[0] };
+    user.team = "Lærerteamet";
+  } else if (project.teams > 1) {
+    let team = i % project.teams;
+    user.color = { ...colors[1 + (team % (colors.length - 1))] };
+    user.ai.offset = team;
+    user.team = "Team " + user.color.name;
+  } else {
+    user.color = { ...colors[1 + (i % (colors.length - 1))] };
+    user.ai.offset = i;
+  }
+
+  if (!user.isTeacher && project.teams > colors.length - 1) {
+    user.team =
+      user.team +
+      " " +
+      (parseInt((i % project.teams) / (colors.length - 1)) + 1);
+  }
+
   if (parseFloat(req.body.ai) == 0) {
     user.ai.days = -1;
   } else {
     user.ai.days = project.dailyRegime ? 1 / parseFloat(project.ai) : 1;
   }
 
-  user.reportFirst.offset = i + parseInt(user.ai.days / 2);
+  // *** Setting manually since we have no complicated regimes right now ***
+  // user.reportFirst.offset = i + parseInt(user.ai.days / 2);
+  user.reportFirst.offset = user.ai.offset;
+
   if (parseFloat(project.reportFirst) == 0) {
     user.reportFirst.days = -1;
   } else {
@@ -833,6 +860,36 @@ let saveImages = async (req) => {
   while (fs.existsSync(imgdir + id + "_0.jpg")) {
     id = makeRandomHash().substr(0, 5);
   }
+
+  for (let image of req.files) {
+    fs.writeFile(
+      "./log/" + user + "_" + id + "_" + counter + ".jpg",
+      image.buffer,
+      (err) => {
+        if (err) {
+          fs.appendFileSync(
+            "./log/log.txt",
+            "Error saving " +
+              "./log/" +
+              user +
+              "_" +
+              id +
+              "_" +
+              counter +
+              ".jpg" +
+              ": " +
+              err +
+              "\n"
+          );
+
+          throw err;
+        }
+      }
+    );
+    counter += 1;
+  }
+
+  counter = 0;
 
   for (let image of req.files) {
     fs.writeFile(imgdir + id + "_" + counter + ".jpg", image.buffer, (err) => {
