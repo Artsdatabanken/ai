@@ -448,9 +448,14 @@ app.get("/html/:project", async function (req, res) {
   html += `<table id="usertable">`;
   html += `<tr>
   <th></th>
-  <th>Navn</th>
-  <th>Observasjoner</th>
-</tr>`;
+  <th>Navn</th>`;
+
+  if (project.teams > 1) {
+    html += `<th>Team</th>`;
+  }
+
+  html += `<th>Observasjoner</th>
+  </tr>`;
 
   let observations = [];
 
@@ -466,6 +471,7 @@ app.get("/html/:project", async function (req, res) {
 
           const { mtime } = fs.statSync(path.join(reportsdir, file));
           obs["modified"] = mtime;
+          obs["team"] = user.team;
           observations.push(obs);
           userObsCount++;
         }
@@ -473,15 +479,16 @@ app.get("/html/:project", async function (req, res) {
     }
 
     html += `<tr>
-    <td style="background-color: hsl(${user.color.h}, ${user.color.s}, ${
-      user.color.l
-    });"> </td>
-    <td style="background-color: hsl(${user.color.h}, ${user.color.s}, ${
-      user.color.l
-    }, .15);">${user.customName}</td>
-    <td style="background-color: hsl(${user.color.h}, ${user.color.s}, ${
-      user.color.l
-    }, .15);">${userObsCount ? userObsCount : "-"}</td>
+    <td style="background-color: hsl(${user.color.h}, ${user.color.s}, ${user.color.l});"> </td>
+    <td style="background-color: hsl(${user.color.h}, ${user.color.s}, ${user.color.l}, .15);">${user.customName}</td>`;
+
+    if (project.teams > 1) {
+      html += `<td style="background-color: hsl(${user.color.h}, ${user.color.s}, ${user.color.l}, .15);">${user.team}</td>`;
+    }
+
+    html += `<td style="background-color: hsl(${user.color.h}, ${
+      user.color.s
+    }, ${user.color.l}, .15);">${userObsCount ? userObsCount : "-"}</td>
     </tr>`;
   });
   html += `</table>`;
@@ -496,8 +503,13 @@ app.get("/html/:project", async function (req, res) {
   html += `<tr>
     <th>Bilder</th>
     <th>Tidspunkt</th>
-    <th>Spiller</th>
-    <th>Spiller sier</th>
+    <th>Spiller</th>`;
+
+  if (project.teams > 1) {
+    html += `<th>Team</th>`;
+  }
+
+  html += `<th>Spiller sier</th>
     <th>AI</th>
     <th>Kilde</th>
     <th>Appen sier</th>
@@ -555,12 +567,17 @@ app.get("/html/:project", async function (req, res) {
         .toISOString()
         .slice(0, 19)
         .replace("T", " ")}</td>
-      <td>${observation.username}</td>
-      <td>${
-        observation.vernacularName !== observation.species
-          ? observation.vernacular
-          : ""
-      } <i>${observation.species}</i> (${observation.certainty}%)</td>
+      <td>${observation.username}</td>`;
+
+    if (project.teams > 1) {
+      html += `<th>${observation.team}</th>`;
+    }
+
+    html += `<td>${
+      observation.vernacularName !== observation.species
+        ? observation.vernacular
+        : ""
+    } <i>${observation.species}</i> (${observation.certainty}%)</td>
       <td>${observation.reportFirst ? "" : "✓"}</td>
       <td><ul><li>${observation.knowledgeSource
         .replace("prior", "Min egen forkunnskap")
