@@ -321,7 +321,7 @@ app.get("/csv/:project", function (req, res) {
 
           const { mtime } = fs.statSync(path.join(reportsdir, file));
           obs["modified"] = mtime;
-          obs["team"] = user.team;
+          obs["team"] = user.team || "";
           observations.push(obs);
         }
       });
