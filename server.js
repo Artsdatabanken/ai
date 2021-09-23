@@ -570,7 +570,7 @@ app.get("/html/:project", async function (req, res) {
       <td>${observation.username}</td>`;
 
     if (project.teams > 1) {
-      html += `<th>${observation.team}</th>`;
+      html += `<td>${observation.team}</td>`;
     }
 
     html += `<td>${
