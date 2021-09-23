@@ -321,6 +321,7 @@ app.get("/csv/:project", function (req, res) {
 
           const { mtime } = fs.statSync(path.join(reportsdir, file));
           obs["modified"] = mtime;
+          obs["team"] = user.team;
           observations.push(obs);
         }
       });
@@ -331,7 +332,7 @@ app.get("/csv/:project", function (req, res) {
     return b.modified - a.modified;
   });
 
-  let csv = `Bilder,Tidspunkt,Spiller,Spiller sier,AI,Kilde,Appen sier,AI treff posisjon,Konklusjon,Kommentar\n`;
+  let csv = `Bilder,Tidspunkt,Spiller,Team,Spiller sier,AI,Kilde,Appen sier,AI treff posisjon,Konklusjon,Kommentar\n`;
 
   observations.forEach((observation) => {
     let predictions = "";
@@ -365,6 +366,8 @@ app.get("/csv/:project", function (req, res) {
       .slice(0, 19)
       .replace("T", " ")},`;
     csv += `${observation.username},`;
+    csv += `${observation.team},`;
+
     csv += `${observation.species} (${observation.certainty}%),`;
     csv += `${observation.reportFirst ? "" : "✓"},`;
     csv += `"${observation.knowledgeSource
