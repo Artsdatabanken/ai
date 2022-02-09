@@ -378,12 +378,12 @@ app.get("/csv/:project", function (req, res) {
     csv += `${predictions},`;
     csv += `${resultIndex ? resultIndex : ""},`;
     csv += `${observation.species === observation.predictions[0].taxon.name
-        ? "✓"
-        : observation.WhoIsRight
-          ? observation.WhoIsRight.replace("IDontKnow", '"✗ Jeg vet ikke"')
-            .replace("IAmRight", "✗ Appen tar feil")
-            .replace("AppIsRight", "✗ Jeg tror appen har rett")
-          : "✗ Overstyrt av spiller"
+      ? "✓"
+      : observation.WhoIsRight
+        ? observation.WhoIsRight.replace("IDontKnow", '"✗ Jeg vet ikke"')
+          .replace("IAmRight", "✗ Appen tar feil")
+          .replace("AppIsRight", "✗ Jeg tror appen har rett")
+        : "✗ Overstyrt av spiller"
       },`;
     csv += `"${observation.comment}"\n`;
   });
@@ -537,8 +537,8 @@ app.get("/html/:project", async function (req, res) {
         prediction.taxon.vernacularName[0].toUpperCase() +
         prediction.taxon.vernacularName.slice(1).toLowerCase();
       predictions += `<li>${prediction.taxon.vernacularName !== prediction.taxon.name
-          ? prediction.taxon.vernacularName
-          : ""
+        ? prediction.taxon.vernacularName
+        : ""
         } <i>${prediction.taxon.name}</i> (${parseInt(
           prediction.probability * 100
         )}%)</li>`;
@@ -574,8 +574,8 @@ app.get("/html/:project", async function (req, res) {
     }
 
     html += `<td>${observation.vernacularName !== observation.species
-        ? observation.vernacular
-        : ""
+      ? observation.vernacular
+      : ""
       } <i>${observation.species}</i> (${observation.certainty}%)</td>
       <td>${observation.reportFirst ? "" : "✓"}</td>
       <td><ul><li>${observation.knowledgeSource
@@ -936,6 +936,7 @@ let getIdExperiment = async (req) => {
 
   var stream = require("stream");
 
+
   for (const file of req.files) {
     if (file.mimetype == "text/plain") {
       if (file.originalname.split(".").pop() == "gif") {
@@ -948,6 +949,7 @@ let getIdExperiment = async (req) => {
         file.mimetype == "image/jpeg"
       }
     }
+
 
     var bufferStream = new stream.PassThrough();
     bufferStream.end(file.buffer);
