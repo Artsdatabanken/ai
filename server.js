@@ -67,7 +67,7 @@ let getName = async (sciName) => {
   try {
     let taxon = await axios.get(
       "https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=" +
-        sciName
+      sciName
     );
 
     if (!taxon.data.length) {
@@ -377,15 +377,14 @@ app.get("/csv/:project", function (req, res) {
       .replace(", ", "\n")}",`;
     csv += `${predictions},`;
     csv += `${resultIndex ? resultIndex : ""},`;
-    csv += `${
-      observation.species === observation.predictions[0].taxon.name
+    csv += `${observation.species === observation.predictions[0].taxon.name
         ? "✓"
         : observation.WhoIsRight
-        ? observation.WhoIsRight.replace("IDontKnow", '"✗ Jeg vet ikke"')
+          ? observation.WhoIsRight.replace("IDontKnow", '"✗ Jeg vet ikke"')
             .replace("IAmRight", "✗ Appen tar feil")
             .replace("AppIsRight", "✗ Jeg tror appen har rett")
-        : "✗ Overstyrt av spiller"
-    },`;
+          : "✗ Overstyrt av spiller"
+      },`;
     csv += `"${observation.comment}"\n`;
   });
 
@@ -489,9 +488,8 @@ app.get("/html/:project", async function (req, res) {
       html += `<td style="background-color: hsl(${user.color.h}, ${user.color.s}, ${user.color.l}, .15);">${user.team}</td>`;
     }
 
-    html += `<td style="background-color: hsl(${user.color.h}, ${
-      user.color.s
-    }, ${user.color.l}, .15);">${userObsCount ? userObsCount : "-"}</td>
+    html += `<td style="background-color: hsl(${user.color.h}, ${user.color.s
+      }, ${user.color.l}, .15);">${userObsCount ? userObsCount : "-"}</td>
     </tr>`;
   });
   html += `</table>`;
@@ -538,13 +536,12 @@ app.get("/html/:project", async function (req, res) {
       prediction.taxon.vernacularName =
         prediction.taxon.vernacularName[0].toUpperCase() +
         prediction.taxon.vernacularName.slice(1).toLowerCase();
-      predictions += `<li>${
-        prediction.taxon.vernacularName !== prediction.taxon.name
+      predictions += `<li>${prediction.taxon.vernacularName !== prediction.taxon.name
           ? prediction.taxon.vernacularName
           : ""
-      } <i>${prediction.taxon.name}</i> (${parseInt(
-        prediction.probability * 100
-      )}%)</li>`;
+        } <i>${prediction.taxon.name}</i> (${parseInt(
+          prediction.probability * 100
+        )}%)</li>`;
     });
     predictions += "</ul>";
 
@@ -576,11 +573,10 @@ app.get("/html/:project", async function (req, res) {
       html += `<td>${observation.team}</td>`;
     }
 
-    html += `<td>${
-      observation.vernacularName !== observation.species
+    html += `<td>${observation.vernacularName !== observation.species
         ? observation.vernacular
         : ""
-    } <i>${observation.species}</i> (${observation.certainty}%)</td>
+      } <i>${observation.species}</i> (${observation.certainty}%)</td>
       <td>${observation.reportFirst ? "" : "✓"}</td>
       <td><ul><li>${observation.knowledgeSource
         .replace("prior", "Min egen forkunnskap")
@@ -592,20 +588,19 @@ app.get("/html/:project", async function (req, res) {
 
 
 
-      <td>${
-        observation.species === observation.predictions[0].taxon.name
-          ? "✓"
-          : observation.WhoIsRight
+      <td>${observation.species === observation.predictions[0].taxon.name
+        ? "✓"
+        : observation.WhoIsRight
           ? observation.WhoIsRight.replace("IDontKnow", "✗ Jeg vet ikke")
-              .replace("IAmRight", "✗ Appen tar feil")
-              .replace("AppIsRight", "✗ Jeg tror appen har rett")
+            .replace("IAmRight", "✗ Appen tar feil")
+            .replace("AppIsRight", "✗ Jeg tror appen har rett")
           : "✗ Overstyrt av spiller"
       }</td>
       <td>${observation.comment}</td>
     </tr>`;
   }
 
-  observations.forEach((observation) => {});
+  observations.forEach((observation) => { });
   html += `</table>`;
 
   html += `</body>
@@ -890,16 +885,16 @@ let saveImages = async (req) => {
           fs.appendFileSync(
             "./log/log.txt",
             "Error saving " +
-              "./log/" +
-              user +
-              "_" +
-              id +
-              "_" +
-              counter +
-              ".jpg" +
-              ": " +
-              err +
-              "\n"
+            "./log/" +
+            user +
+            "_" +
+            id +
+            "_" +
+            counter +
+            ".jpg" +
+            ": " +
+            err +
+            "\n"
           );
 
           throw err;
@@ -917,14 +912,14 @@ let saveImages = async (req) => {
         fs.appendFileSync(
           "./log/log.txt",
           "Error saving " +
-            imgdir +
-            id +
-            "_" +
-            counter +
-            ".jpg" +
-            ": " +
-            err +
-            "\n"
+          imgdir +
+          id +
+          "_" +
+          counter +
+          ".jpg" +
+          ": " +
+          err +
+          "\n"
         );
 
         throw err;
@@ -942,6 +937,18 @@ let getIdExperiment = async (req) => {
   var stream = require("stream");
 
   for (const file of req.files) {
+    if (file.mimetype == "text/plain") {
+      if (file.originalname.split(".").pop() == "gif") {
+        file.mimetype == "image/gif"
+      }
+      else if (file.originalname.split(".").pop() == "png") {
+        file.mimetype == "image/png"
+      }
+      else {
+        file.mimetype == "image/jpeg"
+      }
+    }
+
     var bufferStream = new stream.PassThrough();
     bufferStream.end(file.buffer);
     form.append("image", bufferStream, {
@@ -953,7 +960,6 @@ let getIdExperiment = async (req) => {
 
   try {
     recognition = await axios.post(
-      // "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
       "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
       form,
       {
