@@ -939,8 +939,6 @@ let getIdExperiment = async (req) => {
 
   for (const file of req.files) {
 
-    console.log()
-
     if (file.mimetype == "text/plain") {
       if (file.originalname.split(".").pop() == "gif") {
         file.mimetype = "image/gif"
