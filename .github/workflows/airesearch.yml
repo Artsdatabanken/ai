@@ -33,5 +33,5 @@ jobs:
         pull: true
         push: true
         tags: artsdatabanken/ai:airesearch
-#    - name: Post to slack
-#      run: .github/workflows/slack.sh ${{ secrets.POST_SLACK }}
+    - name: Post to slack
+      run: .github/workflows/slack.sh ${{ secrets.POST_SLACK }}
