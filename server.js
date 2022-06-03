@@ -963,7 +963,8 @@ let getIdExperiment = async (req) => {
 
   try {
     recognition = await axios.post(
-      "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
+      // "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
+      "https://artsdatabanken-d.biodiversityanalysis.eu/v1/observation/identify/noall",
       form,
       {
         headers: {
