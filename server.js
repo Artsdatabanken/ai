@@ -32,6 +32,15 @@ var corsOptions = {
 
 app.use(cors(corsOptions));
 
+app.use(function (req, res, next) {
+  if (req.secure) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
+  next();
+})
+
+
+
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
@@ -69,12 +78,12 @@ let writelog = (req, json) => {
     fs.appendFileSync(
       "./log/" + year + "-" + month + ".csv",
       "Datetime," +
-        "Number_of_pictures," +
-        "Result_1_name,Result_1_group,Result_1_probability," +
-        "Result_2_name,Result_2_group,Result_2_probability," +
-        "Result_3_name,Result_3_group,Result_3_probability," +
-        "Result_4_name,Result_4_group,Result_4_probability," +
-        "Result_5_name,Result_5_group,Result_5_probability,"
+      "Number_of_pictures," +
+      "Result_1_name,Result_1_group,Result_1_probability," +
+      "Result_2_name,Result_2_group,Result_2_probability," +
+      "Result_3_name,Result_3_group,Result_3_probability," +
+      "Result_4_name,Result_4_group,Result_4_probability," +
+      "Result_5_name,Result_5_group,Result_5_probability,"
     );
   }
 
@@ -99,7 +108,7 @@ let getName = async (sciName) => {
   try {
     let taxon = await axios.get(
       "https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=" +
-        sciName
+      sciName
     );
 
     if (!taxon.data.length) {
