@@ -120,10 +120,19 @@ let getName = async (sciName) => {
     nameResult.vernacularName =
       taxon.data["RecommendedVernacularName_nb-NO"] ||
       taxon.data["RecommendedVernacularName_nn-NO"] ||
+      nameResult.scientificName ||
       sciName;
 
     if (taxon.data.Description) {
-      nameResult.infoUrl = taxon.data.Description[0].Id.replace(
+      const description =
+        taxon.data.Description.find(
+          (desc) =>
+            desc.Language == "nb" ||
+            desc.Language == "no" ||
+            desc.Language == "nn"
+        ) || taxon.data.Description[0];
+
+      nameResult.infoUrl = description.Id.replace(
         "Nodes/",
         "https://artsdatabanken.no/Pages/"
       );
@@ -135,6 +144,12 @@ let getName = async (sciName) => {
   } catch (error) {
     date = new Date().toISOString();
     console.log(date, error);
+
+    fs.appendFileSync(
+      "./log/log.txt",
+      "Error getting names: " + error.response.status + " (" + date + ")\n"
+    );
+
     throw error;
   }
 
@@ -268,6 +283,7 @@ let getId = async (req) => {
       // "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
       "http://artsdatabanken.demo.naturalis.io/v1/observation/identify/noall/auth",
       form,
+
       {
         headers: {
           ...formHeaders,
@@ -353,9 +369,10 @@ app.post("/", upload.array("image"), async (req, res) => {
     date = new Date().toISOString();
 
     console.log(date, "Error", error.response.status);
+
     fs.appendFileSync(
       "./log/log.txt",
-      "Error identifying: " + error.response.status + "\n"
+      "Error identifying: " + error.response.status + " (" + date + ")\n"
     );
   }
 });
@@ -423,6 +440,5 @@ app.get("/image/*", (req, res) => {
   });
 });
 
+app.listen(port, console.log(`Server now running on port ${port}`));
 
-date = new Date().toISOString();
-app.listen(port, console.log(date, `Dev server now running on port ${port}`));
