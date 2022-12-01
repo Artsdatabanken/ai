@@ -280,21 +280,16 @@ let getId = async (req) => {
 
   try {
     recognition = await axios.post(
-      // "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
-      "http://artsdatabanken.demo.naturalis.io/v1/observation/identify/noall/auth",
+      "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
       form,
 
       {
         headers: {
           ...formHeaders,
-          // Authorization: "Basic " + process.env.NATURALIS_TOKEN,
+          Authorization: "Basic " + process.env.NATURALIS_TOKEN,
         },
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
-        auth: {
-          username: process.env.NATURALIS_TEST_USER,
-          password: process.env.NATURALIS_TEST_PW,
-        },
       }
     );
   } catch (error) {
