@@ -53,6 +53,7 @@ let getPicture = (sciName) => {
 };
 
 let writelog = (req, json) => {
+
   let today = new Date();
   let year = today.getFullYear();
   let month = ("0" + (today.getMonth() + 1)).slice(-2);
@@ -60,41 +61,35 @@ let writelog = (req, json) => {
   let hours = ("0" + today.getHours()).slice(-2);
   let minutes = ("0" + today.getMinutes()).slice(-2);
   let seconds = ("0" + today.getSeconds()).slice(-2);
+  let date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 
-  let date =
-    year +
-    "-" +
-    month +
-    "-" +
-    day +
-    " " +
-    hours +
-    ":" +
-    minutes +
-    ":" +
-    seconds;
+  let application = req.body.application
 
-  if (!fs.existsSync("./log/" + year + "-" + month + ".csv")) {
+
+  if (!fs.existsSync(`./log/${application}_${year}-${month}.csv`)) {
     fs.appendFileSync(
-      "./log/" + year + "-" + month + ".csv",
+      `./log/${application}_${year}-${month}.csv`,
       "Datetime," +
       "Number_of_pictures," +
       "Result_1_name,Result_1_group,Result_1_probability," +
       "Result_2_name,Result_2_group,Result_2_probability," +
       "Result_3_name,Result_3_group,Result_3_probability," +
       "Result_4_name,Result_4_group,Result_4_probability," +
-      "Result_5_name,Result_5_group,Result_5_probability,"
+      "Result_5_name,Result_5_group,Result_5_probability\n"
     );
   }
+
+  // TODO
+  // Add encrypted IP (req.client._peername.address)
 
   let row = `${date},${req.files.length}`;
   for (let i = 0; i < json.predictions.length; i++) {
     const prediction = json.predictions[i];
-    row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
+    row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
   }
   row += "\n";
 
-  fs.appendFileSync("./log/" + year + "-" + month + ".csv", row);
+  fs.appendFileSync(`./log/${application}_${year}-${month}.csv`, row);
 };
 
 let getName = async (sciName) => {
@@ -272,8 +267,19 @@ let saveImagesAndGetToken = async (req) => {
 };
 
 let getId = async (req) => {
+
   const form = new FormData();
   const formHeaders = form.getHeaders();
+
+
+  const receivedParams = Object.keys(req.body);
+
+  receivedParams.forEach((key, index) => {
+    form.append(key, req.body[key])
+  });
+
+  form.append("taxon_namespace", "NBIC")
+
 
   var stream = require("stream");
 
@@ -289,21 +295,15 @@ let getId = async (req) => {
 
   try {
     recognition = await axios.post(
-      // "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
-      "http://artsdatabanken.demo.naturalis.io/v1/observation/identify/noall/auth",
+      "https://full-scale-test-multisource.demo.naturalis.io/v2/observation/identify",
       form,
-
       {
         headers: {
           ...formHeaders,
-          // Authorization: "Basic " + process.env.NATURALIS_TOKEN,
+          Authorization: "Basic " + process.env.NATURALIS_TOKEN,
         },
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
-        auth: {
-          username: process.env.NATURALIS_TEST_USER,
-          password: process.env.NATURALIS_TEST_PW,
-        },
       }
     );
   } catch (error) {
@@ -312,60 +312,84 @@ let getId = async (req) => {
     throw error;
   }
 
-  // get the best 5
-  recognition.data.predictions = recognition.data.predictions.slice(0, 5);
 
-  // Check against list of misspellings and unknown synonyms
-  recognition.data.predictions = recognition.data.predictions.map((pred) => {
-    pred.taxon.name = taxonMapper.taxa[pred.taxon.name] || pred.taxon.name;
-    return pred;
-  });
+  for (let index = 0; index < recognition.data.predictions.length; index++) {
+    let taxa = recognition.data.predictions[index].taxa.items
 
-  // Get the data from the APIs (including accepted names of synonyms)
-  for (let pred of recognition.data.predictions) {
-    try {
-      let nameResult = await getName(pred.taxon.name);
-      pred.taxon.vernacularName = nameResult.vernacularName;
-      pred.taxon.groupName = nameResult.groupName;
-      pred.taxon.scientificNameID = nameResult.scientificNameID;
-      pred.taxon.name = nameResult.scientificName;
-      pred.taxon.infoUrl = nameResult.infoUrl;
-      pred.taxon.picture = getPicture(nameResult.scientificName);
-    } catch (error) {
-      date = new Date().toISOString();
-      console.log(date, error);
-      throw error;
+    // get the best 5
+    taxa = taxa.slice(0, 5);
+
+    // Check against list of misspellings and unknown synonyms
+    taxa = taxa.map((pred) => {
+      pred.scientific_name = taxonMapper.taxa[pred.scientific_name] || pred.scientific_name;
+      return pred;
+    });
+
+    // Get the data from the APIs (including accepted names of synonyms)
+    for (let pred of taxa) {
+      try {
+        let nameResult;
+        if (!req.body.application || req.body.application === "Artsorakel") {
+          nameResult = await getName(pred.scientific_name);
+          pred.vernacularName = nameResult.vernacularName;
+          pred.groupName = nameResult.groupName;
+          pred.scientificNameID = nameResult.scientificNameID;
+          pred.name = nameResult.scientificName;
+          pred.infoUrl = nameResult.infoUrl;
+        }
+        else {
+          pred.name = pred.scientific_name;
+        }
+        pred.picture = getPicture(pred.scientific_name);
+
+      } catch (error) {
+        date = new Date().toISOString();
+        console.log(date, error);
+        throw error;
+      }
     }
+
+    recognition.data.predictions[index].taxa.items = taxa
   }
+
+
 
   // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
   // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
 
   // if there are duplicates, add the probabilities and delete the duplicates
-  for (let pred of recognition.data.predictions) {
-    let totalProbability = recognition.data.predictions
-      .filter((p) => p.taxon.name === pred.taxon.name)
-      .reduce((total, p) => total + p.probability, 0);
+  // for (let pred of recognition.data.predictions) {
+  //   let totalProbability = recognition.data.predictions
+  //     .filter((p) => p.name === pred.name)
+  //     .reduce((total, p) => total + p.probability, 0);
 
-    if (totalProbability !== pred.probability) {
-      pred.probability = totalProbability;
-      recognition.data.predictions = recognition.data.predictions.filter(
-        (p) => p.taxon.name !== pred.taxon.name
-      );
-      recognition.data.predictions.unshift(pred);
-    }
-  }
+  //   if (totalProbability !== pred.probability) {
+  //     pred.probability = totalProbability;
+  //     recognition.data.predictions = recognition.data.predictions.filter(
+  //       (p) => p.name !== pred.name
+  //     );
+  //     recognition.data.predictions.unshift(pred);
+  //   }
+  // }
 
-  // sort by the new probabilities
-  recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
-    return b.probability - a.probability;
-  });
+  // // sort by the new probabilities
+  // recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
+  //   return b.probability - a.probability;
+  // });
   // -------------- end of duplicate checking code
 
   return recognition.data;
 };
 
 app.post("/", upload.array("image"), async (req, res) => {
+
+  // Future simple token check
+
+  // if (req.headers["authorization"] !== `Bearer ${process.env.AI_TOKEN}`) {
+  //   res.status(401).end("Unauthorized");
+  //   return true;
+  // }
+
   try {
     json = await getId(req);
 
@@ -374,6 +398,7 @@ app.post("/", upload.array("image"), async (req, res) => {
 
     res.status(200).json(json);
   } catch (error) {
+
     res.status(error.response.status).end(error.response.statusText);
     date = new Date().toISOString();
 
