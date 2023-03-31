@@ -271,7 +271,6 @@ let getId = async (req) => {
   const form = new FormData();
   const formHeaders = form.getHeaders();
 
-
   const receivedParams = Object.keys(req.body);
 
   receivedParams.forEach((key, index) => {
@@ -291,16 +290,20 @@ let getId = async (req) => {
     });
   }
 
+
   let recognition;
 
   try {
     recognition = await axios.post(
-      "https://full-scale-test-multisource.demo.naturalis.io/v2/observation/identify",
+      `https://full-scale-test-multisource.demo.naturalis.io/v2/observation/identify/token/${process.env.TEST_TOKEN}`,
       form,
       {
         headers: {
           ...formHeaders,
-          Authorization: "Basic " + process.env.NATURALIS_TOKEN,
+        },
+        auth: {
+          username: process.env.TEST_USERNAME,
+          password: process.env.TEST_PASSWORD
         },
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
