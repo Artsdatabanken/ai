@@ -392,6 +392,8 @@ let getId = async (req) => {
   // });
   // -------------- end of duplicate checking code
 
+  recognition.data.application = req.body.application;
+
   return recognition.data;
 };
 
@@ -410,7 +412,7 @@ app.post("/", upload.array("image"), async (req, res) => {
     // Write to the log
     writelog(req, json);
 
-    if (!req.body.application) {
+    if (req.body.application === undefined) {
       res.status(200).json(simplifyJson(json));
     }
     else {
