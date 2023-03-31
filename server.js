@@ -83,8 +83,8 @@ let writelog = (req, json) => {
   // Add encrypted IP (req.client._peername.address)
 
   let row = `${date},${req.files.length}`;
-  for (let i = 0; i < json.predictions.length; i++) {
-    const prediction = json.predictions[i];
+  for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
+    const prediction = json.predictions[0].taxa.items[i];
     row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
   }
   row += "\n";
@@ -266,6 +266,20 @@ let saveImagesAndGetToken = async (req) => {
   return { id: id, password: password };
 };
 
+let simplifyJson = (json) => {
+  json.predictions = json.predictions[0].taxa.items.map(p => {
+    let simplified = {
+      probability: p.probability,
+      "taxon": p
+    };
+    simplified.taxon.probability = undefined
+    return simplified
+  }
+  )
+  return json;
+};
+
+
 let getId = async (req) => {
 
   const form = new FormData();
@@ -276,9 +290,6 @@ let getId = async (req) => {
   receivedParams.forEach((key, index) => {
     form.append(key, req.body[key])
   });
-
-  form.append("taxon_namespace", "NBIC")
-
 
   var stream = require("stream");
 
@@ -399,8 +410,16 @@ app.post("/", upload.array("image"), async (req, res) => {
     // Write to the log
     writelog(req, json);
 
-    res.status(200).json(json);
+    if (!req.body.application) {
+      res.status(200).json(simplifyJson(json));
+    }
+    else {
+      res.status(200).json(json);
+    }
+
   } catch (error) {
+
+    console.log(error)
 
     res.status(error.response.status).end(error.response.statusText);
     date = new Date().toISOString();
