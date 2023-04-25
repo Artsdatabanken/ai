@@ -301,20 +301,27 @@ let getId = async (req) => {
     });
   }
 
+  let token
+  if (receivedParams.model && receivedParams.model.toLowerCase() === "global") {
+    token = process.env.SH_TOKEN // Shared token
+  }
+  else {
+    token = process.env.SP_TOKEN // Specialized (Norwegian) token
+  }
 
   let recognition;
 
   try {
     recognition = await axios.post(
-      `https://full-scale-test-multisource.demo.naturalis.io/v2/observation/identify/token/${process.env.TEST_TOKEN}`,
+      `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
       form,
       {
         headers: {
           ...formHeaders,
         },
         auth: {
-          username: process.env.TEST_USERNAME,
-          password: process.env.TEST_PASSWORD
+          username: process.env.USERNAME,
+          password: process.env.PASSWORD
         },
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
