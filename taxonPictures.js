@@ -1,9 +1,24 @@
 module.exports = {
   media: {
+    "Geranium sylvaticum": "F46954",
+    "Rubus chamaemorus": "F46955",
+    "Quercus robur": "F46956",
+    "Scorzoneroides autumnalis": "F46949",
+    "Fraxinus excelsior": "F46950",
+    "Chamaenerion angustifolium": "F46951",
+    "Sorbus aucuparia": "F46952",
+    "Acer pseudoplatanus": "F46953",
     "Achillea millefolium": "F46941",
 
+    "Chroicocephalus ridibundus": "F46948",
+    "Larus argentatus": "F46947",
+    "Larus canus": "F46945",
+    "Larus fuscus": "F46946",
+    "Larus marinus": "F46943",
+    "Mergus merganser": "F46942",
+    "Rissa tridactyla": "F46944",
 
-    
+
     "Acossus terebra": 299691,
     "Alectoria sarmentosa": 299776,
     "Alectoria ochroleuca": 299786,
@@ -20,7 +35,6 @@ module.exports = {
     "Carex echinata": 299730,
     "Carex flacca": 299766,
     "Carex hartmanii": 299755,
-    "Chamaenerion angustifolium": 299699,
     "Climacium dendroides": 299762,
     "Comarum palustre": 299724,
     "Corallorhiza trifida": 299782,
