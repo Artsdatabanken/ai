@@ -1,6 +1,6 @@
 module.exports = {
   media: {
-    "Achillea millefolium": 299695,
+    "Achillea millefolium": "F162415",
     "Acossus terebra": 299691,
     "Alectoria sarmentosa": 299776,
     "Alectoria ochroleuca": 299786,
