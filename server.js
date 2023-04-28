@@ -2,6 +2,7 @@ const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
 const express = require("express");
+const bodyParser = require('body-parser')
 const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -25,6 +26,9 @@ dotenv.config({ path: "./config/config.env" });
 
 const app = express();
 const port = process.env.PORT;
+
+app.use(bodyParser.json())
+app.use(bodyParser.urlencoded({ extended: false }))
 
 var corsOptions = {
   origin: "*",
@@ -403,6 +407,17 @@ let getId = async (req) => {
 
   return recognition.data;
 };
+
+
+app.post("/taxonimage", upload.array("image"), (req, res) => {
+  if(!req.body.taxon) {
+    res.status(400).end("Specify the taxon parameter");
+  }
+
+  res.status(200).end(getPicture(req.body.taxon));
+});
+
+
 
 app.post("/", upload.array("image"), async (req, res) => {
 
