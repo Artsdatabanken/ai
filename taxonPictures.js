@@ -10,6 +10,8 @@ module.exports = {
     "Acer pseudoplatanus": "F46953",
     "Achillea millefolium": "F46941",
 
+
+    "Bombycilla garrulus": "F46960",
     "Chroicocephalus ridibundus": "F46948",
     "Larus argentatus": "F46947",
     "Larus canus": "F46945",
@@ -17,7 +19,9 @@ module.exports = {
     "Larus marinus": "F46943",
     "Mergus merganser": "F46942",
     "Rissa tridactyla": "F46944",
-
+    "Sitta europaea": "F46957",
+    "Sturnus vulgaris": "F46959",
+    "Surnia ulula": "F46958",
 
     "Acossus terebra": 299691,
     "Alectoria sarmentosa": 299776,
