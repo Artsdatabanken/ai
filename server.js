@@ -408,16 +408,11 @@ let getId = async (req) => {
   return recognition.data;
 };
 
+app.get("/taxonimage/*", (req, res) => {
+  let taxon = decodeURI(req.originalUrl.replace("/taxonimage/", ""));
 
-app.post("/taxonimage", upload.array("image"), (req, res) => {
-  if(!req.body.taxon) {
-    res.status(400).end("Specify the taxon parameter");
-  }
-
-  res.status(200).end(getPicture(req.body.taxon));
+  res.status(200).end(getPicture(taxon));
 });
-
-
 
 app.post("/", upload.array("image"), async (req, res) => {
 
