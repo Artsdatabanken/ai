@@ -293,15 +293,16 @@ let refreshtaxonimages = async () => {
     page.data.Files.forEach(f => {
       // Unpublished files have no FileUrl
       if (f.FileUrl) {
-        let strings = f.FileUrl.split("/")
-        taxa[strings[4].split(".")[0].replace("_", " ")] = `F${strings[3]}`
+        let name = f.Title.split(".")[0].replace("_", " ")
+        let value = f.Id.split("/")[1]
+        taxa[name] = value
       }
     })
   }
 
   let data = JSON.stringify(taxa);
   fs.writeFileSync('taxonPictures.js', `module.exports = {media: ${data}};`);
-  process.exit(1)
+  return Object.keys(taxa).length
 };
 
 
@@ -435,9 +436,9 @@ app.get("/taxonimage/*", (req, res) => {
   res.status(200).end(getPicture(taxon));
 });
 
-app.get("/refreshtaxonimages", (req, res) => {
-  refreshtaxonimages();
-  res.status(200).end("Done");
+app.get("/refreshtaxonimages", async (req, res) => {
+  let number = await refreshtaxonimages()
+  res.status(200).end(`${number} pictures found`);
 });
 
 app.post("/", upload.array("image"), async (req, res) => {
