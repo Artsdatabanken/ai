@@ -57,7 +57,6 @@ let getPicture = (sciName) => {
 };
 
 let writelog = (req, json) => {
-
   let today = new Date();
   let year = today.getFullYear();
   let month = ("0" + (today.getMonth() + 1)).slice(-2);
@@ -283,6 +282,28 @@ let simplifyJson = (json) => {
   return json;
 };
 
+let refreshtaxonimages = async () => {
+  const pages = [342550, 342548]
+  let taxa = {}
+
+  for (let index = 0; index < pages.length; index++) {
+    let pageId = pages[index];
+    let page = await axios.get(`https://www.artsdatabanken.no/api/Content/${pageId}`);
+
+    page.data.Files.forEach(f => {
+      // Unpublished files have no FileUrl
+      if (f.FileUrl) {
+        let strings = f.FileUrl.split("/")
+        taxa[strings[4].split(".")[0].replace("_", " ")] = `F${strings[3]}`
+      }
+    })
+  }
+
+  let data = JSON.stringify(taxa);
+  fs.writeFileSync('taxonPictures.js', `module.exports = {media: ${data}};`);
+  process.exit(1)
+};
+
 
 let getId = async (req) => {
 
@@ -412,6 +433,11 @@ app.get("/taxonimage/*", (req, res) => {
   let taxon = decodeURI(req.originalUrl.replace("/taxonimage/", ""));
 
   res.status(200).end(getPicture(taxon));
+});
+
+app.get("/refreshtaxonimages", (req, res) => {
+  refreshtaxonimages();
+  res.status(200).end("Done");
 });
 
 app.post("/", upload.array("image"), async (req, res) => {

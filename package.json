@@ -4,6 +4,7 @@
   "description": "",
   "main": "server.js",
   "scripts": {
+    "start": "nodemon start",
     "dev": "nodemon start"
   },
   "author": "Wouter Koch",
