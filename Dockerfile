@@ -20,4 +20,4 @@ RUN mkdir -p log && touch log/log.txt && chown dockerrunner log/log.txt
 
 COPY . .
 
-CMD [ "node", "server.js" ]
+CMD [ "npm", "start" ]
