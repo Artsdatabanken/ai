@@ -283,7 +283,7 @@ let simplifyJson = (json) => {
 };
 
 let refreshtaxonimages = async () => {
-  const pages = [342548, 342550, 342551, 342552, 342553]
+  const pages = [342548, 342550, 342551, 342552, 342553, 342554]
   let taxa = {}
 
   for (let index = 0; index < pages.length; index++) {
