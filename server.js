@@ -23,6 +23,7 @@ if (process.env.IKEY) {
 }
 
 dotenv.config({ path: "./config/config.env" });
+dotenv.config({ path: "./config/secrets.env" });
 
 const app = express();
 const port = process.env.PORT;
@@ -86,10 +87,20 @@ let writelog = (req, json) => {
   // Add encrypted IP (req.client._peername.address)
 
   let row = `${date},${req.files.length}`;
-  for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
-    const prediction = json.predictions[0].taxa.items[i];
-    row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
+
+  if (!req.body.application) {
+    for (let i = 0; i < json.predictions.length; i++) {
+      const prediction = json.predictions[i];
+      row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
+    }
   }
+  else {
+    for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
+      const prediction = json.predictions[0].taxa.items[i];
+      row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
+    }
+  }
+
   row += "\n";
 
   fs.appendFileSync(`./log/${application}_${year}-${month}.csv`, row);
@@ -270,15 +281,18 @@ let saveImagesAndGetToken = async (req) => {
 };
 
 let simplifyJson = (json) => {
-  json.predictions = json.predictions[0].taxa.items.map(p => {
-    let simplified = {
-      probability: p.probability,
-      "taxon": p
-    };
-    simplified.taxon.probability = undefined
-    return simplified
+  if (json.predictions[0].taxa) {
+    json.predictions = json.predictions[0].taxa.items.map(p => {
+      let simplified = {
+        probability: p.probability,
+        "taxon": p
+      };
+      simplified.taxon.probability = undefined
+      return simplified
+    }
+    )
   }
-  )
+
   return json;
 };
 
@@ -337,26 +351,102 @@ let getId = async (req) => {
 
   let recognition;
 
-  try {
-    recognition = await axios.post(
-      `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
-      form,
-      {
-        headers: {
-          ...formHeaders,
-        },
-        auth: {
-          username: process.env.USERNAME,
-          password: process.env.PASSWORD
-        },
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
+
+  if (!req.body.application) {
+    try {
+      recognition = await axios.post(
+        "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
+        form,
+
+        {
+          headers: {
+            ...formHeaders,
+            Authorization: "Basic " + process.env.LEGACY_TOKEN,
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+        }
+      );
+    } catch (error) {
+      date = new Date().toISOString();
+      console.log(date, error);
+      throw error;
+    }
+
+    // get the best 5
+    recognition.data.predictions = recognition.data.predictions.slice(0, 5);
+
+    // Check against list of misspellings and unknown synonyms
+    recognition.data.predictions = recognition.data.predictions.map((pred) => {
+      pred.taxon.name = taxonMapper.taxa[pred.taxon.name] || pred.taxon.name;
+      return pred;
+    });
+
+    // Get the data from the APIs (including accepted names of synonyms)
+    for (let pred of recognition.data.predictions) {
+      try {
+        let nameResult = await getName(pred.taxon.name);
+        pred.taxon.vernacularName = nameResult.vernacularName;
+        pred.taxon.groupName = nameResult.groupName;
+        pred.taxon.scientificNameID = nameResult.scientificNameID;
+        pred.taxon.name = nameResult.scientificName;
+        pred.taxon.infoUrl = nameResult.infoUrl;
+        pred.taxon.picture = getPicture(nameResult.scientificName);
+      } catch (error) {
+        date = new Date().toISOString();
+        console.log(date, error);
+        throw error;
       }
-    );
-  } catch (error) {
-    date = new Date().toISOString();
-    console.log(date, error);
-    throw error;
+    }
+
+    // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
+    // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
+
+    // if there are duplicates, add the probabilities and delete the duplicates
+    for (let pred of recognition.data.predictions) {
+      let totalProbability = recognition.data.predictions
+        .filter((p) => p.taxon.name === pred.taxon.name)
+        .reduce((total, p) => total + p.probability, 0);
+
+      if (totalProbability !== pred.probability) {
+        pred.probability = totalProbability;
+        recognition.data.predictions = recognition.data.predictions.filter(
+          (p) => p.taxon.name !== pred.taxon.name
+        );
+        recognition.data.predictions.unshift(pred);
+      }
+    }
+
+    // sort by the new probabilities
+    recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
+      return b.probability - a.probability;
+    });
+    // -------------- end of duplicate checking code
+
+    return recognition.data;
+  }
+  else {
+    try {
+      recognition = await axios.post(
+        `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
+        form,
+        {
+          headers: {
+            ...formHeaders,
+          },
+          auth: {
+            username: process.env.NATURALIS_USERNAME,
+            password: process.env.NATURALIS_PASSWORD
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+        }
+      );
+    } catch (error) {
+      date = new Date().toISOString();
+      console.log(date, error);
+      throw error;
+    }
   }
 
 

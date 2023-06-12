@@ -21,3 +21,4 @@ TaxonExtractor.ods
 log/*
 
 taxonPictures.js
+config/secrets.env
