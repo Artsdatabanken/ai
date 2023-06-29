@@ -2,7 +2,7 @@ const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
 const express = require("express");
-const bodyParser = require('body-parser')
+const bodyParser = require("body-parser");
 const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -18,8 +18,21 @@ const initVect = crypto.randomBytes(16);
 
 let appInsights = require("applicationinsights");
 
+/** Filter for not logging requests for root url when success */
+var filteringAiFunction = (envelope, context) => {
+  if (
+    envelope.data.baseData.success &&
+    envelope.data.baseData.name === "GET /"
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
 if (process.env.IKEY) {
   appInsights.setup(process.env.IKEY).start();
+  appInsights.defaultClient.addTelemetryProcessor(filteringAiFunction);
 }
 
 dotenv.config({ path: "./config/config.env" });
@@ -28,8 +41,8 @@ dotenv.config({ path: "./config/secrets.env" });
 const app = express();
 const port = process.env.PORT;
 
-app.use(bodyParser.json())
-app.use(bodyParser.urlencoded({ extended: false }))
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 
 var corsOptions = {
   origin: "*",
@@ -39,12 +52,13 @@ app.use(cors(corsOptions));
 
 app.use(function (req, res, next) {
   if (req.secure) {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+    res.setHeader(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains; preload"
+    );
   }
   next();
-})
-
-
+});
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
@@ -67,19 +81,18 @@ let writelog = (req, json) => {
   let seconds = ("0" + today.getSeconds()).slice(-2);
   let date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 
-  let application = req.body.application
-
+  let application = req.body.application;
 
   if (!fs.existsSync(`./log/${application}_${year}-${month}.csv`)) {
     fs.appendFileSync(
       `./log/${application}_${year}-${month}.csv`,
       "Datetime," +
-      "Number_of_pictures," +
-      "Result_1_name,Result_1_group,Result_1_probability," +
-      "Result_2_name,Result_2_group,Result_2_probability," +
-      "Result_3_name,Result_3_group,Result_3_probability," +
-      "Result_4_name,Result_4_group,Result_4_probability," +
-      "Result_5_name,Result_5_group,Result_5_probability\n"
+        "Number_of_pictures," +
+        "Result_1_name,Result_1_group,Result_1_probability," +
+        "Result_2_name,Result_2_group,Result_2_probability," +
+        "Result_3_name,Result_3_group,Result_3_probability," +
+        "Result_4_name,Result_4_group,Result_4_probability," +
+        "Result_5_name,Result_5_group,Result_5_probability\n"
     );
   }
 
@@ -93,8 +106,7 @@ let writelog = (req, json) => {
       const prediction = json.predictions[i];
       row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
     }
-  }
-  else {
+  } else {
     for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
       const prediction = json.predictions[0].taxa.items[i];
       row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
@@ -117,7 +129,7 @@ let getName = async (sciName) => {
   try {
     let taxon = await axios.get(
       "https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=" +
-      sciName
+        sciName
     );
 
     if (!taxon.data.length) {
@@ -282,53 +294,52 @@ let saveImagesAndGetToken = async (req) => {
 
 let simplifyJson = (json) => {
   if (json.predictions[0].taxa) {
-    json.predictions = json.predictions[0].taxa.items.map(p => {
+    json.predictions = json.predictions[0].taxa.items.map((p) => {
       let simplified = {
         probability: p.probability,
-        "taxon": p
+        taxon: p,
       };
-      simplified.taxon.probability = undefined
-      return simplified
-    }
-    )
+      simplified.taxon.probability = undefined;
+      return simplified;
+    });
   }
 
   return json;
 };
 
 let refreshtaxonimages = async () => {
-  const pages = [342548, 342550, 342551, 342552, 342553, 342554]
-  let taxa = {}
+  const pages = [342548, 342550, 342551, 342552, 342553, 342554];
+  let taxa = {};
 
   for (let index = 0; index < pages.length; index++) {
     let pageId = pages[index];
-    let page = await axios.get(`https://www.artsdatabanken.no/api/Content/${pageId}`);
+    let page = await axios.get(
+      `https://www.artsdatabanken.no/api/Content/${pageId}`
+    );
 
-    page.data.Files.forEach(f => {
+    page.data.Files.forEach((f) => {
       // Unpublished files have no FileUrl
       if (f.FileUrl) {
-        let name = f.Title.split(".")[0].replace("_", " ")
-        let value = f.Id.split("/")[1]
-        taxa[name] = value
+        let name = f.Title.split(".")[0].replace("_", " ");
+        let value = f.Id.split("/")[1];
+        taxa[name] = value;
       }
-    })
+    });
   }
 
   let data = JSON.stringify(taxa);
-  fs.writeFileSync('taxonPictures.js', `module.exports = {media: ${data}};`);
-  return Object.keys(taxa).length
+  fs.writeFileSync("taxonPictures.js", `module.exports = {media: ${data}};`);
+  return Object.keys(taxa).length;
 };
 
-
 let getId = async (req) => {
-
   const form = new FormData();
   const formHeaders = form.getHeaders();
 
   const receivedParams = Object.keys(req.body);
 
   receivedParams.forEach((key, index) => {
-    form.append(key, req.body[key])
+    form.append(key, req.body[key]);
   });
 
   var stream = require("stream");
@@ -341,16 +352,14 @@ let getId = async (req) => {
     });
   }
 
-  let token
+  let token;
   if (receivedParams.model && receivedParams.model.toLowerCase() === "global") {
-    token = process.env.SH_TOKEN // Shared token
-  }
-  else {
-    token = process.env.SP_TOKEN // Specialized (Norwegian) token
+    token = process.env.SH_TOKEN; // Shared token
+  } else {
+    token = process.env.SP_TOKEN; // Specialized (Norwegian) token
   }
 
   let recognition;
-
 
   if (!req.body.application) {
     try {
@@ -424,8 +433,7 @@ let getId = async (req) => {
     // -------------- end of duplicate checking code
 
     return recognition.data;
-  }
-  else {
+  } else {
     try {
       recognition = await axios.post(
         `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
@@ -436,7 +444,7 @@ let getId = async (req) => {
           },
           auth: {
             username: process.env.NATURALIS_USERNAME,
-            password: process.env.NATURALIS_PASSWORD
+            password: process.env.NATURALIS_PASSWORD,
           },
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
@@ -449,16 +457,16 @@ let getId = async (req) => {
     }
   }
 
-
   for (let index = 0; index < recognition.data.predictions.length; index++) {
-    let taxa = recognition.data.predictions[index].taxa.items
+    let taxa = recognition.data.predictions[index].taxa.items;
 
     // get the best 5
     taxa = taxa.slice(0, 5);
 
     // Check against list of misspellings and unknown synonyms
     taxa = taxa.map((pred) => {
-      pred.scientific_name = taxonMapper.taxa[pred.scientific_name] || pred.scientific_name;
+      pred.scientific_name =
+        taxonMapper.taxa[pred.scientific_name] || pred.scientific_name;
       return pred;
     });
 
@@ -473,12 +481,10 @@ let getId = async (req) => {
           pred.scientificNameID = nameResult.scientificNameID;
           pred.name = nameResult.scientificName;
           pred.infoUrl = nameResult.infoUrl;
-        }
-        else {
+        } else {
           pred.name = pred.scientific_name;
         }
         pred.picture = getPicture(pred.scientific_name);
-
       } catch (error) {
         date = new Date().toISOString();
         console.log(date, error);
@@ -486,10 +492,8 @@ let getId = async (req) => {
       }
     }
 
-    recognition.data.predictions[index].taxa.items = taxa
+    recognition.data.predictions[index].taxa.items = taxa;
   }
-
-
 
   // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
   // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
@@ -527,12 +531,11 @@ app.get("/taxonimage/*", (req, res) => {
 });
 
 app.get("/refreshtaxonimages", async (req, res) => {
-  let number = await refreshtaxonimages()
+  let number = await refreshtaxonimages();
   res.status(200).end(`${number} pictures found`);
 });
 
 app.post("/", upload.array("image"), async (req, res) => {
-
   // Future simple token check
 
   // if (req.headers["authorization"] !== `Bearer ${process.env.AI_TOKEN}`) {
@@ -548,14 +551,11 @@ app.post("/", upload.array("image"), async (req, res) => {
 
     if (req.body.application === undefined) {
       res.status(200).json(simplifyJson(json));
-    }
-    else {
+    } else {
       res.status(200).json(json);
     }
-
   } catch (error) {
-
-    console.log(error)
+    console.log(error);
 
     res.status(error.response.status).end(error.response.statusText);
     date = new Date().toISOString();
@@ -633,4 +633,3 @@ app.get("/image/*", (req, res) => {
 });
 
 app.listen(port, console.log(`Server now running on port ${port}`));
-

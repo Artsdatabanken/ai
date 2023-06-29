@@ -10,7 +10,7 @@
   "author": "Wouter Koch",
   "license": "MIT",
   "dependencies": {
-    "applicationinsights": "^1.8.0",
+    "applicationinsights": "^2.7.0",
     "axios": "^0.21.1",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
