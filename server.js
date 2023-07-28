@@ -87,12 +87,12 @@ let writelog = (req, json) => {
     fs.appendFileSync(
       `./log/${application}_${year}-${month}.csv`,
       "Datetime," +
-        "Number_of_pictures," +
-        "Result_1_name,Result_1_group,Result_1_probability," +
-        "Result_2_name,Result_2_group,Result_2_probability," +
-        "Result_3_name,Result_3_group,Result_3_probability," +
-        "Result_4_name,Result_4_group,Result_4_probability," +
-        "Result_5_name,Result_5_group,Result_5_probability\n"
+      "Number_of_pictures," +
+      "Result_1_name,Result_1_group,Result_1_probability," +
+      "Result_2_name,Result_2_group,Result_2_probability," +
+      "Result_3_name,Result_3_group,Result_3_probability," +
+      "Result_4_name,Result_4_group,Result_4_probability," +
+      "Result_5_name,Result_5_group,Result_5_probability\n"
     );
   }
 
@@ -129,7 +129,7 @@ let getName = async (sciName) => {
   try {
     let taxon = await axios.get(
       "https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=" +
-        sciName
+      sciName
     );
 
     if (!taxon.data.length) {
@@ -200,26 +200,29 @@ cron.schedule("30 * * * *", () => {
 
   // Loop over all files in uploads/
   fs.readdir("./uploads/", (err, files) => {
-    files.forEach((file) => {
-      // gets timestamp from filename
-      let filename = file.split("_")[1];
-      // gets current timestamp
-      let timestamp = Math.round(new Date().getTime() / 1000);
-      // Check timestamp vs. time now
-      let time_between = timestamp - filename;
-      // Image Survival length, if change this - ensure to change in artsobs-mobile too...
-      let survival_length = 3600; // 1 hr in seconds
-      // If more than survival_length
-      if (time_between >= survival_length) {
-        // Delete the file
-        fs.unlink("./uploads/" + file, (err) => {
-          if (err) {
-            console.log("could not delete file");
-          }
-          console.log("The file has been deleted!");
-        });
-      }
-    });
+
+    if (files) {
+      files.forEach((file) => {
+        // gets timestamp from filename
+        let filename = file.split("_")[1];
+        // gets current timestamp
+        let timestamp = Math.round(new Date().getTime() / 1000);
+        // Check timestamp vs. time now
+        let time_between = timestamp - filename;
+        // Image Survival length, if change this - ensure to change in artsobs-mobile too...
+        let survival_length = 3600; // 1 hr in seconds
+        // If more than survival_length
+        if (time_between >= survival_length) {
+          // Delete the file
+          fs.unlink("./uploads/" + file, (err) => {
+            if (err) {
+              console.log("could not delete file");
+            }
+            console.log("The file has been deleted!");
+          });
+        }
+      });
+    }
   });
 });
 
@@ -474,7 +477,7 @@ let getId = async (req) => {
     for (let pred of taxa) {
       try {
         let nameResult;
-        if(req.body.application.toLowerCase() === "artsobservasjoner") {
+        if (req.body.application.toLowerCase() === "artsobservasjoner") {
           pred.name = pred.scientific_name;
         }
         else {
@@ -485,7 +488,7 @@ let getId = async (req) => {
           pred.name = nameResult.scientificName;
           pred.infoUrl = nameResult.infoUrl;
         }
-        
+
         pred.picture = getPicture(pred.scientific_name);
       } catch (error) {
         date = new Date().toISOString();
