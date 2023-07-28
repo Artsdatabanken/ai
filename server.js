@@ -474,16 +474,18 @@ let getId = async (req) => {
     for (let pred of taxa) {
       try {
         let nameResult;
-        if (!req.body.application || req.body.application === "Artsorakel") {
+        if(req.body.application.toLowerCase() === "artsobservasjoner") {
+          pred.name = pred.scientific_name;
+        }
+        else {
           nameResult = await getName(pred.scientific_name);
           pred.vernacularName = nameResult.vernacularName;
           pred.groupName = nameResult.groupName;
           pred.scientificNameID = nameResult.scientificNameID;
           pred.name = nameResult.scientificName;
           pred.infoUrl = nameResult.infoUrl;
-        } else {
-          pred.name = pred.scientific_name;
         }
+        
         pred.picture = getPicture(pred.scientific_name);
       } catch (error) {
         date = new Date().toISOString();
