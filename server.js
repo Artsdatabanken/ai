@@ -18,7 +18,7 @@ const initVect = crypto.randomBytes(16);
 
 let appInsights = require("applicationinsights");
 
-var dir = './taxa';
+var dir = './log/taxa';
 if (!fs.existsSync(dir)) {
   fs.mkdirSync(dir);
 }
@@ -125,7 +125,7 @@ let writelog = (req, json) => {
 
 let getName = async (sciName) => {
 
-  let jsonfilename = `./taxa/${sciName}.json`
+  let jsonfilename = `./log/taxa/${sciName}.json`
 
   if (fs.existsSync(jsonfilename)) {
     let taxon = JSON.parse(fs.readFileSync(jsonfilename));
