@@ -197,11 +197,15 @@ let getName = async (sciName) => {
   }
 
   if (name && name.data.AcceptedName.dynamicProperties) {
-    nameResult.groupName = name.data.AcceptedName.dynamicProperties.find(
+    let artsobsname = nameResult.groupName = name.data.AcceptedName.dynamicProperties.find(
       (dp) =>
         dp.Name === "GruppeNavn" &&
         dp.Properties.find((p) => p.Value === "Artsobservasjoner")
-    ).Value;
+    )
+
+    if(artsobsname && artsobsname.Value) {
+      nameResult.groupName = artsobsname.Value
+    }
   }
 
 
