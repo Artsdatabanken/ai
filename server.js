@@ -18,6 +18,11 @@ const initVect = crypto.randomBytes(16);
 
 let appInsights = require("applicationinsights");
 
+var dir = './taxa';
+if (!fs.existsSync(dir)) {
+  fs.mkdirSync(dir);
+}
+
 /** Filter for not logging requests for root url when success */
 var filteringAiFunction = (envelope, context) => {
   if (
@@ -119,6 +124,14 @@ let writelog = (req, json) => {
 };
 
 let getName = async (sciName) => {
+
+  let jsonfilename = `./taxa/${sciName}.json`
+
+  if (fs.existsSync(jsonfilename)) {
+    let taxon = JSON.parse(fs.readFileSync(jsonfilename));
+    return taxon;
+  }
+
   let nameResult = {
     vernacularName: sciName,
     groupName: "",
@@ -189,6 +202,12 @@ let getName = async (sciName) => {
         dp.Name === "GruppeNavn" &&
         dp.Properties.find((p) => p.Value === "Artsobservasjoner")
     ).Value;
+  }
+
+
+  if (!fs.existsSync(jsonfilename)) {
+    let data = JSON.stringify(nameResult);
+    fs.writeFileSync(jsonfilename, data);
   }
 
   return nameResult;

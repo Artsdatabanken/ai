@@ -26,6 +26,6 @@
   },
 
   "nodemonConfig": {
-    "ignore": ["log/*"]
+    "ignore": ["log/*", "taxa/*"]
   }
 }

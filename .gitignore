@@ -19,6 +19,8 @@ yarn-error.log*
 .~lock.*
 TaxonExtractor.ods
 log/*
+taxa/*
+
 
 taxonPictures.js
 config/secrets.env
