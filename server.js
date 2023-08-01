@@ -7,7 +7,7 @@ const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const taxonMapper = require("./taxonMapping");
-const taxonPics = require("./taxonPictures");
+const taxonPics = require("./log/taxonPictures");
 const cron = require("node-cron");
 
 // Use the crypto library for encryption and decryption
@@ -374,7 +374,7 @@ let refreshtaxonimages = async () => {
   }
 
   let data = JSON.stringify(taxa);
-  fs.writeFileSync("taxonPictures.js", `module.exports = {media: ${data}};`);
+  fs.writeFileSync("log/taxonPictures.js", `module.exports = {media: ${data}};`);
   return Object.keys(taxa).length;
 
 };
