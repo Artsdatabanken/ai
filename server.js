@@ -509,7 +509,17 @@ let getId = async (req) => {
 
     // get the best 5
     taxa = taxa.slice(0, 5);
-    taxa = taxa.filter(taxon => taxon.probability >= .02)
+    filteredTaxa = taxa.filter(taxon => taxon.probability >= .02)
+
+    if (filteredTaxa.length) {
+      taxa = filteredTaxa
+    }
+    else {
+      taxa = taxa.slice(0, 2);
+    }
+
+
+
 
     // Check against list of misspellings and unknown synonyms
     taxa = taxa.map((pred) => {
