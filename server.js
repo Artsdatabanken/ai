@@ -509,6 +509,7 @@ let getId = async (req) => {
 
     // get the best 5
     taxa = taxa.slice(0, 5);
+    taxa = taxa.filter(taxon => taxon.probability >= .02)
 
     // Check against list of misspellings and unknown synonyms
     taxa = taxa.map((pred) => {
@@ -605,11 +606,15 @@ app.post("/", upload.array("image"), async (req, res) => {
     }
   } catch (error) {
     console.log(error);
-
-    res.status(error.response.status).end(error.response.statusText);
     date = new Date().toISOString();
 
-    console.log(date, "Error", error.response.status);
+    if(error.response) {
+      res.status(error.response.status).end(error.response.statusText);
+      console.log(date, "Error", error.response.status);
+    }
+    else {
+      console.log(date, "Error", error);
+    }
 
     fs.appendFileSync(
       "./log/log.txt",
