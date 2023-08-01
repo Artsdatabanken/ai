@@ -369,13 +369,13 @@ let refreshtaxonimages = async () => {
           taxa[name] = value;
         }
       });
-      let data = JSON.stringify(taxa);
-      fs.writeFileSync("taxonPictures.js", `module.exports = {media: ${data}};`);
-      return Object.keys(taxa).length;
+
     }
   }
 
-  return 0;
+  let data = JSON.stringify(taxa);
+  fs.writeFileSync("taxonPictures.js", `module.exports = {media: ${data}};`);
+  return Object.keys(taxa).length;
 
 };
 
