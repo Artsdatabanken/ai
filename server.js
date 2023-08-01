@@ -142,10 +142,21 @@ let getName = async (sciName) => {
   try {
     let taxon = await axios.get(
       "https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=" +
-      sciName
-    );
+      sciName,
+      {
+        timeout: 5000, // Set a timeout of 5 seconds
+      }
+    )
+      .catch(error => {
+        if (error.code === 'ECONNABORTED') {
+          console.log('Request timed out');
+        } else {
+          console.log(error.message);
+        }
+        error = true
+      });
 
-    if (!taxon.data.length) {
+    if (!taxon || !taxon.data.length) {
       return nameResult;
     }
 
@@ -183,7 +194,10 @@ let getName = async (sciName) => {
       nameResult.infoUrl = "https://artsdatabanken.no/" + taxon.data.Id;
     }
 
-    name = await axios.get("https://artsdatabanken.no/Api/" + taxon.data.Id);
+    name = await axios.get("https://artsdatabanken.no/Api/" + taxon.data.Id,
+      {
+        timeout: 5000, // Set a timeout of 5 seconds
+      });
   } catch (error) {
     date = new Date().toISOString();
     console.log(date, error);
@@ -203,7 +217,7 @@ let getName = async (sciName) => {
         dp.Properties.find((p) => p.Value === "Artsobservasjoner")
     )
 
-    if(artsobsname && artsobsname.Value) {
+    if (artsobsname && artsobsname.Value) {
       nameResult.groupName = artsobsname.Value
     }
   }
@@ -340,22 +354,29 @@ let refreshtaxonimages = async () => {
   for (let index = 0; index < pages.length; index++) {
     let pageId = pages[index];
     let page = await axios.get(
-      `https://www.artsdatabanken.no/api/Content/${pageId}`
+      `https://www.artsdatabanken.no/api/Content/${pageId}`,
+      {
+        timeout: 10000, // Set a timeout of 10 seconds
+      }
     );
 
-    page.data.Files.forEach((f) => {
-      // Unpublished files have no FileUrl
-      if (f.FileUrl) {
-        let name = f.Title.split(".")[0].replace("_", " ");
-        let value = f.Id.split("/")[1];
-        taxa[name] = value;
-      }
-    });
+    if (!!page) {
+      page.data.Files.forEach((f) => {
+        // Unpublished files have no FileUrl
+        if (f.FileUrl) {
+          let name = f.Title.split(".")[0].replace("_", " ");
+          let value = f.Id.split("/")[1];
+          taxa[name] = value;
+        }
+      });
+      let data = JSON.stringify(taxa);
+      fs.writeFileSync("taxonPictures.js", `module.exports = {media: ${data}};`);
+      return Object.keys(taxa).length;
+    }
   }
 
-  let data = JSON.stringify(taxa);
-  fs.writeFileSync("taxonPictures.js", `module.exports = {media: ${data}};`);
-  return Object.keys(taxa).length;
+  return 0;
+
 };
 
 let getId = async (req) => {
