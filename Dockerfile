@@ -21,6 +21,6 @@ RUN mkdir -p log && touch log/log.txt && chown dockerrunner log/log.txt
 COPY . .
 
 RUN chown dockerrunner log/
-RUN chown dockerrunner log/taxonPictures.js
+# RUN chown dockerrunner log/taxonPictures.js
 
 CMD [ "npm", "start" ]

@@ -24,3 +24,4 @@ log/*.csv
 log/*.txt
 
 config/secrets.env
+log/taxonPictures.js
