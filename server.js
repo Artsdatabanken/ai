@@ -364,7 +364,7 @@ let refreshtaxonimages = async () => {
       page.data.Files.forEach((f) => {
         // Unpublished files have no FileUrl
         if (f.FileUrl) {
-          let name = f.Title.split(".")[0].replace("_", " ");
+          let name = f.Title.split(".")[0].replaceAll("_", " ");
           let value = f.Id.split("/")[1];
           taxa[name] = value;
         }
