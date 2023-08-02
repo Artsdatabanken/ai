@@ -202,10 +202,12 @@ let getName = async (sciName) => {
     date = new Date().toISOString();
     console.log(date, error);
 
-    fs.appendFileSync(
-      "./log/log.txt",
-      "Error getting names: " + error.response.status + " (" + date + ")\n"
-    );
+    if (error.response) {
+      fs.appendFileSync(
+        "./log/log.txt",
+        "Error getting names: " + error.response.status + " (" + date + ")\n"
+      );
+    }
 
     throw error;
   }
@@ -618,18 +620,18 @@ app.post("/", upload.array("image"), async (req, res) => {
     console.log(error);
     date = new Date().toISOString();
 
-    if(error.response) {
+    if (error.response) {
       res.status(error.response.status).end(error.response.statusText);
       console.log(date, "Error", error.response.status);
+
+      fs.appendFileSync(
+        "./log/log.txt",
+        "Error identifying: " + error.response.status + " (" + date + ")\n"
+      );
     }
     else {
       console.log(date, "Error", error);
     }
-
-    fs.appendFileSync(
-      "./log/log.txt",
-      "Error identifying: " + error.response.status + " (" + date + ")\n"
-    );
   }
 });
 
