@@ -17,18 +17,22 @@ const initVect = crypto.randomBytes(16);
 
 let appInsights = require("applicationinsights");
 
-var taxadir = './log/taxa';
-if (!fs.existsSync(taxadir)) {
-  fs.mkdirSync(taxadir);
-}
+// --- files and locations
+const logdir = './log'
+const taxadir = `${logdir}/taxa`;
+const pictureFile = `${logdir}/taxonPictures.json`
+const uploadsdir = './uploads'
 
+// --- Get the taxon picture ids from file on start
 var taxonPics = {};
-const pictureFile = './log/taxonPictures.json'
-
 if (fs.existsSync(pictureFile)) {
   taxonPics = JSON.parse(fs.readFileSync(pictureFile));
 }
 
+// --- Make sure the taxon cache directory exists
+if (!fs.existsSync(taxadir)) {
+  fs.mkdirSync(taxadir);
+}
 
 /** Filter for not logging requests for root url when success */
 var filteringAiFunction = (envelope, context) => {
@@ -76,11 +80,8 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 let getPicture = (sciName) => {
-  console.log("Looking for " + sciName)
   let pic = taxonPics[sciName];
-  console.log(pic)
   if (pic) {
-    console.log(`Found https://artsdatabanken.no/Media/${pic}?mode=128x128`)
     return `https://artsdatabanken.no/Media/${pic}?mode=128x128`;
   }
 
@@ -99,9 +100,9 @@ let writelog = (req, json) => {
 
   let application = req.body.application;
 
-  if (!fs.existsSync(`./log/${application}_${year}-${month}.csv`)) {
+  if (!fs.existsSync(`${logdir}/${application}_${year}-${month}.csv`)) {
     fs.appendFileSync(
-      `./log/${application}_${year}-${month}.csv`,
+      `${logdir}/${application}_${year}-${month}.csv`,
       "Datetime," +
       "Number_of_pictures," +
       "Result_1_name,Result_1_group,Result_1_probability," +
@@ -131,12 +132,12 @@ let writelog = (req, json) => {
 
   row += "\n";
 
-  fs.appendFileSync(`./log/${application}_${year}-${month}.csv`, row);
+  fs.appendFileSync(`${logdir}/${application}_${year}-${month}.csv`, row);
 };
 
 let getName = async (sciName) => {
 
-  let jsonfilename = `./log/taxa/${sciName}.json`
+  let jsonfilename = `${taxadir}/${sciName}.json`
 
   if (fs.existsSync(jsonfilename)) {
     let taxon = JSON.parse(fs.readFileSync(jsonfilename));
@@ -217,7 +218,7 @@ let getName = async (sciName) => {
 
     if (error.response) {
       fs.appendFileSync(
-        "./log/log.txt",
+        `${logdir}/log.txt`,
         "Error getting names: " + error.response.status + " (" + date + ")\n"
       );
     }
@@ -251,7 +252,7 @@ cron.schedule("30 * * * *", () => {
   //console.log('Running cleanup every 30th minute');
 
   // Loop over all files in uploads/
-  fs.readdir("./uploads/", (err, files) => {
+  fs.readdir(`${uploadsdir}/`, (err, files) => {
 
     if (files) {
       files.forEach((file) => {
@@ -266,7 +267,7 @@ cron.schedule("30 * * * *", () => {
         // If more than survival_length
         if (time_between >= survival_length) {
           // Delete the file
-          fs.unlink("./uploads/" + file, (err) => {
+          fs.unlink(`${uploadsdir}/${file}`, (err) => {
             if (err) {
               console.log("could not delete file");
             }
@@ -339,7 +340,7 @@ let saveImagesAndGetToken = async (req) => {
     counter += 1;
 
     // Upload to uploads folder
-    fs.writeFile("./uploads/" + filename, encrypted_file, (err) => {
+    fs.writeFile(`${uploadsdir}/${filename}`, encrypted_file, (err) => {
       if (err) throw err;
       console.log("The file has been saved!");
     });
@@ -363,6 +364,7 @@ let simplifyJson = (json) => {
 };
 
 let refreshtaxonimages = async () => {
+
   const pages = [342548, 342550, 342551, 342552, 342553, 342554];
   let taxa = {};
 
@@ -389,7 +391,7 @@ let refreshtaxonimages = async () => {
   }
 
   taxonPics = taxa;
-  fs.writeFileSync("log/taxonPictures.json", JSON.stringify(taxa));
+  fs.writeFileSync(pictureFile, JSON.stringify(taxa));
   return Object.keys(taxa).length;
 };
 
@@ -605,7 +607,14 @@ app.get("/taxonimage/*", (req, res) => {
   res.status(200).end(getPicture(taxon));
 });
 
+
+
 app.get("/refreshtaxonimages", async (req, res) => {
+  // Read the file first in case the fetches fail, so it can still be uploaded manually
+  if (fs.existsSync(pictureFile)) {
+    taxonPics = JSON.parse(fs.readFileSync(pictureFile));
+  }
+
   let number = await refreshtaxonimages();
   res.status(200).end(`${number} pictures found`);
 });
@@ -638,7 +647,7 @@ app.post("/", upload.array("image"), async (req, res) => {
       console.log(date, "Error", error.response.status);
 
       fs.appendFileSync(
-        "./log/log.txt",
+        `${logdir}/log.txt`,
         "Error identifying: " + error.response.status + " (" + date + ")\n"
       );
     }
@@ -677,7 +686,7 @@ app.get("/image/*", (req, res) => {
   url = url.split("&")[0];
 
   // Loop over all files in uploads/
-  fs.readdir("./uploads/", (err, files) => {
+  fs.readdir(`${uploadsdir}/`, (err, files) => {
     let image_list = [];
 
     files.forEach((file) => {
@@ -688,7 +697,7 @@ app.get("/image/*", (req, res) => {
 
       if (fileid === url) {
         // If the request has a match in the database (it should unless the user was too slow)
-        const image_to_fetch = "./uploads/" + file;
+        const image_to_fetch = `${uploadsdir}/${file}`;
 
         // read the file
         const file_buffer = fs.readFileSync(image_to_fetch);
@@ -710,5 +719,11 @@ app.get("/image/*", (req, res) => {
     }
   });
 });
+
+// Reboot node
+app.get("/reboot/" + process.env.SP_TOKEN, (req, res) => {
+  process.exit();
+});
+
 
 app.listen(port, console.log(`Server now running on port ${port}`));
