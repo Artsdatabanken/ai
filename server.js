@@ -7,7 +7,6 @@ const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const taxonMapper = require("./taxonMapping");
-const taxonPics = require("./log/taxonPictures");
 const cron = require("node-cron");
 
 // Use the crypto library for encryption and decryption
@@ -18,10 +17,18 @@ const initVect = crypto.randomBytes(16);
 
 let appInsights = require("applicationinsights");
 
-var dir = './log/taxa';
-if (!fs.existsSync(dir)) {
-  fs.mkdirSync(dir);
+var taxadir = './log/taxa';
+if (!fs.existsSync(taxadir)) {
+  fs.mkdirSync(taxadir);
 }
+
+var taxonPics = {};
+const pictureFile = './log/taxonPictures.json'
+
+if (fs.existsSync(pictureFile)) {
+  taxonPics = JSON.parse(fs.readFileSync(pictureFile));
+}
+
 
 /** Filter for not logging requests for root url when success */
 var filteringAiFunction = (envelope, context) => {
@@ -69,10 +76,14 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 let getPicture = (sciName) => {
-  let pic = taxonPics.media[sciName];
+  console.log("Looking for " + sciName)
+  let pic = taxonPics[sciName];
+  console.log(pic)
   if (pic) {
+    console.log(`Found https://artsdatabanken.no/Media/${pic}?mode=128x128`)
     return `https://artsdatabanken.no/Media/${pic}?mode=128x128`;
   }
+
   return null;
 };
 
@@ -131,6 +142,8 @@ let getName = async (sciName) => {
     let taxon = JSON.parse(fs.readFileSync(jsonfilename));
     return taxon;
   }
+
+
 
   let nameResult = {
     vernacularName: sciName,
@@ -375,11 +388,11 @@ let refreshtaxonimages = async () => {
     }
   }
 
-  let data = JSON.stringify(taxa);
-  fs.writeFileSync("log/taxonPictures.js", `module.exports = {media: ${data}};`);
+  taxonPics = taxa;
+  fs.writeFileSync("log/taxonPictures.json", JSON.stringify(taxa));
   return Object.keys(taxa).length;
-
 };
+
 
 let getId = async (req) => {
   const form = new FormData();
