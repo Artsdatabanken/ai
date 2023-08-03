@@ -720,10 +720,4 @@ app.get("/image/*", (req, res) => {
   });
 });
 
-// Reboot node
-app.get("/reboot/" + process.env.SP_TOKEN, (req, res) => {
-  process.exit();
-});
-
-
 app.listen(port, console.log(`Server now running on port ${port}`));
