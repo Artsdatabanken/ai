@@ -177,14 +177,14 @@ let getName = async (sciName, force=false) => {
   let name;
 
   try {
-    let url = `https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`
+    let url = encodeURI(`https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`)
     let taxon = await axios.get(
       url,
       {
         timeout: 3000,
       }
     ).catch(error => {
-      writeErrorLog(`Failed to get info for ${sciName} from "${url}"`, error);
+      writeErrorLog(`Failed to get info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
     });
 
     if (!taxon || !taxon.data.length) {
@@ -225,15 +225,15 @@ let getName = async (sciName, force=false) => {
       nameResult.infoUrl = "https://artsdatabanken.no/" + taxon.data.Id;
     }
 
-    url = `https://artsdatabanken.no/Api/${taxon.data.Id}`
+    url = encodeURI(`https://artsdatabanken.no/Api/${taxon.data.Id}`)
     name = await axios.get(url,
       {
         timeout: 3000,
       }).catch(error => {
-        writeErrorLog(`Error getting info for ${sciName} from "${url}"`, error);
+        writeErrorLog(`Error getting info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
       });
   } catch (error) {
-    writeErrorLog(`Error processing info in getName(${sciName})`, error);
+    writeErrorLog(`Error processing info in getName(${sciName}). You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
   }
 
   if (name && name.data.AcceptedName.dynamicProperties) {
@@ -380,7 +380,7 @@ let refreshtaxonimages = async () => {
 
   for (let index = 0; index < pages.length; index++) {
     let pageId = pages[index];
-    let url = `https://www.artsdatabanken.no/api/Content/${pageId}`
+    let url = encodeURI(`https://www.artsdatabanken.no/api/Content/${pageId}`)
     let page = await axios.get(
       url,
       {
@@ -477,7 +477,7 @@ let getId = async (req) => {
           pred.taxon.infoUrl = nameResult.infoUrl;
           pred.taxon.picture = getPicture(nameResult.scientificName);
         } catch (error) {
-          writeErrorLog(`Error getting name for ${pred.taxon.name}`, error);
+          writeErrorLog(`Error getting name for ${pred.taxon.name}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + pred.taxon.name)}.`, error);
         }
       }
 
@@ -566,7 +566,7 @@ let getId = async (req) => {
 
           pred.picture = getPicture(pred.scientific_name);
         } catch (error) {
-          writeErrorLog(`Error while processing getName(${pred.scientific_name})`, error);
+          writeErrorLog(`Error while processing getName(${pred.scientific_name}). You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + pred.scientific_name)}.`, error);
         }
       }
 
