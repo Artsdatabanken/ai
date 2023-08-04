@@ -169,8 +169,6 @@ let getName = async (sciName, force=false) => {
     return taxon;
   }
 
-  console.log(sciName)
-
   let nameResult = {
     vernacularName: sciName,
     groupName: "",
@@ -623,7 +621,6 @@ app.get("/cachetaxon/*", async (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
     let name = await getName(taxon, force=true)
-    console.log(name)
     res.status(200).json(name);
   }
   catch (error) {
