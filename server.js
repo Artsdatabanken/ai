@@ -206,7 +206,6 @@ let getName = async (sciName, force = false) => {
       if (hit) {
         hit = hit[0].ScientificNames[0].HigherClassification.filter(h => h.ScientificName === sciName)[0].ScientificNameId
         url = `https://artsdatabanken.no/api/Resource/ScientificName/${hit}`
-        console.log(url)
         let taxon = await axios.get(
           url,
           {
@@ -235,7 +234,6 @@ let getName = async (sciName, force = false) => {
         }
 
         retrievedTaxon.data = taxon.data
-        console.log(taxon.data.AcceptedNameUsage.ScientificNameId)
       }
     }
     else {
