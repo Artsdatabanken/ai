@@ -40,17 +40,17 @@ const dateStr = (resolution = `d`) => {
   const offset = date.getTimezoneOffset();
 
   if (resolution === `m`) {
-    return `${new Date(date.getTime() - (offset*60*1000)).toISOString().substring(0, 7)}`;
+    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 7)}`;
   }
   else if (resolution === `s`) {
-    return `${new Date(date.getTime() - (offset*60*1000)).toISOString().substring(0, 19).replace("T", " ")}`;
+    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 19).replace("T", " ")}`;
   }
 
-  return `${new Date(date.getTime() - (offset*60*1000)).toISOString().substring(0, 10)}`;
+  return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 10)}`;
 };
 
 const writeErrorLog = (message, error) => {
-  if(!!error) {
+  if (!!error) {
     fs.appendFileSync(
       `${logdir}/errorlog_${dateStr(`d`)}.txt`,
       `\n${dateStr(`s`)}: ${message}\n   ${error}\n`
@@ -61,7 +61,7 @@ const writeErrorLog = (message, error) => {
       `${logdir}/errorlog_${dateStr(`d`)}.txt`,
       `${dateStr(`s`)}: ${message}\n`
     );
-  } 
+  }
 }
 
 
@@ -160,7 +160,7 @@ let writelog = (req, json) => {
   fs.appendFileSync(`${logdir}/${application}_${dateStr(`m`)}.csv`, row);
 };
 
-let getName = async (sciName, force=false) => {
+let getName = async (sciName, force = false) => {
 
   let jsonfilename = `${taxadir}/${sciName}.json`
 
@@ -176,9 +176,11 @@ let getName = async (sciName, force=false) => {
   };
   let name;
 
+  let retrievedTaxon = { data: [] };
+
   try {
     let url = encodeURI(`https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`)
-    let taxon = await axios.get(
+    taxon = await axios.get(
       url,
       {
         timeout: 3000,
@@ -191,41 +193,82 @@ let getName = async (sciName, force=false) => {
       return nameResult;
     }
 
-    taxon.data = taxon.data.find(
+    acceptedtaxon = taxon.data.find(
       (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
     );
 
-    if (!taxon.data) {
+    if (!!acceptedtaxon) {
+      retrievedTaxon.data = acceptedtaxon
+    }
+    else if (!sciName.includes(" ")) {
+      // console.log(taxon.data[0].ScientificNames[0].HigherClassification[0])
+      let hit = taxon.data.filter(t => t.ScientificNames[0].HigherClassification.find(h => h.ScientificName === sciName))
+      if (hit) {
+        hit = hit[0].ScientificNames[0].HigherClassification.filter(h => h.ScientificName === sciName)[0].ScientificNameId
+        url = `https://artsdatabanken.no/api/Resource/ScientificName/${hit}`
+        console.log(url)
+        let taxon = await axios.get(
+          url,
+          {
+            timeout: 3000,
+          }
+        ).catch(error => {
+          writeErrorLog(`Failed to get info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        });
+
+        if (!taxon || !taxon.data) {
+          return nameResult;
+        }
+
+        url = `https://artsdatabanken.no/api/Resource/Taxon/${taxon.data.Taxon.TaxonId}`
+        taxon = await axios.get(
+          url,
+          {
+            timeout: 3000,
+          }
+        ).catch(error => {
+          writeErrorLog(`Failed to get info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        });
+
+        if (!taxon || !taxon.data) {
+          return nameResult;
+        }
+
+        retrievedTaxon.data = taxon.data
+        console.log(taxon.data.AcceptedNameUsage.ScientificNameId)
+      }
+    }
+    else {
       return nameResult;
     }
 
-    nameResult.scientificName = taxon.data.AcceptedNameUsage.ScientificName;
-    nameResult.scientificNameID = taxon.data.AcceptedNameUsage.ScientificNameId;
+    nameResult.scientificName = retrievedTaxon.data.AcceptedNameUsage.ScientificName;
+    nameResult.scientificNameID = retrievedTaxon.data.AcceptedNameUsage.ScientificNameId;
 
     nameResult.vernacularName =
-      taxon.data["RecommendedVernacularName_nb-NO"] ||
-      taxon.data["RecommendedVernacularName_nn-NO"] ||
+      retrievedTaxon.data["RecommendedVernacularName_nb-NO"] ||
+      retrievedTaxon.data["RecommendedVernacularName_nn-NO"] ||
       nameResult.scientificName ||
       sciName;
 
-    if (taxon.data.Description) {
+    if (retrievedTaxon.data.Description) {
       const description =
-        taxon.data.Description.find(
+      retrievedTaxon.data.Description.find(
           (desc) =>
             desc.Language == "nb" ||
             desc.Language == "no" ||
             desc.Language == "nn"
-        ) || taxon.data.Description[0];
+        ) || retrievedTaxon.data.Description[0];
 
       nameResult.infoUrl = description.Id.replace(
         "Nodes/",
         "https://artsdatabanken.no/Pages/"
       );
     } else {
-      nameResult.infoUrl = "https://artsdatabanken.no/" + taxon.data.Id;
+      nameResult.infoUrl = "https://artsdatabanken.no/" + retrievedTaxon.data.Id;
     }
 
-    url = encodeURI(`https://artsdatabanken.no/Api/${taxon.data.Id}`)
+    url = encodeURI(`https://artsdatabanken.no/Api/${retrievedTaxon.data.Id}`)
     name = await axios.get(url,
       {
         timeout: 3000,
@@ -523,7 +566,7 @@ let getId = async (req) => {
         }
       ).catch(error => {
         writeErrorLog(`Naturalis API v2 lookup with token ${token} failed`, error);
-        throw("");
+        throw ("");
       });
     }
 
@@ -601,7 +644,7 @@ let getId = async (req) => {
     return recognition.data;
   }
   catch (error) {
-    throw(error)
+    throw (error)
   }
 };
 
@@ -620,7 +663,7 @@ app.get("/taxonimage/*", (req, res) => {
 app.get("/cachetaxon/*", async (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
-    let name = await getName(taxon, force=true)
+    let name = await getName(taxon, force = true)
     res.status(200).json(name);
   }
   catch (error) {
