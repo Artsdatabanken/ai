@@ -160,14 +160,16 @@ let writelog = (req, json) => {
   fs.appendFileSync(`${logdir}/${application}_${dateStr(`m`)}.csv`, row);
 };
 
-let getName = async (sciName) => {
+let getName = async (sciName, force=false) => {
 
   let jsonfilename = `${taxadir}/${sciName}.json`
 
-  if (fs.existsSync(jsonfilename)) {
+  if (!force && fs.existsSync(jsonfilename)) {
     let taxon = JSON.parse(fs.readFileSync(jsonfilename));
     return taxon;
   }
+
+  console.log(sciName)
 
   let nameResult = {
     vernacularName: sciName,
@@ -249,7 +251,7 @@ let getName = async (sciName) => {
   }
 
 
-  if (!fs.existsSync(jsonfilename)) {
+  if (force || !fs.existsSync(jsonfilename)) {
     let data = JSON.stringify(nameResult);
     fs.writeFileSync(jsonfilename, data);
   }
@@ -617,6 +619,18 @@ app.get("/taxonimage/*", (req, res) => {
 });
 
 
+app.get("/cachetaxon/*", async (req, res) => {
+  try {
+    let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
+    let name = await getName(taxon, force=true)
+    console.log(name)
+    res.status(200).json(name);
+  }
+  catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error)
+    res.status(500).end();
+  }
+});
 
 app.get("/refreshtaxonimages", async (req, res) => {
   try {
