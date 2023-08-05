@@ -35,9 +35,7 @@ if (fs.existsSync(pictureFile)) {
 }
 
 // --- Getting the date as a nice Norwegian-time string no matter where the server runs
-const dateStr = (resolution = `d`) => {
-  const date = new Date();
-
+const dateStr = (date=new Date(), resolution = `d`) => {
   let iso = date.toLocaleString('en-CA', { timeZone: "Europe/Oslo", hour12: false }).replace(', ', 'T');
   iso += '.' + date.getMilliseconds().toString().padStart(3, '0');
   const lie = new Date(iso + 'Z');
@@ -737,7 +735,7 @@ app.post("/save", upload.array("image"), async (req, res) => {
 
 app.get("/", (req, res) => {
   fs.stat("./server.js", function (err, stats) {
-    res.status(200).send(`Aiai! <hr/> (${stats.mtime.toISOString().substring(0, 19).replace("T", " ")})`);
+    res.status(200).send(`Aiai! <hr/> (${dateStr(stats.mtime, resolution="s")})`);
   });
 });
 
