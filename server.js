@@ -289,7 +289,6 @@ let getName = async (sciName, force = false) => {
   if (force || !fs.existsSync(jsonfilename)) {
     let data = JSON.stringify(nameResult);
     fs.writeFileSync(jsonfilename, data);
-    // fs.writeFileSync(unencoded_jsonfilename, data);
   }
 
   return nameResult;
@@ -701,6 +700,21 @@ app.post("/", upload.array("image"), async (req, res) => {
     } else {
       res.status(200).json(json);
     }
+
+    // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
+    json.predictions[0].taxa.items.forEach(taxon => {
+      if (Math.random() < 0.05) {
+        let filename = `${taxadir}/${encodeURIComponent(taxon.scientific_name)}.json`
+        if (fs.existsSync(filename)) {
+          fs.stat(filename, function (err, stats) {
+            if (((new Date() - stats.mtime) / (1000 * 60 * 60 * 24)) > 0.0000010) {
+              getName(taxon.scientific_name, force = true)
+            }
+          });
+        }
+      }
+    })
+
   } catch (error) {
     writeErrorLog(`Error while running getId()`, error);
     res.status(500).end();
@@ -774,4 +788,4 @@ app.get("/image/*", (req, res) => {
 });
 
 
-app.listen(port, console.log(`Server now running on port ${port} ${dateStr()}`));
+app.listen(port, console.log(`Server now running on port ${port}`));
