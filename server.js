@@ -288,7 +288,7 @@ let getName = async (sciName, force = false) => {
 
   if (force || !fs.existsSync(jsonfilename)) {
     let data = JSON.stringify(nameResult);
-    fs.writeFileSync(unencoded_jsonfilename, data);
+    fs.writeFileSync(jsonfilename, data);
   }
 
   return nameResult;
