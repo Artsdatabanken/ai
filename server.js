@@ -199,7 +199,7 @@ let getName = async (sciName, force = false) => {
         timeout: 3000,
       }
     ).catch(error => {
-      writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+      writeErrorLog(`Failed to get info for ${sciName} from ${url}.${!!force ? " This happened during a recache, though." : ""}`, error);
       throw ("")
     });
 
@@ -223,7 +223,7 @@ let getName = async (sciName, force = false) => {
           timeout: 3000,
         }
       ).catch(error => {
-        writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        writeErrorLog(`Failed to get info for ${sciName} from ${url}.${!!force ? " This happened during a recache, though." : ""}`, error);
         throw ("")
       });
 
@@ -234,7 +234,7 @@ let getName = async (sciName, force = false) => {
           timeout: 3000,
         }
       ).catch(error => {
-        writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        writeErrorLog(`Failed to get info for ${sciName} from ${url}.${!!force ? " This happened during a recache, though." : ""}`, error);
         throw ("")
       });
 
@@ -272,11 +272,11 @@ let getName = async (sciName, force = false) => {
       {
         timeout: 3000,
       }).catch(error => {
-        writeErrorLog(`Error getting info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        writeErrorLog(`Error getting info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
         throw ("")
       });
   } catch (error) {
-    writeErrorLog(`Error processing info in getName(${sciName}). ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+    writeErrorLog(`Error processing info in getName(${sciName}). You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
     return nameResult
   }
 
