@@ -40,19 +40,22 @@ const dateStr = (resolution = `d`, date = false) => {
     date = new Date();
   }
 
-  let iso = date.toLocaleString('en-CA', { timeZone: "Europe/Oslo", hour12: false }).replace(', ', 'T');
-  iso += '.' + date.getMilliseconds().toString().padStart(3, '0');
-  const lie = new Date(iso + 'Z');
-  const offset = -(lie - date) / 60 / 1000;
+  // let iso = date.toLocaleString('en-US', { timeZone: "Europe/Oslo", hour12: false }).replace(', ', 'T');
+  // iso += '.' + date.getMilliseconds().toString().padStart(3, '0');
+  // const lie = new Date(iso + 'Z');
+  // const offset = -(lie - date) / 60 / 1000;
 
   if (resolution === `m`) {
-    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 7)}`;
+    return `${new Date(date.getTime()).toISOString().substring(0, 7)}`;
+    // return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 7)}`;
   }
   else if (resolution === `s`) {
-    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 19).replace("T", " ")}`;
+    return `${new Date(date.getTime()).toISOString().substring(0, 19).replace("T", " ")}`;
+    // return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 19).replace("T", " ")}`;
   }
 
-  return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 10)}`;
+  return `${new Date(date.getTime()).toISOString().substring(0, 10)}`;
+  // return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 10)}`;
 };
 
 const writeErrorLog = (message, error) => {
@@ -570,51 +573,54 @@ let getId = async (req) => {
       });
     }
 
-    for (let index = 0; index < recognition.data.predictions.length; index++) {
-      let taxa = recognition.data.predictions[index].taxa.items;
-
-      // get the best 5
-      taxa = taxa.slice(0, 5);
-      filteredTaxa = taxa.filter(taxon => taxon.probability >= .02)
-
-      if (filteredTaxa.length) {
-        taxa = filteredTaxa
-      }
-      else {
-        taxa = taxa.slice(0, 2);
-      }
-
-      // Check against list of misspellings and unknown synonyms
-      taxa = taxa.map((pred) => {
-        pred.scientific_name =
-          taxonMapper.taxa[pred.scientific_name] || pred.scientific_name;
-        return pred;
-      });
-
-      // Get the data from the APIs (including accepted names of synonyms)
-      for (let pred of taxa) {
-        try {
-          let nameResult;
-          if (req.body.application.toLowerCase() === "artsobservasjoner") {
-            pred.name = pred.scientific_name;
-          }
-          else {
-            nameResult = await getName(pred.scientific_name);
-            pred.vernacularName = nameResult.vernacularName;
-            pred.groupName = nameResult.groupName;
-            pred.scientificNameID = nameResult.scientificNameID;
-            pred.name = nameResult.scientificName;
-            pred.infoUrl = nameResult.infoUrl;
-          }
-
-          pred.picture = getPicture(pred.scientific_name);
-        } catch (error) {
-          writeErrorLog(`Error while processing getName(${pred.scientific_name}). You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + pred.scientific_name)}.`, error);
-        }
-      }
-
-      recognition.data.predictions[index].taxa.items = taxa;
+    if (!recognition.data.predictions[0].taxa || !recognition.data.predictions[0].taxa.items) {
+      throw (`Naturalis API v2 lookup gave no predictions.\n${JSON.stringify(recognition.data)}`);
     }
+
+    let taxa = recognition.data.predictions[0].taxa.items;
+
+    // get the best 5
+    taxa = taxa.slice(0, 5);
+    filteredTaxa = taxa.filter(taxon => taxon.probability >= .02)
+
+    if (filteredTaxa.length) {
+      taxa = filteredTaxa
+    }
+    else {
+      taxa = taxa.slice(0, 2);
+    }
+
+    // Check against list of misspellings and unknown synonyms
+    taxa = taxa.map((pred) => {
+      pred.scientific_name =
+        taxonMapper.taxa[pred.scientific_name] || pred.scientific_name;
+      return pred;
+    });
+
+    // Get the data from the APIs (including accepted names of synonyms)
+    for (let pred of taxa) {
+      try {
+        let nameResult;
+        if (req.body.application.toLowerCase() === "artsobservasjoner") {
+          pred.name = pred.scientific_name;
+        }
+        else {
+          nameResult = await getName(pred.scientific_name);
+          pred.vernacularName = nameResult.vernacularName;
+          pred.groupName = nameResult.groupName;
+          pred.scientificNameID = nameResult.scientificNameID;
+          pred.name = nameResult.scientificName;
+          pred.infoUrl = nameResult.infoUrl;
+        }
+
+        pred.picture = getPicture(pred.scientific_name);
+      } catch (error) {
+        writeErrorLog(`Error while processing getName(${pred.scientific_name}). You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + pred.scientific_name)}.`, error);
+      }
+    }
+
+    recognition.data.predictions[0].taxa.items = taxa;
+
 
     // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
     // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
