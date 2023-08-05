@@ -34,23 +34,29 @@ if (fs.existsSync(pictureFile)) {
   taxonPics = JSON.parse(fs.readFileSync(pictureFile));
 }
 
-// --- Getting the date as a nice string
-const dateStr = (resolution = `d`) => {
-  date = new Date();
-  const offset = date.getTimezoneOffset();
+// --- Getting the date as a nice Norwegian-time string no matter where the server runs
+const dateStr = (resolution = `d`, date=false) => {
+  if (!date) {
+    date = new Date();
+  }
+
+  let iso = date.toLocaleString('en-CA', { timeZone: "Europe/Oslo", hour12: false }).replace(', ', 'T');
+  iso += '.' + date.getMilliseconds().toString().padStart(3, '0');
+  const lie = new Date(iso + 'Z');
+  const offset = -(lie - date) / 60 / 1000;
 
   if (resolution === `m`) {
-    return `${new Date(date.getTime() - (offset*60*1000)).toISOString().substring(0, 7)}`;
+    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 7)}`;
   }
   else if (resolution === `s`) {
-    return `${new Date(date.getTime() - (offset*60*1000)).toISOString().substring(0, 19).replace("T", " ")}`;
+    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 19).replace("T", " ")}`;
   }
 
-  return `${new Date(date.getTime() - (offset*60*1000)).toISOString().substring(0, 10)}`;
+  return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 10)}`;
 };
 
 const writeErrorLog = (message, error) => {
-  if(!!error) {
+  if (!!error) {
     fs.appendFileSync(
       `${logdir}/errorlog_${dateStr(`d`)}.txt`,
       `\n${dateStr(`s`)}: ${message}\n   ${error}\n`
@@ -61,7 +67,7 @@ const writeErrorLog = (message, error) => {
       `${logdir}/errorlog_${dateStr(`d`)}.txt`,
       `${dateStr(`s`)}: ${message}\n`
     );
-  } 
+  }
 }
 
 
@@ -125,9 +131,9 @@ let getPicture = (sciName) => {
 let writelog = (req, json) => {
   let application = req.body.application;
 
-  if (!fs.existsSync(`${logdir}/${application}_${dateStr(`m`)}.csv`)) {
+  if (!fs.existsSync(`${logdir}/${application}_${dateStr(`d`)}.csv`)) {
     fs.appendFileSync(
-      `${logdir}/${application}_${dateStr(`m`)}.csv`,
+      `${logdir}/${application}_${dateStr(`d`)}.csv`,
       "Datetime," +
       "Number_of_pictures," +
       "Result_1_name,Result_1_group,Result_1_probability," +
@@ -157,16 +163,22 @@ let writelog = (req, json) => {
 
   row += "\n";
 
-  fs.appendFileSync(`${logdir}/${application}_${dateStr(`m`)}.csv`, row);
+  fs.appendFileSync(`${logdir}/${application}_${dateStr(`d`)}.csv`, row);
 };
 
-let getName = async (sciName, force=false) => {
+let getName = async (sciName, force = false) => {
 
-  let jsonfilename = `${taxadir}/${sciName}.json`
+  let unencoded_jsonfilename = `${taxadir}/${sciName}.json`
+  let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`
+
+  if (fs.existsSync(unencoded_jsonfilename) && unencoded_jsonfilename !== jsonfilename) {
+    fs.rename(unencoded_jsonfilename, jsonfilename, function (error) {
+      if (error) writeErrorLog(`Could not rename "${unencoded_jsonfilename}" to "${jsonfilename}"`, error);
+    });
+  }
 
   if (!force && fs.existsSync(jsonfilename)) {
-    let taxon = JSON.parse(fs.readFileSync(jsonfilename));
-    return taxon;
+    return JSON.parse(fs.readFileSync(jsonfilename));
   }
 
   let nameResult = {
@@ -176,6 +188,8 @@ let getName = async (sciName, force=false) => {
   };
   let name;
 
+  let retrievedTaxon = { data: [] };
+
   try {
     let url = encodeURI(`https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`)
     let taxon = await axios.get(
@@ -184,60 +198,89 @@ let getName = async (sciName, force=false) => {
         timeout: 3000,
       }
     ).catch(error => {
-      writeErrorLog(`Failed to get info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+      writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+      throw ("")
     });
 
-    if (!taxon || !taxon.data.length) {
-      return nameResult;
-    }
-
-    taxon.data = taxon.data.find(
+    let acceptedtaxon = taxon.data.find(
       (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
     );
 
-    if (!taxon.data) {
-      return nameResult;
+    if (!!acceptedtaxon) {
+      retrievedTaxon.data = acceptedtaxon
+    }
+    else {
+      let hit = taxon.data.find(t => t.ScientificNames.find(sn => sn.HigherClassification.find(h => h.ScientificName === sciName)))
+      if (!hit) throw ("No HigherClassification hit");
+      hit = hit.ScientificNames.find(sn => sn.HigherClassification.find(h => h.ScientificName === sciName))
+      hit = hit.HigherClassification.find(h => h.ScientificName === sciName)
+      hit = hit.ScientificNameId
+      url = `https://artsdatabanken.no/api/Resource/ScientificName/${hit}`
+      taxon = await axios.get(
+        url,
+        {
+          timeout: 3000,
+        }
+      ).catch(error => {
+        writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        throw ("")
+      });
+
+      url = `https://artsdatabanken.no/api/Resource/Taxon/${taxon.data.Taxon.TaxonId}`
+      taxon = await axios.get(
+        url,
+        {
+          timeout: 3000,
+        }
+      ).catch(error => {
+        writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        throw ("")
+      });
+
+      retrievedTaxon.data = taxon.data
     }
 
-    nameResult.scientificName = taxon.data.AcceptedNameUsage.ScientificName;
-    nameResult.scientificNameID = taxon.data.AcceptedNameUsage.ScientificNameId;
+    nameResult.scientificName = retrievedTaxon.data.AcceptedNameUsage.ScientificName;
+    nameResult.scientificNameID = retrievedTaxon.data.AcceptedNameUsage.ScientificNameId;
 
     nameResult.vernacularName =
-      taxon.data["RecommendedVernacularName_nb-NO"] ||
-      taxon.data["RecommendedVernacularName_nn-NO"] ||
+      retrievedTaxon.data["RecommendedVernacularName_nb-NO"] ||
+      retrievedTaxon.data["RecommendedVernacularName_nn-NO"] ||
       nameResult.scientificName ||
       sciName;
 
-    if (taxon.data.Description) {
+    if (retrievedTaxon.data.Description) {
       const description =
-        taxon.data.Description.find(
+        retrievedTaxon.data.Description.find(
           (desc) =>
             desc.Language == "nb" ||
             desc.Language == "no" ||
             desc.Language == "nn"
-        ) || taxon.data.Description[0];
+        ) || retrievedTaxon.data.Description[0];
 
       nameResult.infoUrl = description.Id.replace(
         "Nodes/",
         "https://artsdatabanken.no/Pages/"
       );
     } else {
-      nameResult.infoUrl = "https://artsdatabanken.no/" + taxon.data.Id;
+      nameResult.infoUrl = "https://artsdatabanken.no/" + retrievedTaxon.data.Id;
     }
 
-    url = encodeURI(`https://artsdatabanken.no/Api/${taxon.data.Id}`)
+    url = encodeURI(`https://artsdatabanken.no/Api/${retrievedTaxon.data.Id}`)
     name = await axios.get(url,
       {
         timeout: 3000,
       }).catch(error => {
-        writeErrorLog(`Error getting info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        writeErrorLog(`Error getting info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        throw ("")
       });
   } catch (error) {
-    writeErrorLog(`Error processing info in getName(${sciName}). You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+    writeErrorLog(`Error processing info in getName(${sciName}). ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+    return nameResult
   }
 
   if (name && name.data.AcceptedName.dynamicProperties) {
-    let artsobsname = nameResult.groupName = name.data.AcceptedName.dynamicProperties.find(
+    let artsobsname = name.data.AcceptedName.dynamicProperties.find(
       (dp) =>
         dp.Name === "GruppeNavn" &&
         dp.Properties.find((p) => p.Value === "Artsobservasjoner")
@@ -523,7 +566,7 @@ let getId = async (req) => {
         }
       ).catch(error => {
         writeErrorLog(`Naturalis API v2 lookup with token ${token} failed`, error);
-        throw("");
+        throw ("");
       });
     }
 
@@ -601,7 +644,7 @@ let getId = async (req) => {
     return recognition.data;
   }
   catch (error) {
-    throw(error)
+    throw (error)
   }
 };
 
@@ -620,7 +663,7 @@ app.get("/taxonimage/*", (req, res) => {
 app.get("/cachetaxon/*", async (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
-    let name = await getName(taxon, force=true)
+    let name = await getName(taxon, force = true)
     res.status(200).json(name);
   }
   catch (error) {
@@ -663,6 +706,21 @@ app.post("/", upload.array("image"), async (req, res) => {
     } else {
       res.status(200).json(json);
     }
+
+    // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
+    json.predictions[0].taxa.items.forEach(taxon => {
+      if (Math.random() < 0.05) {
+        let filename = `${taxadir}/${encodeURIComponent(taxon.scientific_name)}.json`
+        if (fs.existsSync(filename)) {
+          fs.stat(filename, function (err, stats) {
+            if (((new Date() - stats.mtime) / (1000 * 60 * 60 * 24)) > 0.0000010) {
+              getName(taxon.scientific_name, force = true)
+            }
+          });
+        }
+      }
+    })
+
   } catch (error) {
     writeErrorLog(`Error while running getId()`, error);
     res.status(500).end();
@@ -681,10 +739,8 @@ app.post("/save", upload.array("image"), async (req, res) => {
 
 app.get("/", (req, res) => {
   fs.stat("./server.js", function (err, stats) {
-    res.status(200).send(`Aiai! <hr/> (${stats.mtime.toISOString().substring(0, 19).replace("T", " ")})`);
+    res.status(200).send(`Aiai! <hr/> (${dateStr('s', stats.mtime)})`);
   });
-
-
 });
 
 app.get("/image/*", (req, res) => {
@@ -736,4 +792,4 @@ app.get("/image/*", (req, res) => {
 });
 
 
-app.listen(port, console.log(`Server now running on port ${port} ${dateStr()}`));
+app.listen(port, console.log(`Server now running on port ${port}`));
