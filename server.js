@@ -162,11 +162,13 @@ let writelog = (req, json) => {
 
 let getName = async (sciName, force = false) => {
 
-  let jsonfilename = `${taxadir}/${sciName}.json`
+  let unencoded_jsonfilename = `${taxadir}/${sciName}.json`
+  let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`
 
-  // TODO: once lookups work reliably, encode all names regardless. For now, just the problematic ones.
-  if(sciName.includes("/")) {
-    jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`
+  if (fs.existsSync(unencoded_jsonfilename) && unencoded_jsonfilename !== jsonfilename) {
+    fs.rename(unencoded_jsonfilename, jsonfilename, function (error) {
+      if (error) writeErrorLog(`Could not rename "${unencoded_jsonfilename}" to "${jsonfilename}"`, error);
+    });
   }
 
   if (!force && fs.existsSync(jsonfilename)) {
@@ -191,7 +193,7 @@ let getName = async (sciName, force = false) => {
       }
     ).catch(error => {
       writeErrorLog(`Failed to get info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
-      throw("")
+      throw ("")
     });
 
     let acceptedtaxon = taxon.data.find(
@@ -215,7 +217,7 @@ let getName = async (sciName, force = false) => {
         }
       ).catch(error => {
         writeErrorLog(`Failed to get info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
-        throw("")
+        throw ("")
       });
 
       url = `https://artsdatabanken.no/api/Resource/Taxon/${taxon.data.Taxon.TaxonId}`
@@ -226,7 +228,7 @@ let getName = async (sciName, force = false) => {
         }
       ).catch(error => {
         writeErrorLog(`Failed to get info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
-        throw("")
+        throw ("")
       });
 
       retrievedTaxon.data = taxon.data
@@ -264,7 +266,7 @@ let getName = async (sciName, force = false) => {
         timeout: 3000,
       }).catch(error => {
         writeErrorLog(`Error getting info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
-        throw("")
+        throw ("")
       });
   } catch (error) {
     writeErrorLog(`Error processing info in getName(${sciName}). You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
@@ -287,6 +289,7 @@ let getName = async (sciName, force = false) => {
   if (force || !fs.existsSync(jsonfilename)) {
     let data = JSON.stringify(nameResult);
     fs.writeFileSync(jsonfilename, data);
+    // fs.writeFileSync(unencoded_jsonfilename, data);
   }
 
   return nameResult;
