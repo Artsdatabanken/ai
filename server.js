@@ -164,6 +164,11 @@ let getName = async (sciName, force = false) => {
 
   let jsonfilename = `${taxadir}/${sciName}.json`
 
+  // TODO: once lookups work reliably, encode all names regardless. For now, just the problematic ones.
+  if(sciName.includes("/")) {
+    jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`
+  }
+
   if (!force && fs.existsSync(jsonfilename)) {
     return JSON.parse(fs.readFileSync(jsonfilename));
   }
