@@ -40,22 +40,20 @@ const dateStr = (resolution = `d`, date = false) => {
     date = new Date();
   }
 
-  // let iso = date.toLocaleString('en-US', { timeZone: "Europe/Oslo", hour12: false }).replace(', ', 'T');
-  // iso += '.' + date.getMilliseconds().toString().padStart(3, '0');
-  // const lie = new Date(iso + 'Z');
-  // const offset = -(lie - date) / 60 / 1000;
+  let iso = date.toLocaleString('en-CA', { timeZone: "Europe/Oslo", hour12: false }).replace(', ', 'T');
+  iso = iso.replace("T24", "T00")
+  iso += '.' + date.getMilliseconds().toString().padStart(3, '0');
+  const lie = new Date(iso + 'Z');
+  const offset = -(lie - date) / 60 / 1000;
 
   if (resolution === `m`) {
-    return `${new Date(date.getTime()).toISOString().substring(0, 7)}`;
-    // return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 7)}`;
+    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 7)}`;
   }
   else if (resolution === `s`) {
-    return `${new Date(date.getTime()).toISOString().substring(0, 19).replace("T", " ")}`;
-    // return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 19).replace("T", " ")}`;
+    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 19).replace("T", " ")}`;
   }
 
-  return `${new Date(date.getTime()).toISOString().substring(0, 10)}`;
-  // return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 10)}`;
+  return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 10)}`;
 };
 
 const writeErrorLog = (message, error) => {
@@ -797,6 +795,5 @@ app.get("/image/*", (req, res) => {
     }
   });
 });
-
 
 app.listen(port, console.log(`Server now running on port ${port}`));
