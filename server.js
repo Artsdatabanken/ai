@@ -127,9 +127,9 @@ let getPicture = (sciName) => {
 let writelog = (req, json) => {
   let application = req.body.application;
 
-  if (!fs.existsSync(`${logdir}/${application}_${dateStr(`m`)}.csv`)) {
+  if (!fs.existsSync(`${logdir}/${application}_${dateStr(`d`)}.csv`)) {
     fs.appendFileSync(
-      `${logdir}/${application}_${dateStr(`m`)}.csv`,
+      `${logdir}/${application}_${dateStr(`d`)}.csv`,
       "Datetime," +
       "Number_of_pictures," +
       "Result_1_name,Result_1_group,Result_1_probability," +
@@ -159,7 +159,7 @@ let writelog = (req, json) => {
 
   row += "\n";
 
-  fs.appendFileSync(`${logdir}/${application}_${dateStr(`m`)}.csv`, row);
+  fs.appendFileSync(`${logdir}/${application}_${dateStr(`d`)}.csv`, row);
 };
 
 let getName = async (sciName, force = false) => {
