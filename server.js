@@ -34,10 +34,14 @@ if (fs.existsSync(pictureFile)) {
   taxonPics = JSON.parse(fs.readFileSync(pictureFile));
 }
 
-// --- Getting the date as a nice string
+// --- Getting the date as a nice Norwegian-time string no matter where the server runs
 const dateStr = (resolution = `d`) => {
-  date = new Date();
-  const offset = date.getTimezoneOffset();
+  const date = new Date();
+
+  let iso = date.toLocaleString('en-CA', { timeZone: "Europe/Oslo", hour12: false }).replace(', ', 'T');
+  iso += '.' + date.getMilliseconds().toString().padStart(3, '0');
+  const lie = new Date(iso + 'Z');
+  const offset = -(lie - date) / 60 / 1000;
 
   if (resolution === `m`) {
     return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 7)}`;
@@ -192,7 +196,7 @@ let getName = async (sciName, force = false) => {
         timeout: 3000,
       }
     ).catch(error => {
-      writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${ !!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+      writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
       throw ("")
     });
 
@@ -216,7 +220,7 @@ let getName = async (sciName, force = false) => {
           timeout: 3000,
         }
       ).catch(error => {
-        writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${ !!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
         throw ("")
       });
 
@@ -227,7 +231,7 @@ let getName = async (sciName, force = false) => {
           timeout: 3000,
         }
       ).catch(error => {
-        writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${ !!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        writeErrorLog(`Failed to get info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
         throw ("")
       });
 
@@ -265,11 +269,11 @@ let getName = async (sciName, force = false) => {
       {
         timeout: 3000,
       }).catch(error => {
-        writeErrorLog(`Error getting info for ${sciName} from ${url}. ${ !!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        writeErrorLog(`Error getting info for ${sciName} from ${url}. ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
         throw ("")
       });
   } catch (error) {
-    writeErrorLog(`Error processing info in getName(${sciName}). ${ !!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+    writeErrorLog(`Error processing info in getName(${sciName}). ${!!force ? "This happened during a recache, though. " : ""}You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
     return nameResult
   }
 
@@ -735,8 +739,6 @@ app.get("/", (req, res) => {
   fs.stat("./server.js", function (err, stats) {
     res.status(200).send(`Aiai! <hr/> (${stats.mtime.toISOString().substring(0, 19).replace("T", " ")})`);
   });
-
-
 });
 
 app.get("/image/*", (req, res) => {
