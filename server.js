@@ -670,6 +670,44 @@ app.get("/taxonimage/*", (req, res) => {
   }
 });
 
+app.get("/taxonimages", (req, res) => {
+  try {
+    res.status(200).json(taxonPics);
+  }
+  catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error)
+    res.status(500).end();
+  }
+});
+
+app.get("/taxonimages/view", (req, res) => {
+  try {
+    let pics = Object.entries(taxonPics)
+    pics.sort()
+
+    let html = "<html><head><style>"
+    html += "img {border-radius: 50%}"
+    html += "img:hover {border-radius: 0}"
+    html += "</style></head><body>"
+    html += `<h1>Alle ${pics.length} "profilbilder"</h1>`
+    html += "<table>"
+
+    pics.forEach(pic => {
+      html += `<tr><td style="padding: 20px"><a href="https://artsdatabanken.no/Media/${pic[1]}" target="_blank"><img src="https://artsdatabanken.no/Media/${pic[1]}?mode=128x128"/></a></td>`
+      html += `<td><h3><i>${pic[0]}</i></h3></td></tr>`
+    })
+    html += "</body></html>"
+
+    res.status(200).send(html);
+  }
+  catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error)
+    res.status(500).end();
+  }
+});
+
+
+
 
 app.get("/cachetaxon/*", async (req, res) => {
   try {
