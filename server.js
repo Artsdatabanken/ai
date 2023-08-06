@@ -712,20 +712,23 @@ app.post("/", upload.array("image"), async (req, res) => {
     }
 
     // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
-    if (json.predictions[0].taxa) {
-      json.predictions[0].taxa.items.forEach(taxon => {
-        if (Math.random() < 0.05) {
-          let filename = `${taxadir}/${encodeURIComponent(taxon.scientific_name)}.json`
-          if (fs.existsSync(filename)) {
-            fs.stat(filename, function (err, stats) {
-              if (((new Date() - stats.mtime) / (1000 * 60 * 60 * 24)) > 0.0000010) {
-                getName(taxon.scientific_name, force = true)
-              }
-            });
-          }
-        }
-      })
-    }
+
+    // --- This is a suspect for a memory leak, commenting out for now
+
+    // if (json.predictions[0].taxa) {
+    //   json.predictions[0].taxa.items.forEach(taxon => {
+    //     if (Math.random() < 0.05) {
+    //       let filename = `${taxadir}/${encodeURIComponent(taxon.scientific_name)}.json`
+    //       if (fs.existsSync(filename)) {
+    //         fs.stat(filename, function (err, stats) {
+    //           if (((new Date() - stats.mtime) / (1000 * 60 * 60 * 24)) > 0.0000010) {
+    //             getName(taxon.scientific_name, force = true)
+    //           }
+    //         });
+    //       }
+    //     }
+    //   })
+    // }
   } catch (error) {
     writeErrorLog(`Error while running getId()`, error);
     res.status(500).end();
