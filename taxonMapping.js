@@ -1,6 +1,5 @@
 module.exports = {
   taxa: {
-    "Atheniella adonis": "Mycena adonis",
     "Psammophiliella muralis": "Gypsophila muralis",
     "Cheilosia tarditas": "Cheilosia scutellata",
     "Ranunculus propinquus": "Ranunculus subborealis pumilus",
@@ -114,7 +113,6 @@ module.exports = {
     "Mannia gracilis": "Asterella gracilis",
     "Picipes badius": "Polyporus badius",
     "Cerioporus squamosus": "Polyporus squamosus",
-    "Coloeus monedula": "Corvus monedula",
     "Adelges viridis": "Sacchiphantes viridis",
     "Peziza queletii": "Peziza ampelina",
     "Nabicula flavomarginata": "Nabis flavomarginatus",
