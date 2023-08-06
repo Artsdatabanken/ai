@@ -206,7 +206,7 @@ let getName = async (sciName, force = false) => {
         timeout: 3000,
       }
     ).catch(error => {
-      writeErrorLog(`Failed to get info for ${sciName} from ${url}.${!!force ? " This happened during a recache, though." : ""}`, error);
+      writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
       throw ("")
     });
 
@@ -230,7 +230,7 @@ let getName = async (sciName, force = false) => {
           timeout: 3000,
         }
       ).catch(error => {
-        writeErrorLog(`Failed to get info for ${sciName} from ${url}.${!!force ? " This happened during a recache, though." : ""}`, error);
+        writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
         throw ("")
       });
 
@@ -241,7 +241,7 @@ let getName = async (sciName, force = false) => {
           timeout: 3000,
         }
       ).catch(error => {
-        writeErrorLog(`Failed to get info for ${sciName} from ${url}.${!!force ? " This happened during a recache, though." : ""}`, error);
+        writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
         throw ("")
       });
 
@@ -279,11 +279,11 @@ let getName = async (sciName, force = false) => {
       {
         timeout: 3000,
       }).catch(error => {
-        writeErrorLog(`Error getting info for ${sciName} from ${url}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+        writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
         throw ("")
       });
   } catch (error) {
-    writeErrorLog(`Error processing info in getName(${sciName}). You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+    writeErrorLog(`Error in getName(${sciName}). Retry: ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
     return nameResult
   }
 
