@@ -172,10 +172,17 @@ let getName = async (sciName, force = false) => {
   let unencoded_jsonfilename = `${taxadir}/${sciName}.json`
   let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`
 
+
+  // --- Take it easy on the renaming to avoid memory peaks
   if (fs.existsSync(unencoded_jsonfilename) && unencoded_jsonfilename !== jsonfilename) {
-    fs.rename(unencoded_jsonfilename, jsonfilename, function (error) {
-      if (error) writeErrorLog(`Could not rename "${unencoded_jsonfilename}" to "${jsonfilename}"`, error);
-    });
+    if (Math.random() < 0.05) {
+      fs.rename(unencoded_jsonfilename, jsonfilename, function (error) {
+        if (error) writeErrorLog(`Could not rename "${unencoded_jsonfilename}" to "${jsonfilename}"`, error);
+      });
+    }
+    else {
+      return JSON.parse(fs.readFileSync(unencoded_jsonfilename));
+    }
   }
 
   if (!force && fs.existsSync(jsonfilename)) {
@@ -712,23 +719,20 @@ app.post("/", upload.array("image"), async (req, res) => {
     }
 
     // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
-
-    // --- This is a suspect for a memory leak, commenting out for now
-
-    // if (json.predictions[0].taxa) {
-    //   json.predictions[0].taxa.items.forEach(taxon => {
-    //     if (Math.random() < 0.05) {
-    //       let filename = `${taxadir}/${encodeURIComponent(taxon.scientific_name)}.json`
-    //       if (fs.existsSync(filename)) {
-    //         fs.stat(filename, function (err, stats) {
-    //           if (((new Date() - stats.mtime) / (1000 * 60 * 60 * 24)) > 0.0000010) {
-    //             getName(taxon.scientific_name, force = true)
-    //           }
-    //         });
-    //       }
-    //     }
-    //   })
-    // }
+    if (json.predictions[0].taxa) {
+      json.predictions[0].taxa.items.forEach(taxon => {
+        if (Math.random() < 0.05) {
+          let filename = `${taxadir}/${encodeURIComponent(taxon.scientific_name)}.json`
+          if (fs.existsSync(filename)) {
+            fs.stat(filename, function (err, stats) {
+              if (((new Date() - stats.mtime) / (1000 * 60 * 60 * 24)) > 10) {
+                getName(taxon.scientific_name, force = true)
+              }
+            });
+          }
+        }
+      })
+    }
   } catch (error) {
     writeErrorLog(`Error while running getId()`, error);
     res.status(500).end();
