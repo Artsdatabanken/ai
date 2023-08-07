@@ -27,3 +27,9 @@ stages:
         dockerfile: '$(Build.SourcesDirectory)/Dockerfile'
         tags: |
           $(tag)
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'DockerHub'
+        repository: 'artsdatabanken/ai'
+        command: 'push'
+        tags: 'azure'
