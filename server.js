@@ -150,17 +150,17 @@ let writelog = (req, json) => {
 
   let row = `${dateStr(`s`)},${req.files.length}`;
 
-  if (!req.body.application) {
-    for (let i = 0; i < json.predictions.length; i++) {
-      const prediction = json.predictions[i];
-      row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
-    }
-  } else {
+  // if (!req.body.application) {
+  //   for (let i = 0; i < json.predictions.length; i++) {
+  //     const prediction = json.predictions[i];
+  //     row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
+  //   }
+  // } else {
     for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
       const prediction = json.predictions[0].taxa.items[i];
       row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
     }
-  }
+  // }
 
   row += "\n";
 
@@ -490,7 +490,10 @@ let getId = async (req) => {
 
     let recognition;
 
-    if (!req.body.application) {
+    // Drop the old API
+    if (!req.body.application && false) {
+      console.log("NEEEE")
+
       recognition = await axios.post(
         "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
         form,
@@ -606,11 +609,12 @@ let getId = async (req) => {
     for (let pred of taxa) {
       try {
         let nameResult;
-        if (req.body.application.toLowerCase() === "artsobservasjoner") {
+        if (req.body.application && req.body.application.toLowerCase() === "artsobservasjoner") {
           pred.name = pred.scientific_name;
         }
         else {
           nameResult = await getName(pred.scientific_name);
+
           pred.vernacularName = nameResult.vernacularName;
           pred.groupName = nameResult.groupName;
           pred.scientificNameID = nameResult.scientificNameID;
@@ -750,11 +754,16 @@ app.post("/", upload.array("image"), async (req, res) => {
     // Write to the log
     writelog(req, json);
 
-    if (req.body.application === undefined) {
-      res.status(200).json(simplifyJson(json));
-    } else {
+    json.predictions[0].probability = .5
+    json.predictions[0].taxon = {}
+    json.predictions[0].taxon.vernacularName = "Denne versjonen er utdatert"
+    json.predictions[0].taxon.name = "Vennligst oppdater Artsorakelet"
+
+    // if (req.body.application === undefined) {
+    //   res.status(200).json(simplifyJson(json));
+    // } else {
       res.status(200).json(json);
-    }
+    // }
 
     // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
     if (json.predictions[0].taxa) {
