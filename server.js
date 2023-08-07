@@ -156,10 +156,10 @@ let writelog = (req, json) => {
   //     row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
   //   }
   // } else {
-    for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
-      const prediction = json.predictions[0].taxa.items[i];
-      row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
-    }
+  for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
+    const prediction = json.predictions[0].taxa.items[i];
+    row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
+  }
   // }
 
   row += "\n";
@@ -711,8 +711,6 @@ app.get("/taxonimages/view", (req, res) => {
 });
 
 
-
-
 app.get("/cachetaxon/*", async (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
@@ -754,16 +752,28 @@ app.post("/", upload.array("image"), async (req, res) => {
     // Write to the log
     writelog(req, json);
 
-    json.predictions[0].probability = .5
-    json.predictions[0].taxon = {}
-    json.predictions[0].taxon.vernacularName = "Denne versjonen er utdatert"
-    json.predictions[0].taxon.name = "Vennligst oppdater Artsorakelet"
 
-    // if (req.body.application === undefined) {
-    //   res.status(200).json(simplifyJson(json));
-    // } else {
-      res.status(200).json(json);
-    // }
+    if (req.body.application === undefined) {
+      json = simplifyJson(json)
+      json.predictions = [{}].concat(json.predictions)
+      console.log("simplified")
+    }
+    else {
+      console.log("not simplified")
+    }
+
+    json.predictions[0].probability = 1;
+    json.predictions[0].taxon = {
+      "vernacularName": "*** Utdatert versjon ***",
+      "name": "Vennligst oppdater Artsorakelet via app store, eller Ctrl-Shift-R på pc"
+    };
+
+    res.status(200).json(json);
+
+
+
+
+
 
     // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
     if (json.predictions[0].taxa) {
