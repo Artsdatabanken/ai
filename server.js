@@ -492,8 +492,6 @@ let getId = async (req) => {
 
     // Drop the old API
     if (!req.body.application && false) {
-      console.log("NEEEE")
-
       recognition = await axios.post(
         "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
         form,
@@ -752,15 +750,11 @@ app.post("/", upload.array("image"), async (req, res) => {
     // Write to the log
     writelog(req, json);
 
-
     if (req.body.application === undefined) {
       json = simplifyJson(json)
       json.predictions = [{}].concat(json.predictions)
-      console.log("simplified")
     }
-    else {
-      console.log("not simplified")
-    }
+
 
     json.predictions[0].probability = 1;
     json.predictions[0].taxon = {
