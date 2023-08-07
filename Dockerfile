@@ -1,4 +1,4 @@
-FROM node:10
+FROM node:16
 
 # Create app directory
 WORKDIR /app
@@ -20,4 +20,7 @@ RUN mkdir -p log && touch log/log.txt && chown dockerrunner log/log.txt
 
 COPY . .
 
-CMD [ "node", "server.js" ]
+RUN chown dockerrunner log/
+# RUN chown dockerrunner log/taxonPictures.js
+
+CMD [ "npm", "start" ]

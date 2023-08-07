@@ -2,11 +2,11 @@ const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
 const express = require("express");
+const bodyParser = require("body-parser");
 const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const taxonMapper = require("./taxonMapping");
-const taxonPics = require("./taxonPictures");
 const cron = require("node-cron");
 
 // Use the crypto library for encryption and decryption
@@ -17,14 +17,89 @@ const initVect = crypto.randomBytes(16);
 
 let appInsights = require("applicationinsights");
 
-if (process.env.IKEY) {
-  appInsights.setup(process.env.IKEY).start();
+// --- Reading env variables
+dotenv.config({ path: "./config/config.env" });
+dotenv.config({ path: "./config/secrets.env" });
+
+
+// --- Setting files and locations
+const logdir = './log'
+const taxadir = `${logdir}/taxa`;
+const pictureFile = `${logdir}/taxonPictures.json`
+const uploadsdir = './uploads'
+
+// --- Get the taxon picture ids from file on start
+var taxonPics = {};
+if (fs.existsSync(pictureFile)) {
+  taxonPics = JSON.parse(fs.readFileSync(pictureFile));
 }
 
-dotenv.config({ path: "./config/config.env" });
+// --- Getting the date as a nice Norwegian-time string no matter where the server runs
+const dateStr = (resolution = `d`, date = false) => {
+  if (!date) {
+    date = new Date();
+  }
+
+  let iso = date.toLocaleString('en-CA', { timeZone: "Europe/Oslo", hour12: false }).replace(', ', 'T');
+  iso = iso.replace("T24", "T00")
+  iso += '.' + date.getMilliseconds().toString().padStart(3, '0');
+  const lie = new Date(iso + 'Z');
+  const offset = -(lie - date) / 60 / 1000;
+
+  if (resolution === `m`) {
+    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 7)}`;
+  }
+  else if (resolution === `s`) {
+    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 19).replace("T", " ")}`;
+  }
+
+  return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 10)}`;
+};
+
+const writeErrorLog = (message, error) => {
+  if (!!error) {
+    fs.appendFileSync(
+      `${logdir}/errorlog_${dateStr(`d`)}.txt`,
+      `\n${dateStr(`s`)}: ${message}\n   ${error}\n`
+    );
+  }
+  else {
+    fs.appendFileSync(
+      `${logdir}/errorlog_${dateStr(`d`)}.txt`,
+      `${dateStr(`s`)}: ${message}\n`
+    );
+  }
+}
+
+
+// --- Make sure the taxon cache directory exists
+if (!fs.existsSync(taxadir)) {
+  fs.mkdirSync(taxadir);
+}
+
+/** Filter for not logging requests for root url when success */
+var filteringAiFunction = (envelope, context) => {
+  if (
+    envelope.data.baseData.success &&
+    envelope.data.baseData.name === "GET /"
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
+if (process.env.IKEY) {
+  appInsights.setup(process.env.IKEY).start();
+  appInsights.defaultClient.addTelemetryProcessor(filteringAiFunction);
+}
+
 
 const app = express();
 const port = process.env.PORT;
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
 
 var corsOptions = {
   origin: "*",
@@ -32,63 +107,88 @@ var corsOptions = {
 
 app.use(cors(corsOptions));
 
+app.use(function (req, res, next) {
+  if (req.secure) {
+    res.setHeader(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains; preload"
+    );
+  }
+  next();
+});
+
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 let getPicture = (sciName) => {
-  let pic = taxonPics.media[sciName];
+  let pic = taxonPics[sciName];
   if (pic) {
     return `https://artsdatabanken.no/Media/${pic}?mode=128x128`;
   }
+
   return null;
 };
 
 let writelog = (req, json) => {
-  let today = new Date();
-  let year = today.getFullYear();
-  let month = ("0" + (today.getMonth() + 1)).slice(-2);
-  let day = ("0" + today.getDate()).slice(-2);
-  let hours = ("0" + today.getHours()).slice(-2);
-  let minutes = ("0" + today.getMinutes()).slice(-2);
-  let seconds = ("0" + today.getSeconds()).slice(-2);
+  let application = req.body.application;
 
-  let date =
-    year +
-    "-" +
-    month +
-    "-" +
-    day +
-    " " +
-    hours +
-    ":" +
-    minutes +
-    ":" +
-    seconds;
-
-  if (!fs.existsSync("./log/" + year + "-" + month + ".csv")) {
+  if (!fs.existsSync(`${logdir}/${application}_${dateStr(`d`)}.csv`)) {
     fs.appendFileSync(
-      "./log/" + year + "-" + month + ".csv",
+      `${logdir}/${application}_${dateStr(`d`)}.csv`,
       "Datetime," +
-        "Number_of_pictures," +
-        "Result_1_name,Result_1_group,Result_1_probability," +
-        "Result_2_name,Result_2_group,Result_2_probability," +
-        "Result_3_name,Result_3_group,Result_3_probability," +
-        "Result_4_name,Result_4_group,Result_4_probability," +
-        "Result_5_name,Result_5_group,Result_5_probability,"
+      "Number_of_pictures," +
+      "Result_1_name,Result_1_group,Result_1_probability," +
+      "Result_2_name,Result_2_group,Result_2_probability," +
+      "Result_3_name,Result_3_group,Result_3_probability," +
+      "Result_4_name,Result_4_group,Result_4_probability," +
+      "Result_5_name,Result_5_group,Result_5_probability\n"
     );
   }
 
-  let row = `${date},${req.files.length}`;
-  for (let i = 0; i < json.predictions.length; i++) {
-    const prediction = json.predictions[i];
-    row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
-  }
+  // TODO
+  // Add encrypted IP (req.client._peername.address)
+
+  let row = `${dateStr(`s`)},${req.files.length}`;
+
+  // if (!req.body.application) {
+  //   for (let i = 0; i < json.predictions.length; i++) {
+  //     const prediction = json.predictions[i];
+  //     row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
+  //   }
+  // } else {
+    for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
+      const prediction = json.predictions[0].taxa.items[i];
+      row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
+    }
+  // }
+
   row += "\n";
 
-  fs.appendFileSync("./log/" + year + "-" + month + ".csv", row);
+  fs.appendFileSync(`${logdir}/${application}_${dateStr(`d`)}.csv`, row);
 };
 
-let getName = async (sciName) => {
+let getName = async (sciName, force = false) => {
+
+  let unencoded_jsonfilename = `${taxadir}/${sciName}.json`
+  let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`
+
+
+  // --- Take it easy on the renaming to avoid memory peaks
+  if (fs.existsSync(unencoded_jsonfilename) && unencoded_jsonfilename !== jsonfilename) {
+    if (Math.random() < 0.05) {
+      fs.rename(unencoded_jsonfilename, jsonfilename, function (error) {
+        if (error) writeErrorLog(`Could not rename "${unencoded_jsonfilename}" to "${jsonfilename}"`, error);
+      });
+    }
+    else {
+      return JSON.parse(fs.readFileSync(unencoded_jsonfilename));
+    }
+  }
+
+  if (!force && fs.existsSync(jsonfilename)) {
+    return JSON.parse(fs.readFileSync(jsonfilename));
+  }
+
   let nameResult = {
     vernacularName: sciName,
     groupName: "",
@@ -96,69 +196,113 @@ let getName = async (sciName) => {
   };
   let name;
 
+  let retrievedTaxon = { data: [] };
+
   try {
+    let url = encodeURI(`https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`)
     let taxon = await axios.get(
-      "https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=" +
-        sciName
-    );
+      url,
+      {
+        timeout: 3000,
+      }
+    ).catch(error => {
+      writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
+      throw ("")
+    });
 
-    if (!taxon.data.length) {
-      return nameResult;
-    }
-
-    taxon.data = taxon.data.find(
+    let acceptedtaxon = taxon.data.find(
       (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
     );
 
-    if (!taxon.data) {
-      return nameResult;
+    if (!!acceptedtaxon) {
+      retrievedTaxon.data = acceptedtaxon
+    }
+    else {
+      let hit = taxon.data.find(t => t.ScientificNames.find(sn => sn.HigherClassification.find(h => h.ScientificName === sciName)))
+      if (!hit) throw ("No HigherClassification hit");
+      hit = hit.ScientificNames.find(sn => sn.HigherClassification.find(h => h.ScientificName === sciName))
+      hit = hit.HigherClassification.find(h => h.ScientificName === sciName)
+      hit = hit.ScientificNameId
+      url = `https://artsdatabanken.no/api/Resource/ScientificName/${hit}`
+      taxon = await axios.get(
+        url,
+        {
+          timeout: 3000,
+        }
+      ).catch(error => {
+        writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
+        throw ("")
+      });
+
+      url = `https://artsdatabanken.no/api/Resource/Taxon/${taxon.data.Taxon.TaxonId}`
+      taxon = await axios.get(
+        url,
+        {
+          timeout: 3000,
+        }
+      ).catch(error => {
+        writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
+        throw ("")
+      });
+
+      retrievedTaxon.data = taxon.data
     }
 
-    nameResult.scientificName = taxon.data.AcceptedNameUsage.ScientificName;
-    nameResult.scientificNameID = taxon.data.AcceptedNameUsage.ScientificNameId;
+    nameResult.scientificName = retrievedTaxon.data.AcceptedNameUsage.ScientificName;
+    nameResult.scientificNameID = retrievedTaxon.data.AcceptedNameUsage.ScientificNameId;
 
     nameResult.vernacularName =
-      taxon.data["RecommendedVernacularName_nb-NO"] ||
-      taxon.data["RecommendedVernacularName_nn-NO"] ||
+      retrievedTaxon.data["RecommendedVernacularName_nb-NO"] ||
+      retrievedTaxon.data["RecommendedVernacularName_nn-NO"] ||
       nameResult.scientificName ||
       sciName;
 
-    if (taxon.data.Description) {
+    if (retrievedTaxon.data.Description) {
       const description =
-        taxon.data.Description.find(
+        retrievedTaxon.data.Description.find(
           (desc) =>
             desc.Language == "nb" ||
             desc.Language == "no" ||
             desc.Language == "nn"
-        ) || taxon.data.Description[0];
+        ) || retrievedTaxon.data.Description[0];
 
       nameResult.infoUrl = description.Id.replace(
         "Nodes/",
         "https://artsdatabanken.no/Pages/"
       );
     } else {
-      nameResult.infoUrl = "https://artsdatabanken.no/" + taxon.data.Id;
+      nameResult.infoUrl = "https://artsdatabanken.no/" + retrievedTaxon.data.Id;
     }
 
-    name = await axios.get("https://artsdatabanken.no/Api/" + taxon.data.Id);
+    url = encodeURI(`https://artsdatabanken.no/Api/${retrievedTaxon.data.Id}`)
+    name = await axios.get(url,
+      {
+        timeout: 3000,
+      }).catch(error => {
+        writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
+        throw ("")
+      });
   } catch (error) {
-    date = new Date().toISOString();
-    console.log(date, error);
-
-    fs.appendFileSync(
-      "./log/log.txt",
-      "Error getting names: " + error.response.status + " (" + date + ")\n"
-    );
-
-    throw error;
+    writeErrorLog(`Error in getName(${sciName}). Retry: ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
+    return nameResult
   }
 
   if (name && name.data.AcceptedName.dynamicProperties) {
-    nameResult.groupName = name.data.AcceptedName.dynamicProperties.find(
+    let artsobsname = name.data.AcceptedName.dynamicProperties.find(
       (dp) =>
         dp.Name === "GruppeNavn" &&
         dp.Properties.find((p) => p.Value === "Artsobservasjoner")
-    ).Value;
+    )
+
+    if (artsobsname && artsobsname.Value) {
+      nameResult.groupName = artsobsname.Value
+    }
+  }
+
+
+  if (force || !fs.existsSync(jsonfilename)) {
+    let data = JSON.stringify(nameResult);
+    fs.writeFileSync(jsonfilename, data);
   }
 
   return nameResult;
@@ -169,27 +313,30 @@ cron.schedule("30 * * * *", () => {
   //console.log('Running cleanup every 30th minute');
 
   // Loop over all files in uploads/
-  fs.readdir("./uploads/", (err, files) => {
-    files.forEach((file) => {
-      // gets timestamp from filename
-      let filename = file.split("_")[1];
-      // gets current timestamp
-      let timestamp = Math.round(new Date().getTime() / 1000);
-      // Check timestamp vs. time now
-      let time_between = timestamp - filename;
-      // Image Survival length, if change this - ensure to change in artsobs-mobile too...
-      let survival_length = 3600; // 1 hr in seconds
-      // If more than survival_length
-      if (time_between >= survival_length) {
-        // Delete the file
-        fs.unlink("./uploads/" + file, (err) => {
-          if (err) {
-            console.log("could not delete file");
-          }
-          console.log("The file has been deleted!");
-        });
-      }
-    });
+  fs.readdir(`${uploadsdir}/`, (err, files) => {
+
+    if (files) {
+      files.forEach((file) => {
+        // gets timestamp from filename
+        let filename = file.split("_")[1];
+        // gets current timestamp
+        let timestamp = Math.round(new Date().getTime() / 1000);
+        // Check timestamp vs. time now
+        let time_between = timestamp - filename;
+        // Image Survival length, if change this - ensure to change in artsobs-mobile too...
+        let survival_length = 3600; // 1 hr in seconds
+        // If more than survival_length
+        if (time_between >= survival_length) {
+          // Delete the file
+          fs.unlink(`${uploadsdir}/${file}`, (err) => {
+            if (err) {
+              console.log("could not delete file");
+            }
+            console.log("The file has been deleted!");
+          });
+        }
+      });
+    }
   });
 });
 
@@ -254,7 +401,7 @@ let saveImagesAndGetToken = async (req) => {
     counter += 1;
 
     // Upload to uploads folder
-    fs.writeFile("./uploads/" + filename, encrypted_file, (err) => {
+    fs.writeFile(`${uploadsdir}/${filename}`, encrypted_file, (err) => {
       if (err) throw err;
       console.log("The file has been saved!");
     });
@@ -262,113 +409,380 @@ let saveImagesAndGetToken = async (req) => {
   return { id: id, password: password };
 };
 
-let getId = async (req) => {
-  const form = new FormData();
-  const formHeaders = form.getHeaders();
-
-  var stream = require("stream");
-
-  for (const file of req.files) {
-    var bufferStream = new stream.PassThrough();
-    bufferStream.end(file.buffer);
-    form.append("image", bufferStream, {
-      filename: "" + Date.now() + "." + file.mimetype.split("image/").pop(),
+let simplifyJson = (json) => {
+  if (json.predictions[0].taxa) {
+    json.predictions = json.predictions[0].taxa.items.map((p) => {
+      let simplified = {
+        probability: p.probability,
+        taxon: p,
+      };
+      simplified.taxon.probability = undefined;
+      return simplified;
     });
   }
 
-  let recognition;
-
-  try {
-    recognition = await axios.post(
-      "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
-      form,
-
-      {
-        headers: {
-          ...formHeaders,
-          Authorization: "Basic " + process.env.NATURALIS_TOKEN,
-        },
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
-      }
-    );
-  } catch (error) {
-    date = new Date().toISOString();
-    console.log(date, error);
-    throw error;
-  }
-
-  // get the best 5
-  recognition.data.predictions = recognition.data.predictions.slice(0, 5);
-
-  // Check against list of misspellings and unknown synonyms
-  recognition.data.predictions = recognition.data.predictions.map((pred) => {
-    pred.taxon.name = taxonMapper.taxa[pred.taxon.name] || pred.taxon.name;
-    return pred;
-  });
-
-  // Get the data from the APIs (including accepted names of synonyms)
-  for (let pred of recognition.data.predictions) {
-    try {
-      let nameResult = await getName(pred.taxon.name);
-      pred.taxon.vernacularName = nameResult.vernacularName;
-      pred.taxon.groupName = nameResult.groupName;
-      pred.taxon.scientificNameID = nameResult.scientificNameID;
-      pred.taxon.name = nameResult.scientificName;
-      pred.taxon.infoUrl = nameResult.infoUrl;
-      pred.taxon.picture = getPicture(nameResult.scientificName);
-    } catch (error) {
-      date = new Date().toISOString();
-      console.log(date, error);
-      throw error;
-    }
-  }
-
-  // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
-  // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
-
-  // if there are duplicates, add the probabilities and delete the duplicates
-  for (let pred of recognition.data.predictions) {
-    let totalProbability = recognition.data.predictions
-      .filter((p) => p.taxon.name === pred.taxon.name)
-      .reduce((total, p) => total + p.probability, 0);
-
-    if (totalProbability !== pred.probability) {
-      pred.probability = totalProbability;
-      recognition.data.predictions = recognition.data.predictions.filter(
-        (p) => p.taxon.name !== pred.taxon.name
-      );
-      recognition.data.predictions.unshift(pred);
-    }
-  }
-
-  // sort by the new probabilities
-  recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
-    return b.probability - a.probability;
-  });
-  // -------------- end of duplicate checking code
-
-  return recognition.data;
+  return json;
 };
 
+let refreshtaxonimages = async () => {
+
+  const pages = [342548, 342550, 342551, 342552, 342553, 342554];
+  let taxa = {};
+
+  for (let index = 0; index < pages.length; index++) {
+    let pageId = pages[index];
+    let url = encodeURI(`https://www.artsdatabanken.no/api/Content/${pageId}`)
+    let page = await axios.get(
+      url,
+      {
+        timeout: 10000,
+      }
+    ).catch(error => {
+      writeErrorLog(`Error getting "${url}" while running refreshtaxonimages`, error);
+      throw ("")
+    });
+
+    if (!!page) {
+      page.data.Files.forEach((f) => {
+        // Unpublished files have no FileUrl
+        if (f.FileUrl) {
+          let name = f.Title.split(".")[0].replaceAll("_", " ");
+          let value = f.Id.split("/")[1];
+          taxa[name] = value;
+        }
+      });
+
+    }
+  }
+
+  taxonPics = taxa;
+  fs.writeFileSync(pictureFile, JSON.stringify(taxa));
+  return Object.keys(taxa).length;
+};
+
+
+let getId = async (req) => {
+  try {
+    const form = new FormData();
+    const formHeaders = form.getHeaders();
+    const receivedParams = Object.keys(req.body);
+
+    receivedParams.forEach((key, index) => {
+      form.append(key, req.body[key]);
+    });
+
+    var stream = require("stream");
+
+    for (const file of req.files) {
+      var bufferStream = new stream.PassThrough();
+      bufferStream.end(file.buffer);
+      form.append("image", bufferStream, {
+        filename: "" + Date.now() + "." + file.mimetype.split("image/").pop(),
+      });
+    }
+
+    let token;
+    if (receivedParams.model && receivedParams.model.toLowerCase() === "global") {
+      token = process.env.SH_TOKEN; // Shared token
+    } else {
+      token = process.env.SP_TOKEN; // Specialized (Norwegian) token
+    }
+
+    let recognition;
+
+    // Drop the old API
+    if (!req.body.application && false) {
+      console.log("NEEEE")
+
+      recognition = await axios.post(
+        "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
+        form,
+
+        {
+          headers: {
+            ...formHeaders,
+            Authorization: "Basic " + process.env.LEGACY_TOKEN,
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+        }
+      ).catch(error => {
+        writeErrorLog(`Naturalis API v1 (legacy) lookup failed`, error);
+        throw ("");
+      });
+
+      // get the best 5
+      recognition.data.predictions = recognition.data.predictions.slice(0, 5);
+
+      // Check against list of misspellings and unknown synonyms
+      recognition.data.predictions = recognition.data.predictions.map((pred) => {
+        pred.taxon.name = taxonMapper.taxa[pred.taxon.name] || pred.taxon.name;
+        return pred;
+      });
+
+      // Get the data from the APIs (including accepted names of synonyms)
+      for (let pred of recognition.data.predictions) {
+        try {
+          let nameResult = await getName(pred.taxon.name);
+          pred.taxon.vernacularName = nameResult.vernacularName;
+          pred.taxon.groupName = nameResult.groupName;
+          pred.taxon.scientificNameID = nameResult.scientificNameID;
+          pred.taxon.name = nameResult.scientificName;
+          pred.taxon.infoUrl = nameResult.infoUrl;
+          pred.taxon.picture = getPicture(nameResult.scientificName);
+        } catch (error) {
+          writeErrorLog(`Error getting name for ${pred.taxon.name}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + pred.taxon.name)}.`, error);
+        }
+      }
+
+      // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
+      // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
+
+      // if there are duplicates, add the probabilities and delete the duplicates
+      for (let pred of recognition.data.predictions) {
+        let totalProbability = recognition.data.predictions
+          .filter((p) => p.taxon.name === pred.taxon.name)
+          .reduce((total, p) => total + p.probability, 0);
+
+        if (totalProbability !== pred.probability) {
+          pred.probability = totalProbability;
+          recognition.data.predictions = recognition.data.predictions.filter(
+            (p) => p.taxon.name !== pred.taxon.name
+          );
+          recognition.data.predictions.unshift(pred);
+        }
+      }
+
+      // sort by the new probabilities
+      recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
+        return b.probability - a.probability;
+      });
+      // -------------- end of duplicate checking code
+
+      return recognition.data;
+    } else {
+      recognition = await axios.post(
+        `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
+        form,
+        {
+          headers: {
+            ...formHeaders,
+          },
+          auth: {
+            username: process.env.NATURALIS_USERNAME,
+            password: process.env.NATURALIS_PASSWORD,
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+        }
+      ).catch(error => {
+        writeErrorLog(`Naturalis API v2 lookup with token ${token} failed`, error);
+        throw ("");
+      });
+    }
+
+    if (!recognition.data.predictions[0].taxa || !recognition.data.predictions[0].taxa.items) {
+      throw (`Naturalis API v2 lookup gave no predictions.\n${JSON.stringify(recognition.data)}`);
+    }
+
+    let taxa = recognition.data.predictions[0].taxa.items;
+
+    // get the best 5
+    taxa = taxa.slice(0, 5);
+    filteredTaxa = taxa.filter(taxon => taxon.probability >= .02)
+
+    if (filteredTaxa.length) {
+      taxa = filteredTaxa
+    }
+    else {
+      taxa = taxa.slice(0, 2);
+    }
+
+    // Check against list of misspellings and unknown synonyms
+    taxa = taxa.map((pred) => {
+      pred.scientific_name =
+        taxonMapper.taxa[pred.scientific_name] || pred.scientific_name;
+      return pred;
+    });
+
+    // Get the data from the APIs (including accepted names of synonyms)
+    for (let pred of taxa) {
+      try {
+        let nameResult;
+        if (req.body.application && req.body.application.toLowerCase() === "artsobservasjoner") {
+          pred.name = pred.scientific_name;
+        }
+        else {
+          nameResult = await getName(pred.scientific_name);
+
+          pred.vernacularName = nameResult.vernacularName;
+          pred.groupName = nameResult.groupName;
+          pred.scientificNameID = nameResult.scientificNameID;
+          pred.name = nameResult.scientificName;
+          pred.infoUrl = nameResult.infoUrl;
+        }
+
+        pred.picture = getPicture(pred.scientific_name);
+      } catch (error) {
+        writeErrorLog(`Error while processing getName(${pred.scientific_name}). You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + pred.scientific_name)}.`, error);
+      }
+    }
+
+    recognition.data.predictions[0].taxa.items = taxa;
+
+
+    // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
+    // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
+
+    // if there are duplicates, add the probabilities and delete the duplicates
+    // for (let pred of recognition.data.predictions) {
+    //   let totalProbability = recognition.data.predictions
+    //     .filter((p) => p.name === pred.name)
+    //     .reduce((total, p) => total + p.probability, 0);
+
+    //   if (totalProbability !== pred.probability) {
+    //     pred.probability = totalProbability;
+    //     recognition.data.predictions = recognition.data.predictions.filter(
+    //       (p) => p.name !== pred.name
+    //     );
+    //     recognition.data.predictions.unshift(pred);
+    //   }
+    // }
+
+    // // sort by the new probabilities
+    // recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
+    //   return b.probability - a.probability;
+    // });
+    // -------------- end of duplicate checking code
+
+    recognition.data.application = req.body.application;
+    return recognition.data;
+  }
+  catch (error) {
+    throw (error)
+  }
+};
+
+app.get("/taxonimage/*", (req, res) => {
+  try {
+    let taxon = decodeURI(req.originalUrl.replace("/taxonimage/", ""));
+    res.status(200).send(getPicture(taxon));
+  }
+  catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error)
+    res.status(500).end();
+  }
+});
+
+app.get("/taxonimages", (req, res) => {
+  try {
+    res.status(200).json(taxonPics);
+  }
+  catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error)
+    res.status(500).end();
+  }
+});
+
+app.get("/taxonimages/view", (req, res) => {
+  try {
+    let pics = Object.entries(taxonPics)
+    pics.sort()
+
+    let html = "<html><head><style>"
+    html += "img {border-radius: 50%}"
+    html += "img:hover {border-radius: 0}"
+    html += "</style></head><body>"
+    html += `<h1>Alle ${pics.length} "profilbilder"</h1>`
+    html += "<table>"
+
+    pics.forEach(pic => {
+      html += `<tr><td style="padding: 20px"><a href="https://artsdatabanken.no/Media/${pic[1]}" target="_blank"><img src="https://artsdatabanken.no/Media/${pic[1]}?mode=128x128"/></a></td>`
+      html += `<td><h3><i>${pic[0]}</i></h3></td></tr>`
+    })
+    html += "</body></html>"
+
+    res.status(200).send(html);
+  }
+  catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error)
+    res.status(500).end();
+  }
+});
+
+
+
+
+app.get("/cachetaxon/*", async (req, res) => {
+  try {
+    let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
+    let name = await getName(taxon, force = true)
+    res.status(200).json(name);
+  }
+  catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error)
+    res.status(500).end();
+  }
+});
+
+app.get("/refreshtaxonimages", async (req, res) => {
+  try {
+    // Read the file first in case the fetches fail, so it can still be uploaded manually
+    if (fs.existsSync(pictureFile)) {
+      taxonPics = JSON.parse(fs.readFileSync(pictureFile));
+    }
+
+    let number = await refreshtaxonimages();
+    res.status(200).send(`${number} pictures found`);
+  }
+  catch (error) {
+    res.status(500).end();
+  }
+});
+
 app.post("/", upload.array("image"), async (req, res) => {
+  // Future simple token check
+
+  // if (req.headers["authorization"] !== `Bearer ${process.env.AI_TOKEN}`) {
+  //   res.status(401).end("Unauthorized");
+  //   return true;
+  // }
+
   try {
     json = await getId(req);
 
     // Write to the log
     writelog(req, json);
 
-    res.status(200).json(json);
+    json.predictions[0].probability = .5
+    json.predictions[0].taxon = {}
+    json.predictions[0].taxon.vernacularName = "Denne versjonen er utdatert"
+    json.predictions[0].taxon.name = "Vennligst oppdater Artsorakelet"
+
+    // if (req.body.application === undefined) {
+    //   res.status(200).json(simplifyJson(json));
+    // } else {
+      res.status(200).json(json);
+    // }
+
+    // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
+    if (json.predictions[0].taxa) {
+      json.predictions[0].taxa.items.forEach(taxon => {
+        if (Math.random() < 0.05) {
+          let filename = `${taxadir}/${encodeURIComponent(taxon.scientific_name)}.json`
+          if (fs.existsSync(filename)) {
+            fs.stat(filename, function (err, stats) {
+              if (((new Date() - stats.mtime) / (1000 * 60 * 60 * 24)) > 10) {
+                getName(taxon.scientific_name, force = true)
+              }
+            });
+          }
+        }
+      })
+    }
   } catch (error) {
-    res.status(error.response.status).end(error.response.statusText);
-    date = new Date().toISOString();
-
-    console.log(date, "Error", error.response.status);
-
-    fs.appendFileSync(
-      "./log/log.txt",
-      "Error identifying: " + error.response.status + " (" + date + ")\n"
-    );
+    writeErrorLog(`Error while running getId()`, error);
+    res.status(500).end();
   }
 });
 
@@ -378,13 +792,14 @@ app.post("/save", upload.array("image"), async (req, res) => {
     json = await saveImagesAndGetToken(req);
     res.status(200).json(json);
   } catch (error) {
-    date = new Date().toISOString();
-    console.log(date, "Error", error);
+    writeErrorLog(`Failed to save image(s)`, error);
   }
 });
 
 app.get("/", (req, res) => {
-  res.status(200).end("Aiai!");
+  fs.stat("./server.js", function (err, stats) {
+    res.status(200).send(`Aiai! <hr/> (${dateStr('s', stats.mtime)})`);
+  });
 });
 
 app.get("/image/*", (req, res) => {
@@ -401,7 +816,7 @@ app.get("/image/*", (req, res) => {
   url = url.split("&")[0];
 
   // Loop over all files in uploads/
-  fs.readdir("./uploads/", (err, files) => {
+  fs.readdir(`${uploadsdir}/`, (err, files) => {
     let image_list = [];
 
     files.forEach((file) => {
@@ -412,7 +827,7 @@ app.get("/image/*", (req, res) => {
 
       if (fileid === url) {
         // If the request has a match in the database (it should unless the user was too slow)
-        const image_to_fetch = "./uploads/" + file;
+        const image_to_fetch = `${uploadsdir}/${file}`;
 
         // read the file
         const file_buffer = fs.readFileSync(image_to_fetch);
@@ -429,11 +844,10 @@ app.get("/image/*", (req, res) => {
     try {
       res.status(200).json(json);
     } catch (error) {
-      date = new Date().toISOString();
-      console.error(date, "Error", error);
+      writeErrorLog(`Failed to return json of saved images:\n${filelist.toString()}`, error);
+      res.status(500).end()
     }
   });
 });
 
 app.listen(port, console.log(`Server now running on port ${port}`));
-
