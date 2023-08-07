@@ -438,8 +438,10 @@ let saveImagesAndGetToken = async (req) => {
     counter += 1;
 
     // Upload to uploads folder
-    fs.writeFile(`${uploadsdir}/${filename}`, encrypted_file, (err) => {
-      if (err) throw err;
+    fs.writeFile(`${uploadsdir}/${filename}`, encrypted_file, (error) => {
+      if (error) {
+        writeErrorLog(`Failed to write file "${uploadsdir}/${filename}".`, error)
+      }
       console.log("The file has been saved!");
     });
   }
