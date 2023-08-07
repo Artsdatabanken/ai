@@ -167,7 +167,11 @@ let getPicture = (sciName) => {
 };
 
 let writelog = (req, json) => {
-  let application = sanitize(req.body.application);
+
+  let application;
+  if (req.body.application) {
+    application = sanitize(req.body.application);
+  }
 
   if (!fs.existsSync(`${logdir}/${application}_${dateStr(`d`)}.csv`)) {
     fs.appendFileSync(
@@ -188,17 +192,10 @@ let writelog = (req, json) => {
 
   let row = `${dateStr(`s`)},${Array.isArray(req.files) ? req.files.length : 0}`;
 
-  // if (!req.body.application) {
-  //   for (let i = 0; i < json.predictions.length; i++) {
-  //     const prediction = json.predictions[i];
-  //     row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
-  //   }
-  // } else {
   for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
     const prediction = json.predictions[0].taxa.items[i];
     row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
   }
-  // }
 
   row += "\n";
 
@@ -208,7 +205,7 @@ let writelog = (req, json) => {
 let getName = async (sciName, force = false) => {
   let unencoded_jsonfilename = `${taxadir}/${sanitize(sciName)}.json`
   let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`
-  
+
   // --- Take it easy on the renaming to avoid memory peaks
   if (fs.existsSync(unencoded_jsonfilename) && unencoded_jsonfilename !== jsonfilename) {
     if (Math.random() < 0.05) {
@@ -528,94 +525,25 @@ let getId = async (req) => {
 
     let recognition;
 
-    // Drop the old API
-    if (!req.body.application && false) {
-      recognition = await axios.post(
-        "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
-        form,
-
-        {
-          headers: {
-            ...formHeaders,
-            Authorization: "Basic " + process.env.LEGACY_TOKEN,
-          },
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
-        }
-      ).catch(error => {
-        writeErrorLog(`Naturalis API v1 (legacy) lookup failed`, error);
-        throw ("");
-      });
-
-      // get the best 5
-      recognition.data.predictions = recognition.data.predictions.slice(0, 5);
-
-      // Check against list of misspellings and unknown synonyms
-      recognition.data.predictions = recognition.data.predictions.map((pred) => {
-        pred.taxon.name = taxonMapper.taxa[pred.taxon.name] || pred.taxon.name;
-        return pred;
-      });
-
-      // Get the data from the APIs (including accepted names of synonyms)
-      for (let pred of recognition.data.predictions) {
-        try {
-          let nameResult = await getName(pred.taxon.name);
-          pred.taxon.vernacularName = nameResult.vernacularName;
-          pred.taxon.groupName = nameResult.groupName;
-          pred.taxon.scientificNameID = nameResult.scientificNameID;
-          pred.taxon.name = nameResult.scientificName;
-          pred.taxon.infoUrl = nameResult.infoUrl;
-          pred.taxon.picture = getPicture(nameResult.scientificName);
-        } catch (error) {
-          writeErrorLog(`Error getting name for ${pred.taxon.name}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + pred.taxon.name)}.`, error);
-        }
+    recognition = await axios.post(
+      `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
+      form,
+      {
+        headers: {
+          ...formHeaders,
+        },
+        auth: {
+          username: process.env.NATURALIS_USERNAME,
+          password: process.env.NATURALIS_PASSWORD,
+        },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
       }
+    ).catch(error => {
+      writeErrorLog(`Naturalis API v2 lookup with token ${token} failed`, error);
+      throw ("");
+    });
 
-      // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
-      // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
-
-      // if there are duplicates, add the probabilities and delete the duplicates
-      for (let pred of recognition.data.predictions) {
-        let totalProbability = recognition.data.predictions
-          .filter((p) => p.taxon.name === pred.taxon.name)
-          .reduce((total, p) => total + p.probability, 0);
-
-        if (totalProbability !== pred.probability) {
-          pred.probability = totalProbability;
-          recognition.data.predictions = recognition.data.predictions.filter(
-            (p) => p.taxon.name !== pred.taxon.name
-          );
-          recognition.data.predictions.unshift(pred);
-        }
-      }
-
-      // sort by the new probabilities
-      recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
-        return b.probability - a.probability;
-      });
-      // -------------- end of duplicate checking code
-
-      return recognition.data;
-    } else {
-      recognition = await axios.post(
-        `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
-        form,
-        {
-          headers: {
-            ...formHeaders,
-          },
-          auth: {
-            username: process.env.NATURALIS_USERNAME,
-            password: process.env.NATURALIS_PASSWORD,
-          },
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
-        }
-      ).catch(error => {
-        writeErrorLog(`Naturalis API v2 lookup with token ${token} failed`, error);
-        throw ("");
-      });
-    }
 
     if (!recognition.data.predictions[0].taxa || !recognition.data.predictions[0].taxa.items) {
       throw (`Naturalis API v2 lookup gave no predictions.\n${JSON.stringify(recognition.data)}`);
