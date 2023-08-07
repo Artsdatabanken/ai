@@ -8,6 +8,43 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const taxonMapper = require("./taxonMapping");
 const cron = require("node-cron");
+const rateLimit = require("express-rate-limit");
+
+
+const cacheLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // Timeframe
+  max: 3, // Max requests per timeframe per ip
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  handler: (request, response, next, options) => {
+    writeErrorLog(`Too many cache requests`, `IP ${request.client._peername.address}`)
+    return response.status(options.statusCode).send(options.message);
+  },
+})
+
+const idLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // Timeframe
+  max: 50, // Max requests per timeframe per ip
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  handler: (request, response, next, options) => {
+    writeErrorLog(`Too many ID requests`, `IP ${request.client._peername.address}`)
+    return response.status(options.statusCode).send(options.message);
+  },
+})
+
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // Timeframe
+  max: 25, // Max requests per timeframe per ip
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  handler: (request, response, next, options) => {
+    writeErrorLog(`Too many misc API requests`, `IP ${request.client._peername.address}`)
+    return response.status(options.statusCode).send(options.message);
+  },
+})
+
+
 
 // Use the crypto library for encryption and decryption
 const crypto = require("crypto");
@@ -661,7 +698,7 @@ let getId = async (req) => {
   }
 };
 
-app.get("/taxonimage/*", (req, res) => {
+app.get("/taxonimage/*", apiLimiter, (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/taxonimage/", ""));
     res.status(200).send(getPicture(taxon));
@@ -672,7 +709,7 @@ app.get("/taxonimage/*", (req, res) => {
   }
 });
 
-app.get("/taxonimages", (req, res) => {
+app.get("/taxonimages", apiLimiter, (req, res) => {
   try {
     res.status(200).json(taxonPics);
   }
@@ -682,7 +719,7 @@ app.get("/taxonimages", (req, res) => {
   }
 });
 
-app.get("/taxonimages/view", (req, res) => {
+app.get("/taxonimages/view", apiLimiter, (req, res) => {
   try {
     let pics = Object.entries(taxonPics)
     pics.sort()
@@ -709,7 +746,7 @@ app.get("/taxonimages/view", (req, res) => {
 });
 
 
-app.get("/cachetaxon/*", async (req, res) => {
+app.get("/cachetaxon/*", cacheLimiter, async (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
     let name = await getName(taxon, force = true)
@@ -721,7 +758,7 @@ app.get("/cachetaxon/*", async (req, res) => {
   }
 });
 
-app.get("/refreshtaxonimages", async (req, res) => {
+app.get("/refreshtaxonimages", cacheLimiter, async (req, res) => {
   try {
     // Read the file first in case the fetches fail, so it can still be uploaded manually
     if (fs.existsSync(pictureFile)) {
@@ -736,7 +773,7 @@ app.get("/refreshtaxonimages", async (req, res) => {
   }
 });
 
-app.post("/", upload.array("image"), async (req, res) => {
+app.post("/", idLimiter, upload.array("image"), async (req, res) => {
   // Future simple token check
 
   // if (req.headers["authorization"] !== `Bearer ${process.env.AI_TOKEN}`) {
@@ -765,10 +802,6 @@ app.post("/", upload.array("image"), async (req, res) => {
     res.status(200).json(json);
 
 
-
-
-
-
     // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
     if (json.predictions[0].taxa) {
       json.predictions[0].taxa.items.forEach(taxon => {
@@ -790,7 +823,7 @@ app.post("/", upload.array("image"), async (req, res) => {
   }
 });
 
-app.post("/save", upload.array("image"), async (req, res) => {
+app.post("/save", apiLimiter, upload.array("image"), async (req, res) => {
   // image saving request from the orakel service
   try {
     json = await saveImagesAndGetToken(req);
@@ -800,13 +833,13 @@ app.post("/save", upload.array("image"), async (req, res) => {
   }
 });
 
-app.get("/", (req, res) => {
+app.get("/", apiLimiter, (req, res) => {
   fs.stat("./server.js", function (err, stats) {
     res.status(200).send(`Aiai! <hr/> (${dateStr('s', stats.mtime)})`);
   });
 });
 
-app.get("/image/*", (req, res) => {
+app.get("/image/*", apiLimiter, (req, res) => {
   // image request from the orakel service
   // On the form /image/id&password
 
