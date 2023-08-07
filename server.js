@@ -9,7 +9,7 @@ const dotenv = require("dotenv");
 const taxonMapper = require("./taxonMapping");
 const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
-
+const sanitize = require("sanitize-filename");
 
 const cacheLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // Timeframe
@@ -167,7 +167,7 @@ let getPicture = (sciName) => {
 };
 
 let writelog = (req, json) => {
-  let application = req.body.application.replaceAll("/","_");
+  let application = sanitize(req.body.application);
 
   if (!fs.existsSync(`${logdir}/${application}_${dateStr(`d`)}.csv`)) {
     fs.appendFileSync(
@@ -206,9 +206,9 @@ let writelog = (req, json) => {
 };
 
 let getName = async (sciName, force = false) => {
+  let unencoded_jsonfilename = `${taxadir}/${sanitize(sciName)}.json`
   let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`
-  let unencoded_jsonfilename = `${taxadir}/${sciName.replaceAll("%20"," ")}.json`
-
+  
   // --- Take it easy on the renaming to avoid memory peaks
   if (fs.existsSync(unencoded_jsonfilename) && unencoded_jsonfilename !== jsonfilename) {
     if (Math.random() < 0.05) {
