@@ -185,7 +185,8 @@ let writelog = (req, json) => {
   // TODO
   // Add encrypted IP (req.client._peername.address)
 
-  let row = `${dateStr(`s`)},${req.files.length}`;
+
+  let row = `${dateStr(`s`)},${Array.isArray(req.files) ? req.files.length : 0}`;
 
   // if (!req.body.application) {
   //   for (let i = 0; i < json.predictions.length; i++) {
