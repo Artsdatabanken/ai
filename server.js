@@ -850,9 +850,13 @@ app.get("/image/*", (req, res) => {
   });
 });
 
-// --- Path that Azure uses to check health
+// --- Path that Azure uses to check health, prevents 404 in the logs
 app.get("/robots933456.txt", (req, res) => {
   res.status(200).send("Hi, Azure")
 });
+
+// --- Serve a favicon, prevents 404 in the logs
+app.use('/favicon.ico', express.static('favicon.ico'));
+
 
 app.listen(port, console.log(`Server now running on port ${port}`));
