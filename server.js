@@ -850,4 +850,9 @@ app.get("/image/*", (req, res) => {
   });
 });
 
+// --- Path that Azure uses to check health
+app.get("/robots933456.txt", apiLimiter, (req, res) => {
+  res.status(200).send("Hi, Azure")
+});
+
 app.listen(port, console.log(`Server now running on port ${port}`));
