@@ -21,12 +21,11 @@ let appInsights = require("applicationinsights");
 dotenv.config({ path: "./config/config.env" });
 dotenv.config({ path: "./config/secrets.env" });
 
-
 // --- Setting files and locations
-const logdir = './log'
+const logdir = "./log";
 const taxadir = `${logdir}/taxa`;
-const pictureFile = `${logdir}/taxonPictures.json`
-const uploadsdir = './uploads'
+const pictureFile = `${logdir}/taxonPictures.json`;
+const uploadsdir = "./uploads";
 
 // --- Get the taxon picture ids from file on start
 var taxonPics = {};
@@ -40,20 +39,28 @@ const dateStr = (resolution = `d`, date = false) => {
     date = new Date();
   }
 
-  let iso = date.toLocaleString('en-CA', { timeZone: "Europe/Oslo", hour12: false }).replace(', ', 'T');
-  iso = iso.replace("T24", "T00")
-  iso += '.' + date.getMilliseconds().toString().padStart(3, '0');
-  const lie = new Date(iso + 'Z');
+  let iso = date
+    .toLocaleString("en-CA", { timeZone: "Europe/Oslo", hour12: false })
+    .replace(", ", "T");
+  iso = iso.replace("T24", "T00");
+  iso += "." + date.getMilliseconds().toString().padStart(3, "0");
+  const lie = new Date(iso + "Z");
   const offset = -(lie - date) / 60 / 1000;
 
   if (resolution === `m`) {
-    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 7)}`;
-  }
-  else if (resolution === `s`) {
-    return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 19).replace("T", " ")}`;
+    return `${new Date(date.getTime() - offset * 60 * 1000)
+      .toISOString()
+      .substring(0, 7)}`;
+  } else if (resolution === `s`) {
+    return `${new Date(date.getTime() - offset * 60 * 1000)
+      .toISOString()
+      .substring(0, 19)
+      .replace("T", " ")}`;
   }
 
-  return `${new Date(date.getTime() - (offset * 60 * 1000)).toISOString().substring(0, 10)}`;
+  return `${new Date(date.getTime() - offset * 60 * 1000)
+    .toISOString()
+    .substring(0, 10)}`;
 };
 
 const writeErrorLog = (message, error) => {
@@ -62,15 +69,13 @@ const writeErrorLog = (message, error) => {
       `${logdir}/errorlog_${dateStr(`d`)}.txt`,
       `\n${dateStr(`s`)}: ${message}\n   ${error}\n`
     );
-  }
-  else {
+  } else {
     fs.appendFileSync(
       `${logdir}/errorlog_${dateStr(`d`)}.txt`,
       `${dateStr(`s`)}: ${message}\n`
     );
   }
-}
-
+};
 
 // --- Make sure the taxon cache directory exists
 if (!fs.existsSync(taxadir)) {
@@ -93,7 +98,6 @@ if (process.env.IKEY) {
   appInsights.setup(process.env.IKEY).start();
   appInsights.defaultClient.addTelemetryProcessor(filteringAiFunction);
 }
-
 
 const app = express();
 const port = process.env.PORT;
@@ -136,12 +140,12 @@ let writelog = (req, json) => {
     fs.appendFileSync(
       `${logdir}/${application}_${dateStr(`d`)}.csv`,
       "Datetime," +
-      "Number_of_pictures," +
-      "Result_1_name,Result_1_group,Result_1_probability," +
-      "Result_2_name,Result_2_group,Result_2_probability," +
-      "Result_3_name,Result_3_group,Result_3_probability," +
-      "Result_4_name,Result_4_group,Result_4_probability," +
-      "Result_5_name,Result_5_group,Result_5_probability\n"
+        "Number_of_pictures," +
+        "Result_1_name,Result_1_group,Result_1_probability," +
+        "Result_2_name,Result_2_group,Result_2_probability," +
+        "Result_3_name,Result_3_group,Result_3_probability," +
+        "Result_4_name,Result_4_group,Result_4_probability," +
+        "Result_5_name,Result_5_group,Result_5_probability\n"
     );
   }
 
@@ -156,10 +160,10 @@ let writelog = (req, json) => {
   //     row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
   //   }
   // } else {
-    for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
-      const prediction = json.predictions[0].taxa.items[i];
-      row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
-    }
+  for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
+    const prediction = json.predictions[0].taxa.items[i];
+    row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
+  }
   // }
 
   row += "\n";
@@ -168,19 +172,23 @@ let writelog = (req, json) => {
 };
 
 let getName = async (sciName, force = false) => {
-
-  let unencoded_jsonfilename = `${taxadir}/${sciName}.json`
-  let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`
-
+  let unencoded_jsonfilename = `${taxadir}/${sciName}.json`;
+  let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`;
 
   // --- Take it easy on the renaming to avoid memory peaks
-  if (fs.existsSync(unencoded_jsonfilename) && unencoded_jsonfilename !== jsonfilename) {
+  if (
+    fs.existsSync(unencoded_jsonfilename) &&
+    unencoded_jsonfilename !== jsonfilename
+  ) {
     if (Math.random() < 0.05) {
       fs.rename(unencoded_jsonfilename, jsonfilename, function (error) {
-        if (error) writeErrorLog(`Could not rename "${unencoded_jsonfilename}" to "${jsonfilename}"`, error);
+        if (error)
+          writeErrorLog(
+            `Could not rename "${unencoded_jsonfilename}" to "${jsonfilename}"`,
+            error
+          );
       });
-    }
-    else {
+    } else {
       return JSON.parse(fs.readFileSync(unencoded_jsonfilename));
     }
   }
@@ -199,57 +207,78 @@ let getName = async (sciName, force = false) => {
   let retrievedTaxon = { data: [] };
 
   try {
-    let url = encodeURI(`https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`)
-    let taxon = await axios.get(
-      url,
-      {
+    let url = encodeURI(
+      `https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`
+    );
+    let taxon = await axios
+      .get(url, {
         timeout: 3000,
-      }
-    ).catch(error => {
-      writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
-      throw ("")
-    });
+      })
+      .catch((error) => {
+        writeErrorLog(
+          `Failed to ${
+            !force ? "get info for" : "*recache*"
+          } ${sciName} from ${url}.`,
+          error
+        );
+        throw "";
+      });
 
     let acceptedtaxon = taxon.data.find(
       (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
     );
 
     if (!!acceptedtaxon) {
-      retrievedTaxon.data = acceptedtaxon
-    }
-    else {
-      let hit = taxon.data.find(t => t.ScientificNames.find(sn => sn.HigherClassification.find(h => h.ScientificName === sciName)))
-      if (!hit) throw ("No HigherClassification hit");
-      hit = hit.ScientificNames.find(sn => sn.HigherClassification.find(h => h.ScientificName === sciName))
-      hit = hit.HigherClassification.find(h => h.ScientificName === sciName)
-      hit = hit.ScientificNameId
-      url = `https://artsdatabanken.no/api/Resource/ScientificName/${hit}`
-      taxon = await axios.get(
-        url,
-        {
+      retrievedTaxon.data = acceptedtaxon;
+    } else {
+      let hit = taxon.data.find((t) =>
+        t.ScientificNames.find((sn) =>
+          sn.HigherClassification.find((h) => h.ScientificName === sciName)
+        )
+      );
+      if (!hit) throw "No HigherClassification hit";
+      hit = hit.ScientificNames.find((sn) =>
+        sn.HigherClassification.find((h) => h.ScientificName === sciName)
+      );
+      hit = hit.HigherClassification.find((h) => h.ScientificName === sciName);
+      hit = hit.ScientificNameId;
+      url = `https://artsdatabanken.no/api/Resource/ScientificName/${hit}`;
+      taxon = await axios
+        .get(url, {
           timeout: 3000,
-        }
-      ).catch(error => {
-        writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
-        throw ("")
-      });
+        })
+        .catch((error) => {
+          writeErrorLog(
+            `Failed to ${
+              !force ? "get info for" : "*recache*"
+            } ${sciName} from ${url}.`,
+            error
+          );
+          throw "";
+        });
 
-      url = `https://artsdatabanken.no/api/Resource/Taxon/${taxon.data.Taxon.TaxonId}`
-      taxon = await axios.get(
-        url,
-        {
+      url = `https://artsdatabanken.no/api/Resource/Taxon/${taxon.data.Taxon.TaxonId}`;
+      taxon = await axios
+        .get(url, {
           timeout: 3000,
-        }
-      ).catch(error => {
-        writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
-        throw ("")
-      });
+        })
+        .catch((error) => {
+          writeErrorLog(
+            `Failed to ${
+              !force ? "get info for" : "*recache*"
+            } ${sciName} from ${url}.`,
+            error
+          );
+          throw "";
+        });
 
-      retrievedTaxon.data = taxon.data
+      retrievedTaxon.data = taxon.data;
     }
 
-    nameResult.scientificName = retrievedTaxon.data.AcceptedNameUsage.ScientificName;
-    nameResult.scientificNameID = retrievedTaxon.data.AcceptedNameUsage.ScientificNameId;
+    nameResult.scientificName =
+      retrievedTaxon.data.AcceptedNameUsage.ScientificName;
+    nameResult.scientificNameID =
+      retrievedTaxon.data.AcceptedNameUsage.ScientificNameId;
 
     nameResult.vernacularName =
       retrievedTaxon.data["RecommendedVernacularName_nb-NO"] ||
@@ -271,20 +300,32 @@ let getName = async (sciName, force = false) => {
         "https://artsdatabanken.no/Pages/"
       );
     } else {
-      nameResult.infoUrl = "https://artsdatabanken.no/" + retrievedTaxon.data.Id;
+      nameResult.infoUrl =
+        "https://artsdatabanken.no/" + retrievedTaxon.data.Id;
     }
 
-    url = encodeURI(`https://artsdatabanken.no/Api/${retrievedTaxon.data.Id}`)
-    name = await axios.get(url,
-      {
+    url = encodeURI(`https://artsdatabanken.no/Api/${retrievedTaxon.data.Id}`);
+    name = await axios
+      .get(url, {
         timeout: 3000,
-      }).catch(error => {
-        writeErrorLog(`Failed to ${!force ? "get info for" : "*recache*"} ${sciName} from ${url}.`, error);
-        throw ("")
+      })
+      .catch((error) => {
+        writeErrorLog(
+          `Failed to ${
+            !force ? "get info for" : "*recache*"
+          } ${sciName} from ${url}.`,
+          error
+        );
+        throw "";
       });
   } catch (error) {
-    writeErrorLog(`Error in getName(${sciName}). Retry: ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + sciName)}.`, error);
-    return nameResult
+    writeErrorLog(
+      `Error in getName(${sciName}). Retry: ${encodeURI(
+        "https://ai.test.artsdatabanken.no/cachetaxon/" + sciName
+      )}.`,
+      error
+    );
+    return nameResult;
   }
 
   if (name && name.data.AcceptedName.dynamicProperties) {
@@ -292,13 +333,12 @@ let getName = async (sciName, force = false) => {
       (dp) =>
         dp.Name === "GruppeNavn" &&
         dp.Properties.find((p) => p.Value === "Artsobservasjoner")
-    )
+    );
 
     if (artsobsname && artsobsname.Value) {
-      nameResult.groupName = artsobsname.Value
+      nameResult.groupName = artsobsname.Value;
     }
   }
-
 
   if (force || !fs.existsSync(jsonfilename)) {
     let data = JSON.stringify(nameResult);
@@ -314,7 +354,6 @@ cron.schedule("30 * * * *", () => {
 
   // Loop over all files in uploads/
   fs.readdir(`${uploadsdir}/`, (err, files) => {
-
     if (files) {
       files.forEach((file) => {
         // gets timestamp from filename
@@ -425,22 +464,23 @@ let simplifyJson = (json) => {
 };
 
 let refreshtaxonimages = async () => {
-
   const pages = [342548, 342550, 342551, 342552, 342553, 342554];
   let taxa = {};
 
   for (let index = 0; index < pages.length; index++) {
     let pageId = pages[index];
-    let url = encodeURI(`https://www.artsdatabanken.no/api/Content/${pageId}`)
-    let page = await axios.get(
-      url,
-      {
+    let url = encodeURI(`https://www.artsdatabanken.no/api/Content/${pageId}`);
+    let page = await axios
+      .get(url, {
         timeout: 10000,
-      }
-    ).catch(error => {
-      writeErrorLog(`Error getting "${url}" while running refreshtaxonimages`, error);
-      throw ("")
-    });
+      })
+      .catch((error) => {
+        writeErrorLog(
+          `Error getting "${url}" while running refreshtaxonimages`,
+          error
+        );
+        throw "";
+      });
 
     if (!!page) {
       page.data.Files.forEach((f) => {
@@ -451,7 +491,6 @@ let refreshtaxonimages = async () => {
           taxa[name] = value;
         }
       });
-
     }
   }
 
@@ -459,7 +498,6 @@ let refreshtaxonimages = async () => {
   fs.writeFileSync(pictureFile, JSON.stringify(taxa));
   return Object.keys(taxa).length;
 };
-
 
 let getId = async (req) => {
   try {
@@ -482,7 +520,10 @@ let getId = async (req) => {
     }
 
     let token;
-    if (receivedParams.model && receivedParams.model.toLowerCase() === "global") {
+    if (
+      receivedParams.model &&
+      receivedParams.model.toLowerCase() === "global"
+    ) {
       token = process.env.SH_TOKEN; // Shared token
     } else {
       token = process.env.SP_TOKEN; // Specialized (Norwegian) token
@@ -492,33 +533,38 @@ let getId = async (req) => {
 
     // Drop the old API
     if (!req.body.application && false) {
-      console.log("NEEEE")
+      console.log("NEEEE");
 
-      recognition = await axios.post(
-        "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
-        form,
+      recognition = await axios
+        .post(
+          "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
+          form,
 
-        {
-          headers: {
-            ...formHeaders,
-            Authorization: "Basic " + process.env.LEGACY_TOKEN,
-          },
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
-        }
-      ).catch(error => {
-        writeErrorLog(`Naturalis API v1 (legacy) lookup failed`, error);
-        throw ("");
-      });
+          {
+            headers: {
+              ...formHeaders,
+              Authorization: "Basic " + process.env.LEGACY_TOKEN,
+            },
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+          }
+        )
+        .catch((error) => {
+          writeErrorLog(`Naturalis API v1 (legacy) lookup failed`, error);
+          throw "";
+        });
 
       // get the best 5
       recognition.data.predictions = recognition.data.predictions.slice(0, 5);
 
       // Check against list of misspellings and unknown synonyms
-      recognition.data.predictions = recognition.data.predictions.map((pred) => {
-        pred.taxon.name = taxonMapper.taxa[pred.taxon.name] || pred.taxon.name;
-        return pred;
-      });
+      recognition.data.predictions = recognition.data.predictions.map(
+        (pred) => {
+          pred.taxon.name =
+            taxonMapper.taxa[pred.taxon.name] || pred.taxon.name;
+          return pred;
+        }
+      );
 
       // Get the data from the APIs (including accepted names of synonyms)
       for (let pred of recognition.data.predictions) {
@@ -531,7 +577,14 @@ let getId = async (req) => {
           pred.taxon.infoUrl = nameResult.infoUrl;
           pred.taxon.picture = getPicture(nameResult.scientificName);
         } catch (error) {
-          writeErrorLog(`Error getting name for ${pred.taxon.name}. You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + pred.taxon.name)}.`, error);
+          writeErrorLog(
+            `Error getting name for ${
+              pred.taxon.name
+            }. You can force a recache on ${encodeURI(
+              "https://ai.test.artsdatabanken.no/cachetaxon/" + pred.taxon.name
+            )}.`,
+            error
+          );
         }
       }
 
@@ -554,47 +607,58 @@ let getId = async (req) => {
       }
 
       // sort by the new probabilities
-      recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
-        return b.probability - a.probability;
-      });
+      recognition.data.predictions = recognition.data.predictions.sort(
+        (a, b) => {
+          return b.probability - a.probability;
+        }
+      );
       // -------------- end of duplicate checking code
 
       return recognition.data;
     } else {
-      recognition = await axios.post(
-        `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
-        form,
-        {
-          headers: {
-            ...formHeaders,
-          },
-          auth: {
-            username: process.env.NATURALIS_USERNAME,
-            password: process.env.NATURALIS_PASSWORD,
-          },
-          maxContentLength: Infinity,
-          maxBodyLength: Infinity,
-        }
-      ).catch(error => {
-        writeErrorLog(`Naturalis API v2 lookup with token ${token} failed`, error);
-        throw ("");
-      });
+      recognition = await axios
+        .post(
+          `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
+          form,
+          {
+            headers: {
+              ...formHeaders,
+            },
+            auth: {
+              username: process.env.NATURALIS_USERNAME,
+              password: process.env.NATURALIS_PASSWORD,
+            },
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity,
+          }
+        )
+        .catch((error) => {
+          writeErrorLog(
+            `Naturalis API v2 lookup with token ${token} failed`,
+            error
+          );
+          throw "";
+        });
     }
 
-    if (!recognition.data.predictions[0].taxa || !recognition.data.predictions[0].taxa.items) {
-      throw (`Naturalis API v2 lookup gave no predictions.\n${JSON.stringify(recognition.data)}`);
+    if (
+      !recognition.data.predictions[0].taxa ||
+      !recognition.data.predictions[0].taxa.items
+    ) {
+      throw `Naturalis API v2 lookup gave no predictions.\n${JSON.stringify(
+        recognition.data
+      )}`;
     }
 
     let taxa = recognition.data.predictions[0].taxa.items;
 
     // get the best 5
     taxa = taxa.slice(0, 5);
-    filteredTaxa = taxa.filter(taxon => taxon.probability >= .02)
+    filteredTaxa = taxa.filter((taxon) => taxon.probability >= 0.02);
 
     if (filteredTaxa.length) {
-      taxa = filteredTaxa
-    }
-    else {
+      taxa = filteredTaxa;
+    } else {
       taxa = taxa.slice(0, 2);
     }
 
@@ -609,10 +673,12 @@ let getId = async (req) => {
     for (let pred of taxa) {
       try {
         let nameResult;
-        if (req.body.application && req.body.application.toLowerCase() === "artsobservasjoner") {
+        if (
+          req.body.application &&
+          req.body.application.toLowerCase() === "artsobservasjoner"
+        ) {
           pred.name = pred.scientific_name;
-        }
-        else {
+        } else {
           nameResult = await getName(pred.scientific_name);
 
           pred.vernacularName = nameResult.vernacularName;
@@ -624,12 +690,19 @@ let getId = async (req) => {
 
         pred.picture = getPicture(pred.scientific_name);
       } catch (error) {
-        writeErrorLog(`Error while processing getName(${pred.scientific_name}). You can force a recache on ${encodeURI("https://ai.test.artsdatabanken.no/cachetaxon/" + pred.scientific_name)}.`, error);
+        writeErrorLog(
+          `Error while processing getName(${
+            pred.scientific_name
+          }). You can force a recache on ${encodeURI(
+            "https://ai.test.artsdatabanken.no/cachetaxon/" +
+              pred.scientific_name
+          )}.`,
+          error
+        );
       }
     }
 
     recognition.data.predictions[0].taxa.items = taxa;
-
 
     // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
     // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
@@ -657,9 +730,8 @@ let getId = async (req) => {
 
     recognition.data.application = req.body.application;
     return recognition.data;
-  }
-  catch (error) {
-    throw (error)
+  } catch (error) {
+    throw error;
   }
 };
 
@@ -667,9 +739,8 @@ app.get("/taxonimage/*", (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/taxonimage/", ""));
     res.status(200).send(getPicture(taxon));
-  }
-  catch (error) {
-    writeErrorLog(`Error for ${req.originalUrl}`, error)
+  } catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error);
     res.status(500).end();
   }
 });
@@ -677,50 +748,44 @@ app.get("/taxonimage/*", (req, res) => {
 app.get("/taxonimages", (req, res) => {
   try {
     res.status(200).json(taxonPics);
-  }
-  catch (error) {
-    writeErrorLog(`Error for ${req.originalUrl}`, error)
+  } catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error);
     res.status(500).end();
   }
 });
 
 app.get("/taxonimages/view", (req, res) => {
   try {
-    let pics = Object.entries(taxonPics)
-    pics.sort()
+    let pics = Object.entries(taxonPics);
+    pics.sort();
 
-    let html = "<html><head><style>"
-    html += "img {border-radius: 50%}"
-    html += "img:hover {border-radius: 0}"
-    html += "</style></head><body>"
-    html += `<h1>Alle ${pics.length} "profilbilder"</h1>`
-    html += "<table>"
+    let html = "<html><head><style>";
+    html += "img {border-radius: 50%}";
+    html += "img:hover {border-radius: 0}";
+    html += "</style></head><body>";
+    html += `<h1>Alle ${pics.length} "profilbilder"</h1>`;
+    html += "<table>";
 
-    pics.forEach(pic => {
-      html += `<tr><td style="padding: 20px"><a href="https://artsdatabanken.no/Media/${pic[1]}" target="_blank"><img src="https://artsdatabanken.no/Media/${pic[1]}?mode=128x128"/></a></td>`
-      html += `<td><h3><i>${pic[0]}</i></h3></td></tr>`
-    })
-    html += "</body></html>"
+    pics.forEach((pic) => {
+      html += `<tr><td style="padding: 20px"><a href="https://artsdatabanken.no/Media/${pic[1]}" target="_blank"><img src="https://artsdatabanken.no/Media/${pic[1]}?mode=128x128"/></a></td>`;
+      html += `<td><h3><i>${pic[0]}</i></h3></td></tr>`;
+    });
+    html += "</body></html>";
 
     res.status(200).send(html);
-  }
-  catch (error) {
-    writeErrorLog(`Error for ${req.originalUrl}`, error)
+  } catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error);
     res.status(500).end();
   }
 });
 
-
-
-
 app.get("/cachetaxon/*", async (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
-    let name = await getName(taxon, force = true)
+    let name = await getName(taxon, (force = true));
     res.status(200).json(name);
-  }
-  catch (error) {
-    writeErrorLog(`Error for ${req.originalUrl}`, error)
+  } catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error);
     res.status(500).end();
   }
 });
@@ -734,8 +799,7 @@ app.get("/refreshtaxonimages", async (req, res) => {
 
     let number = await refreshtaxonimages();
     res.status(200).send(`${number} pictures found`);
-  }
-  catch (error) {
+  } catch (error) {
     res.status(500).end();
   }
 });
@@ -754,31 +818,38 @@ app.post("/", upload.array("image"), async (req, res) => {
     // Write to the log
     writelog(req, json);
 
-    json.predictions[0].probability = .5
-    json.predictions[0].taxon = {}
-    json.predictions[0].taxon.vernacularName = "Denne versjonen er utdatert"
-    json.predictions[0].taxon.name = "Vennligst oppdater Artsorakelet"
+    if (
+      req.body.application === undefined ||
+      req.body.application === "Artsorakel 3.1.0"
+    ) {
+      json.predictions[0].probability = 0.5;
+      json.predictions[0].taxon = {};
+      json.predictions[0].taxon.vernacularName = "Denne versjonen er utdatert";
+      json.predictions[0].taxon.name = "Vennligst oppdater Artsorakelet";
+    }
 
     // if (req.body.application === undefined) {
     //   res.status(200).json(simplifyJson(json));
     // } else {
-      res.status(200).json(json);
+    res.status(200).json(json);
     // }
 
     // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
     if (json.predictions[0].taxa) {
-      json.predictions[0].taxa.items.forEach(taxon => {
+      json.predictions[0].taxa.items.forEach((taxon) => {
         if (Math.random() < 0.05) {
-          let filename = `${taxadir}/${encodeURIComponent(taxon.scientific_name)}.json`
+          let filename = `${taxadir}/${encodeURIComponent(
+            taxon.scientific_name
+          )}.json`;
           if (fs.existsSync(filename)) {
             fs.stat(filename, function (err, stats) {
-              if (((new Date() - stats.mtime) / (1000 * 60 * 60 * 24)) > 10) {
-                getName(taxon.scientific_name, force = true)
+              if ((new Date() - stats.mtime) / (1000 * 60 * 60 * 24) > 10) {
+                getName(taxon.scientific_name, (force = true));
               }
             });
           }
         }
-      })
+      });
     }
   } catch (error) {
     writeErrorLog(`Error while running getId()`, error);
@@ -798,7 +869,7 @@ app.post("/save", upload.array("image"), async (req, res) => {
 
 app.get("/", (req, res) => {
   fs.stat("./server.js", function (err, stats) {
-    res.status(200).send(`Aiai! <hr/> (${dateStr('s', stats.mtime)})`);
+    res.status(200).send(`Aiai! <hr/> (${dateStr("s", stats.mtime)})`);
   });
 });
 
@@ -844,19 +915,21 @@ app.get("/image/*", (req, res) => {
     try {
       res.status(200).json(json);
     } catch (error) {
-      writeErrorLog(`Failed to return json of saved images:\n${filelist.toString()}`, error);
-      res.status(500).end()
+      writeErrorLog(
+        `Failed to return json of saved images:\n${filelist.toString()}`,
+        error
+      );
+      res.status(500).end();
     }
   });
 });
 
 // --- Path that Azure uses to check health, prevents 404 in the logs
 app.get("/robots933456.txt", (req, res) => {
-  res.status(200).send("Hi, Azure")
+  res.status(200).send("Hi, Azure");
 });
 
 // --- Serve a favicon, prevents 404 in the logs
-app.use('/favicon.ico', express.static('favicon.ico'));
-
+app.use("/favicon.ico", express.static("favicon.ico"));
 
 app.listen(port, console.log(`Server now running on port ${port}`));
