@@ -10,7 +10,7 @@
   "author": "Wouter Koch",
   "license": "MIT",
   "dependencies": {
-    "applicationinsights": "^2.7.0",
+    "applicationinsights": "^2.5.0",
     "axios": "^0.21.1",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
@@ -18,6 +18,7 @@
     "express": "^4.17.1",
     "express-rate-limit": "^6.9.0",
     "form-data": "^3.0.0",
+    "http-proxy-middleware": "^2.0.6",
     "multer": "^1.4.5-lts.1",
     "node-cron": "^2.0.3",
     "sanitize-filename": "^1.6.3",
