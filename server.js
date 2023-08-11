@@ -764,7 +764,7 @@ app.post("/save", apiLimiter, upload.array("image"), async (req, res) => {
 
 app.get("/", apiLimiter, (req, res) => {
   fs.stat("./server.js", function (err, stats) {
-    res.status(200).send(`Aiai! <hr/> (${dateStr('s', stats.mtime)})`);
+    res.status(200).send(`Aiaiai! <hr/> (${dateStr('s', stats.mtime)})`);
   });
 });
 
