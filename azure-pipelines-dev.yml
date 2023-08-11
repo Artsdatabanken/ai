@@ -3,7 +3,7 @@
 # https://docs.microsoft.com/azure/devops/pipelines/languages/docker
 
 trigger:
-  - master
+  - dev
 
 resources:
   - repo: self
@@ -24,15 +24,15 @@ stages:
               repository: "artsdatabanken/ai"
               command: "build"
               Dockerfile: "**/Dockerfile"
-              tags: "azure"
+              tags: "azure-test"
           - task: Docker@2
             inputs:
               containerRegistry: "DockerHub"
               repository: "artsdatabanken/ai"
               command: "push"
-              tags: "azure"
+              tags: "azure-test"
           - task: AzureAppServiceManage@0
             inputs:
-              azureSubscription: "prod-deploy-code"
+              azureSubscription: "test-deploy-code"
               Action: "Restart Azure App Service"
-              WebAppName: "adb-prod-ai-as"
+              WebAppName: "adb-test-ai-as"
