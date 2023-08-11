@@ -8,6 +8,50 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const taxonMapper = require("./taxonMapping");
 const cron = require("node-cron");
+const rateLimit = require("express-rate-limit");
+const sanitize = require("sanitize-filename");
+
+const cacheLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // Timeframe
+  max: 3, // Max requests per timeframe per ip
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  handler: (request, response, next, options) => {
+    writeErrorLog(
+      `Too many cache requests`,
+      `IP ${request.client._peername.address}`
+    );
+    return response.status(options.statusCode).send(options.message);
+  },
+});
+
+const idLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // Timeframe
+  max: 150, // Max requests per timeframe per ip
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  handler: (request, response, next, options) => {
+    writeErrorLog(
+      `Too many ID requests`,
+      `IP ${request.client._peername.address}`
+    );
+    return response.status(options.statusCode).send(options.message);
+  },
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // Timeframe
+  max: 25, // Max requests per timeframe per ip
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  handler: (request, response, next, options) => {
+    writeErrorLog(
+      `Too many misc API requests`,
+      `IP ${request.client._peername.address}`
+    );
+    return response.status(options.statusCode).send(options.message);
+  },
+});
 
 // Use the crypto library for encryption and decryption
 const crypto = require("crypto");
@@ -134,7 +178,10 @@ let getPicture = (sciName) => {
 };
 
 let writelog = (req, json) => {
-  let application = req.body.application;
+  let application;
+  if (req.body.application) {
+    application = sanitize(req.body.application);
+  }
 
   if (!fs.existsSync(`${logdir}/${application}_${dateStr(`d`)}.csv`)) {
     fs.appendFileSync(
@@ -152,19 +199,14 @@ let writelog = (req, json) => {
   // TODO
   // Add encrypted IP (req.client._peername.address)
 
-  let row = `${dateStr(`s`)},${req.files.length}`;
+  let row = `${dateStr(`s`)},${
+    Array.isArray(req.files) ? req.files.length : 0
+  }`;
 
-  // if (!req.body.application) {
-  //   for (let i = 0; i < json.predictions.length; i++) {
-  //     const prediction = json.predictions[i];
-  //     row += `,"${prediction.taxon.name}","${prediction.taxon.groupName}",${prediction.probability}`;
-  //   }
-  // } else {
   for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
     const prediction = json.predictions[0].taxa.items[i];
     row += `,"${prediction.name}","${prediction.groupName}",${prediction.probability}`;
   }
-  // }
 
   row += "\n";
 
@@ -172,7 +214,7 @@ let writelog = (req, json) => {
 };
 
 let getName = async (sciName, force = false) => {
-  let unencoded_jsonfilename = `${taxadir}/${sciName}.json`;
+  let unencoded_jsonfilename = `${taxadir}/${sanitize(sciName)}.json`;
   let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`;
 
   // --- Take it easy on the renaming to avoid memory peaks
@@ -440,8 +482,13 @@ let saveImagesAndGetToken = async (req) => {
     counter += 1;
 
     // Upload to uploads folder
-    fs.writeFile(`${uploadsdir}/${filename}`, encrypted_file, (err) => {
-      if (err) throw err;
+    fs.writeFile(`${uploadsdir}/${filename}`, encrypted_file, (error) => {
+      if (error) {
+        writeErrorLog(
+          `Failed to write file "${uploadsdir}/${filename}".`,
+          error
+        );
+      }
       console.log("The file has been saved!");
     });
   }
@@ -531,115 +578,29 @@ let getId = async (req) => {
 
     let recognition;
 
-    // Drop the old API
-    if (!req.body.application && false) {
-      console.log("NEEEE");
-
-      recognition = await axios
-        .post(
-          "https://artsdatabanken.biodiversityanalysis.eu/v1/observation/identify/noall/auth",
-          form,
-
-          {
-            headers: {
-              ...formHeaders,
-              Authorization: "Basic " + process.env.LEGACY_TOKEN,
-            },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity,
-          }
-        )
-        .catch((error) => {
-          writeErrorLog(`Naturalis API v1 (legacy) lookup failed`, error);
-          throw "";
-        });
-
-      // get the best 5
-      recognition.data.predictions = recognition.data.predictions.slice(0, 5);
-
-      // Check against list of misspellings and unknown synonyms
-      recognition.data.predictions = recognition.data.predictions.map(
-        (pred) => {
-          pred.taxon.name =
-            taxonMapper.taxa[pred.taxon.name] || pred.taxon.name;
-          return pred;
+    recognition = await axios
+      .post(
+        `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
+        form,
+        {
+          headers: {
+            ...formHeaders,
+          },
+          auth: {
+            username: process.env.NATURALIS_USERNAME,
+            password: process.env.NATURALIS_PASSWORD,
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
         }
-      );
-
-      // Get the data from the APIs (including accepted names of synonyms)
-      for (let pred of recognition.data.predictions) {
-        try {
-          let nameResult = await getName(pred.taxon.name);
-          pred.taxon.vernacularName = nameResult.vernacularName;
-          pred.taxon.groupName = nameResult.groupName;
-          pred.taxon.scientificNameID = nameResult.scientificNameID;
-          pred.taxon.name = nameResult.scientificName;
-          pred.taxon.infoUrl = nameResult.infoUrl;
-          pred.taxon.picture = getPicture(nameResult.scientificName);
-        } catch (error) {
-          writeErrorLog(
-            `Error getting name for ${
-              pred.taxon.name
-            }. You can force a recache on ${encodeURI(
-              "https://ai.test.artsdatabanken.no/cachetaxon/" + pred.taxon.name
-            )}.`,
-            error
-          );
-        }
-      }
-
-      // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
-      // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
-
-      // if there are duplicates, add the probabilities and delete the duplicates
-      for (let pred of recognition.data.predictions) {
-        let totalProbability = recognition.data.predictions
-          .filter((p) => p.taxon.name === pred.taxon.name)
-          .reduce((total, p) => total + p.probability, 0);
-
-        if (totalProbability !== pred.probability) {
-          pred.probability = totalProbability;
-          recognition.data.predictions = recognition.data.predictions.filter(
-            (p) => p.taxon.name !== pred.taxon.name
-          );
-          recognition.data.predictions.unshift(pred);
-        }
-      }
-
-      // sort by the new probabilities
-      recognition.data.predictions = recognition.data.predictions.sort(
-        (a, b) => {
-          return b.probability - a.probability;
-        }
-      );
-      // -------------- end of duplicate checking code
-
-      return recognition.data;
-    } else {
-      recognition = await axios
-        .post(
-          `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
-          form,
-          {
-            headers: {
-              ...formHeaders,
-            },
-            auth: {
-              username: process.env.NATURALIS_USERNAME,
-              password: process.env.NATURALIS_PASSWORD,
-            },
-            maxContentLength: Infinity,
-            maxBodyLength: Infinity,
-          }
-        )
-        .catch((error) => {
-          writeErrorLog(
-            `Naturalis API v2 lookup with token ${token} failed`,
-            error
-          );
-          throw "";
-        });
-    }
+      )
+      .catch((error) => {
+        writeErrorLog(
+          `Naturalis API v2 lookup with token ${token} failed`,
+          error
+        );
+        throw "";
+      });
 
     if (
       !recognition.data.predictions[0].taxa ||
@@ -735,7 +696,7 @@ let getId = async (req) => {
   }
 };
 
-app.get("/taxonimage/*", (req, res) => {
+app.get("/taxonimage/*", apiLimiter, (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/taxonimage/", ""));
     res.status(200).send(getPicture(taxon));
@@ -745,7 +706,7 @@ app.get("/taxonimage/*", (req, res) => {
   }
 });
 
-app.get("/taxonimages", (req, res) => {
+app.get("/taxonimages", apiLimiter, (req, res) => {
   try {
     res.status(200).json(taxonPics);
   } catch (error) {
@@ -754,7 +715,7 @@ app.get("/taxonimages", (req, res) => {
   }
 });
 
-app.get("/taxonimages/view", (req, res) => {
+app.get("/taxonimages/view", apiLimiter, (req, res) => {
   try {
     let pics = Object.entries(taxonPics);
     pics.sort();
@@ -779,7 +740,7 @@ app.get("/taxonimages/view", (req, res) => {
   }
 });
 
-app.get("/cachetaxon/*", async (req, res) => {
+app.get("/cachetaxon/*", cacheLimiter, async (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
     let name = await getName(taxon, (force = true));
@@ -790,7 +751,7 @@ app.get("/cachetaxon/*", async (req, res) => {
   }
 });
 
-app.get("/refreshtaxonimages", async (req, res) => {
+app.get("/refreshtaxonimages", cacheLimiter, async (req, res) => {
   try {
     // Read the file first in case the fetches fail, so it can still be uploaded manually
     if (fs.existsSync(pictureFile)) {
@@ -804,7 +765,7 @@ app.get("/refreshtaxonimages", async (req, res) => {
   }
 });
 
-app.post("/", upload.array("image"), async (req, res) => {
+app.post("/", idLimiter, upload.array("image"), async (req, res) => {
   // Future simple token check
 
   // if (req.headers["authorization"] !== `Bearer ${process.env.AI_TOKEN}`) {
@@ -819,17 +780,17 @@ app.post("/", upload.array("image"), async (req, res) => {
     writelog(req, json);
 
     if (req.body.application === undefined) {
-      json.predictions[0].probability = 0.5;
-      json.predictions[0].taxon = {};
-      json.predictions[0].taxon.vernacularName = "Denne versjonen er utdatert";
-      json.predictions[0].taxon.name = "Vennligst oppdater Artsorakelet";
+      json = simplifyJson(json);
+      json.predictions = [{}].concat(json.predictions);
     }
 
-    // if (req.body.application === undefined) {
-    //   res.status(200).json(simplifyJson(json));
-    // } else {
+    json.predictions[0].probability = 1;
+    json.predictions[0].taxon = {
+      vernacularName: "*** Utdatert versjon ***",
+      name: "Vennligst oppdater Artsorakelet via app store, eller Ctrl-Shift-R på pc",
+    };
+
     res.status(200).json(json);
-    // }
 
     // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
     if (json.predictions[0].taxa) {
@@ -854,7 +815,7 @@ app.post("/", upload.array("image"), async (req, res) => {
   }
 });
 
-app.post("/save", upload.array("image"), async (req, res) => {
+app.post("/save", apiLimiter, upload.array("image"), async (req, res) => {
   // image saving request from the orakel service
   try {
     json = await saveImagesAndGetToken(req);
@@ -864,13 +825,13 @@ app.post("/save", upload.array("image"), async (req, res) => {
   }
 });
 
-app.get("/", (req, res) => {
+app.get("/", apiLimiter, (req, res) => {
   fs.stat("./server.js", function (err, stats) {
     res.status(200).send(`Aiai! <hr/> (${dateStr("s", stats.mtime)})`);
   });
 });
 
-app.get("/image/*", (req, res) => {
+app.get("/image/*", apiLimiter, (req, res) => {
   // image request from the orakel service
   // On the form /image/id&password
 
@@ -922,11 +883,11 @@ app.get("/image/*", (req, res) => {
 });
 
 // --- Path that Azure uses to check health, prevents 404 in the logs
-app.get("/robots933456.txt", (req, res) => {
+app.get("/robots933456.txt", apiLimiter, (req, res) => {
   res.status(200).send("Hi, Azure");
 });
 
 // --- Serve a favicon, prevents 404 in the logs
-app.use("/favicon.ico", express.static("favicon.ico"));
+app.use("/favicon.ico", apiLimiter, express.static("favicon.ico"));
 
 app.listen(port, console.log(`Server now running on port ${port}`));
