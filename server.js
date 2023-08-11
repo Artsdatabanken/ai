@@ -818,10 +818,7 @@ app.post("/", upload.array("image"), async (req, res) => {
     // Write to the log
     writelog(req, json);
 
-    if (
-      req.body.application === undefined ||
-      req.body.application === "Artsorakel 3.1.0"
-    ) {
+    if (req.body.application === undefined) {
       json.predictions[0].probability = 0.5;
       json.predictions[0].taxon = {};
       json.predictions[0].taxon.vernacularName = "Denne versjonen er utdatert";
