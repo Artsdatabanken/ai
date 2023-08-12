@@ -899,7 +899,7 @@ app.get("/loglist/*", cacheLimiter, (req, res) => {
   }
 });
 
-app.get("/getlog/*", cacheLimiter, (req, res) => {
+app.get("/getlog/*", idLimiter, (req, res) => {
   const token = process.env.SP_TOKEN;
   let [requestToken, filename] = req.originalUrl
     .replace("/getlog/", "")
