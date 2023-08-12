@@ -784,7 +784,6 @@ app.post("/", idLimiter, upload.array("image"), async (req, res) => {
       json.predictions = [{}].concat(json.predictions);
     }
 
-
     // ---- For now, if communicating with the test api, it is new enough not to have to update
     // json.predictions[0].probability = 1;
     // json.predictions[0].taxon = {
