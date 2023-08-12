@@ -27,7 +27,7 @@ const cacheLimiter = rateLimit({
 
 const idLimiter = rateLimit({
   windowMs: 5 * 60 * 1000, // Timeframe
-  max: 150, // Max requests per timeframe per ip
+  max: 250, // Max requests per timeframe per ip
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   handler: (request, response, next, options) => {
