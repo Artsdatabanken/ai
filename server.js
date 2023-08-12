@@ -883,6 +883,41 @@ app.get("/image/*", apiLimiter, (req, res) => {
   });
 });
 
+app.get("/loglist/*", cacheLimiter, (req, res) => {
+  const token = process.env.SP_TOKEN;
+  let requestToken = req.originalUrl.replace("/loglist/", "");
+  if (requestToken !== token) {
+    res.status(403).send(`Nope`);
+  } else {
+    var json = [];
+    fs.readdir("./log", function (err, files) {
+      files.forEach(function (file, index) {
+        json.push(file);
+      });
+      res.status(200).json(json);
+    });
+  }
+});
+
+app.get("/getlog/*", cacheLimiter, (req, res) => {
+  const token = process.env.SP_TOKEN;
+  let [requestToken, filename] = req.originalUrl
+    .replace("/getlog/", "")
+    .split("/");
+
+  if (requestToken !== token) {
+    res.status(403).end();
+  } else {
+    const file = `./log/${decodeURI(filename)}`;
+    if (fs.existsSync(file)) {
+      res.download(file);
+    } else {
+      res.status(404).end();
+    }
+  }
+});
+
+
 // --- Path that Azure uses to check health, prevents 404 in the logs
 app.get("/robots933456.txt", apiLimiter, (req, res) => {
   res.status(200).send("Hi, Azure");
