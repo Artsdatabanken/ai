@@ -11,7 +11,6 @@ const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
 const sanitize = require("sanitize-filename");
 
-
 const cacheLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // Timeframe
   max: 30, // Max requests per timeframe per ip
@@ -231,16 +230,27 @@ let getName = async (sciName, force = false) => {
     });
   }
 
-  if (!force && fs.existsSync(jsonfilename)) {
-    try {
-      return JSON.parse(fs.readFileSync(jsonfilename));
-    } catch (error) {
-      writeErrorLog(`Could not parse "${jsonfilename}"`, error);
+  // --- Return the cached json if it exists, and it parses, and no recache is forced. In all other cases, try to delete that cache.
+  if (fs.existsSync(jsonfilename)) {
+    if (!force) {
+      try {
+        return JSON.parse(fs.readFileSync(jsonfilename));
+      } catch (error) {
+        writeErrorLog(`Could not parse "${jsonfilename}"`, error);
 
+        fs.unlink(jsonfilename, function (error) {
+          if (error)
+            writeErrorLog(
+              `Could not delete "${jsonfilename}" after JSON parse failed`,
+              error
+            );
+        });
+      }
+    } else {
       fs.unlink(jsonfilename, function (error) {
         if (error)
           writeErrorLog(
-            `Could not delete "${jsonfilename}" after JSON parse failed`,
+            `Could not delete "${jsonfilename}" while forcing recache`,
             error
           );
       });
