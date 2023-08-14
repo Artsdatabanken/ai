@@ -217,26 +217,44 @@ let getName = async (sciName, force = false) => {
   let unencoded_jsonfilename = `${taxadir}/${sanitize(sciName)}.json`;
   let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`;
 
-  // --- Take it easy on the renaming to avoid memory peaks
   if (
     fs.existsSync(unencoded_jsonfilename) &&
     unencoded_jsonfilename !== jsonfilename
   ) {
-    if (Math.random() < 0.05) {
-      fs.rename(unencoded_jsonfilename, jsonfilename, function (error) {
+    fs.unlink(unencoded_jsonfilename, function (error) {
+      if (error)
+        writeErrorLog(
+          `Could not delete "${unencoded_jsonfilename}" while updating old filename`,
+          error
+        );
+    });
+  }
+
+  // --- Return the cached json if it exists, and it parses, and no recache is forced. In all other cases, try to delete that cache.
+  if (fs.existsSync(jsonfilename)) {
+    if (!force) {
+      try {
+        return JSON.parse(fs.readFileSync(jsonfilename));
+      } catch (error) {
+        writeErrorLog(`Could not parse "${jsonfilename}"`, error);
+
+        fs.unlink(jsonfilename, function (error) {
+          if (error)
+            writeErrorLog(
+              `Could not delete "${jsonfilename}" after JSON parse failed`,
+              error
+            );
+        });
+      }
+    } else {
+      fs.unlink(jsonfilename, function (error) {
         if (error)
           writeErrorLog(
-            `Could not rename "${unencoded_jsonfilename}" to "${jsonfilename}"`,
+            `Could not delete "${jsonfilename}" while forcing recache`,
             error
           );
       });
-    } else {
-      return JSON.parse(fs.readFileSync(unencoded_jsonfilename));
     }
-  }
-
-  if (!force && fs.existsSync(jsonfilename)) {
-    return JSON.parse(fs.readFileSync(jsonfilename));
   }
 
   let nameResult = {
