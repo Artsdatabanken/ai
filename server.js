@@ -217,26 +217,33 @@ let getName = async (sciName, force = false) => {
   let unencoded_jsonfilename = `${taxadir}/${sanitize(sciName)}.json`;
   let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`;
 
-  // --- Take it easy on the renaming to avoid memory peaks
   if (
     fs.existsSync(unencoded_jsonfilename) &&
     unencoded_jsonfilename !== jsonfilename
   ) {
-    if (Math.random() < 0.05) {
-      fs.rename(unencoded_jsonfilename, jsonfilename, function (error) {
-        if (error)
-          writeErrorLog(
-            `Could not rename "${unencoded_jsonfilename}" to "${jsonfilename}"`,
-            error
-          );
-      });
-    } else {
-      return JSON.parse(fs.readFileSync(unencoded_jsonfilename));
-    }
+    fs.unlink(unencoded_jsonfilename, function (error) {
+      if (error)
+        writeErrorLog(
+          `Could not delete "${unencoded_jsonfilename}" while updating old filename`,
+          error
+        );
+    });
   }
 
   if (!force && fs.existsSync(jsonfilename)) {
-    return JSON.parse(fs.readFileSync(jsonfilename));
+    try {
+      return JSON.parse(fs.readFileSync(jsonfilename));
+    } catch (error) {
+      writeErrorLog(`Could not parse "${jsonfilename}"`, error);
+
+      fs.unlink(jsonfilename, function (error) {
+        if (error)
+          writeErrorLog(
+            `Could not delete "${jsonfilename}" after JSON parse failed`,
+            error
+          );
+      });
+    }
   }
 
   let nameResult = {
@@ -916,7 +923,6 @@ app.get("/getlog/*", idLimiter, (req, res) => {
     }
   }
 });
-
 
 // --- Path that Azure uses to check health, prevents 404 in the logs
 app.get("/robots933456.txt", apiLimiter, (req, res) => {
