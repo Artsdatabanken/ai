@@ -844,8 +844,14 @@ app.post("/save", apiLimiter, upload.array("image"), async (req, res) => {
 });
 
 app.get("/", apiLimiter, (req, res) => {
+  let v = "Gitless";
+  const gitfile = ".git/FETCH_HEAD";
+  if (fs.existsSync(gitfile)) {
+    v = fs.readFileSync(gitfile);
+  }
+
   fs.stat("./server.js", function (err, stats) {
-    res.status(200).send(`Aiaiai! <hr/> (${dateStr("s", stats.mtime)})`);
+    res.status(200).send(`<h3>Aiaiai!</h3><hr/> ${v}<br/>${dateStr("s", stats.mtime)}`);
   });
 });
 
