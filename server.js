@@ -847,11 +847,13 @@ app.get("/", apiLimiter, (req, res) => {
   let v = "Gitless";
   const gitfile = ".git/FETCH_HEAD";
   if (fs.existsSync(gitfile)) {
-    v = fs.readFileSync(gitfile).split(" ")[0];
+    v = fs.readFileSync(gitfile).toString().split("\t")[0];
   }
 
   fs.stat("./server.js", function (err, stats) {
-    res.status(200).send(`<h3>Aiaiai!</h3><hr/> ${v}<br/>${dateStr("s", stats.mtime)}`);
+    res
+      .status(200)
+      .send(`<h3>Aiaiai!</h3><hr/> ${v}<br/>${dateStr("s", stats.mtime)}`);
   });
 });
 
