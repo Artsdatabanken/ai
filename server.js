@@ -845,7 +845,7 @@ app.post("/save", apiLimiter, upload.array("image"), async (req, res) => {
 
 app.get("/", apiLimiter, (req, res) => {
   let v = "Gitless";
-  const gitfile = ".git/FETCH_HEAD";
+  const gitfile = ".git/ORIG_HEAD";
   if (fs.existsSync(gitfile)) {
     v = fs.readFileSync(gitfile);
   }
