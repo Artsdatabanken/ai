@@ -169,6 +169,9 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 let getPicture = (sciName) => {
+  // Special characters do not work in all cases
+  sciName = sciName.replaceAll("×", "x");
+
   let pic = taxonPics[sciName];
   if (pic) {
     return `https://artsdatabanken.no/Media/${pic}?mode=128x128`;
