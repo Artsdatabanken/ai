@@ -170,7 +170,7 @@ const upload = multer({ storage: storage });
 
 let getPicture = (sciName) => {
   // Special characters do not work in all cases
-  sciName = sciName.replaceAll("×", "x");
+  sciName = sciName.replaceAll("×", "x").replaceAll("ë", "e");
 
   let pic = taxonPics[sciName];
   if (pic) {
