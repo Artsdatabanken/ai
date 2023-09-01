@@ -31,3 +31,8 @@ stages:
         repository: 'artsdatabanken/ai'
         command: 'push'
         tags: 'azure'
+    - task: AzureAppServiceManage@0
+      inputs:
+        azureSubscription: 'prod-deploy-code'
+        Action: 'Restart Azure App Service'
+        WebAppName: 'adb-prod-ai-as'
