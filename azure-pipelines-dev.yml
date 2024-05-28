@@ -3,36 +3,31 @@
 # https://docs.microsoft.com/azure/devops/pipelines/languages/docker
 
 trigger:
-  - dev
+- dev
 
 resources:
-  - repo: self
+- repo: self
 
 stages:
-  - stage: Build
-    displayName: Build image
-    jobs:
-      - job: Build
-        displayName: Build
-        pool:
-          vmImage: ubuntu-latest
-        steps:
-          - task: Docker@2
-            displayName: Build an image
-            inputs:
-              containerRegistry: "DockerHub"
-              repository: "artsdatabanken/ai"
-              command: "build"
-              Dockerfile: "**/Dockerfile"
-              tags: "azure-test"
-          - task: Docker@2
-            inputs:
-              containerRegistry: "DockerHub"
-              repository: "artsdatabanken/ai"
-              command: "push"
-              tags: "azure-test"
-          - task: AzureAppServiceManage@0
-            inputs:
-              azureSubscription: "test-deploy-code"
-              Action: "Restart Azure App Service"
-              WebAppName: "adb-test-ai-as"
+- stage: Build
+  displayName: Build image
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: Docker@2
+      displayName: Build an image
+      inputs:
+        containerRegistry: 'DockerHub'
+        repository: 'artsdatabanken/ai'
+        command: 'build'
+        Dockerfile: '**/Dockerfile'
+        tags: 'azure-test'
+    - task: Docker@2
+      inputs:
+        containerRegistry: 'DockerHub'
+        repository: 'artsdatabanken/ai'
+        command: 'push'
+        tags: 'azure-test'

@@ -1,5 +1,4 @@
 /npm-debug.log
-/uploads
 
 # dependencies
 /node_modules
@@ -23,5 +22,9 @@ log/*.json
 log/*.csv
 log/*.txt
 
+resources/taxoncache
+resources/taxonPictures.json
+/uploads
+
+
 config/secrets.env
-log/taxonPictures.js

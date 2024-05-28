@@ -16,11 +16,15 @@ RUN npm install
 
 RUN groupadd --gid 1007 dockerrunner && useradd -r --uid 1007 -g dockerrunner dockerrunner
 RUN mkdir -p log && touch log/log.txt && chown dockerrunner log/log.txt
+
+RUN mkdir -p resources
+RUN mkdir -p resources/taxoncache
+
+RUN mkdir -p uploads
+
+
 #USER dockerrunner
 
 COPY . .
 
-RUN chown dockerrunner log/
-# RUN chown dockerrunner log/taxonPictures.js
-
-CMD [ "npm", "start" ]
+CMD [ "node", "server.js" ]
