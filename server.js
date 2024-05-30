@@ -622,7 +622,7 @@ let retrieveRecognition = async (req, token) => {
     });
 };
 
-let augmentRecognition = async (recognition) => {
+let augmentRecognition = async (req, recognition) => {
   if (
     !recognition.data.predictions[0].taxa ||
     !recognition.data.predictions[0].taxa.items
@@ -652,6 +652,7 @@ let augmentRecognition = async (recognition) => {
   });
 
   // Get the data from the APIs (including accepted names of synonyms)
+
   for (let pred of taxa) {
     try {
       let nameResult;
@@ -755,7 +756,7 @@ let getId = async (req) => {
 
     const results = await Promise.all(promises);
 
-    let recognition = await augmentRecognition(results[0]);
+    let recognition = await augmentRecognition(req, results[0]);
     recognition.application = req.body.application;
 
     recognition.alerts = getAlerts(results[results.length - 1]);
