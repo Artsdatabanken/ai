@@ -718,8 +718,9 @@ let getAlerts = (recognition) => {
     (prediction) => prediction.probability > 0.02
   );
 
+
   taxa = taxa.filter((taxon) => {
-    taxonAlerts["Pest species"].includes(taxon.scientific_name);
+    return taxonAlerts["Pest species"].includes(taxon.scientific_name);
   });
 
   taxa = taxa.map((taxon) => {
@@ -756,13 +757,17 @@ let getId = async (req) => {
 
     const results = await Promise.all(promises);
 
+
+
     let recognition = await augmentRecognition(req, results[0]);
     recognition.application = req.body.application;
+
 
     recognition.alerts = getAlerts(results[results.length - 1]);
 
     return recognition;
   } catch (error) {
+    writeErrorLog(`Error while running getId()`, error);
     throw error;
   }
 };
