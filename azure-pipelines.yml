@@ -31,3 +31,9 @@ stages:
         repository: 'artsdatabanken/ai'
         command: 'push'
         tags: 'azure-test'
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'prod-deploy-code'
+        scriptType: 'pscore'
+        scriptLocation: 'inlineScript'
+        inlineScript: 'az webapp restart --name adb-prod-ai-as --resource-group adb-prod-ai-rg'
