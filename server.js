@@ -203,6 +203,9 @@ app.use(function (req, res, next) {
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
+// Serve OpenAPI documentation
+app.use('/api-docs', express.static('openapi.yaml'));
+
 /**
  * Retrieves a picture URL for a given scientific name.
  * @param {string} sciName - The scientific name of the species.
