@@ -1,3 +1,22 @@
+/**
+ * @fileoverview Main server file for the AI-powered species identification API.
+ * This API provides endpoints for image-based species identification, taxon information retrieval,
+ * and various utility functions related to species data management.
+ * 
+ * @requires axios
+ * @requires form-data
+ * @requires fs
+ * @requires express
+ * @requires body-parser
+ * @requires multer
+ * @requires cors
+ * @requires dotenv
+ * @requires ./resources/taxonMapping
+ * @requires node-cron
+ * @requires express-rate-limit
+ * @requires sanitize-filename
+ */
+
 const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
@@ -10,6 +29,11 @@ const taxonMapper = require("./resources/taxonMapping");
 const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
 const sanitize = require("sanitize-filename");
+
+/**
+ * Rate limiter for cache-related requests.
+ * @type {Function}
+ */
 
 const cacheLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // Timeframe
@@ -179,6 +203,11 @@ app.use(function (req, res, next) {
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
+/**
+ * Retrieves a picture URL for a given scientific name.
+ * @param {string} sciName - The scientific name of the species.
+ * @returns {string|null} The URL of the picture, or null if not found.
+ */
 let getPicture = (sciName) => {
   // Special characters do not work in all cases
   sciName = sciName.replaceAll("×", "x").replaceAll("ë", "e");
@@ -841,6 +870,20 @@ app.get("/refreshtaxonimages", cacheLimiter, async (req, res) => {
   }
 });
 
+/**
+ * @api {post} / Identify species from image
+ * @apiName IdentifySpecies
+ * @apiGroup Identification
+ * 
+ * @apiDescription Identifies species from uploaded images using AI.
+ * 
+ * @apiParam {File} image Image file(s) to be analyzed.
+ * @apiParam {String} [application] Name of the application making the request.
+ * 
+ * @apiSuccess {Object} json Identification results including predictions and taxa information.
+ * 
+ * @apiError (500) {String} InternalServerError An error occurred during processing.
+ */
 app.post("/", idLimiter, upload.array("image"), async (req, res) => {
   // Future simple token check
 
