@@ -2,7 +2,7 @@
  * @fileoverview Main server file for the AI-powered species identification API.
  * This API provides endpoints for image-based species identification, taxon information retrieval,
  * and various utility functions related to species data management.
- * 
+ *
  * @requires axios
  * @requires form-data
  * @requires fs
@@ -204,7 +204,7 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 // Serve OpenAPI documentation
-app.use('/api-docs', express.static('openapi.yaml'));
+app.use("/api-docs", express.static("openapi.yaml"));
 
 /**
  * Retrieves a picture URL for a given scientific name.
@@ -719,27 +719,25 @@ let augmentRecognition = async (req, recognition) => {
   recognition.data.predictions[0].taxa.items = taxa;
 
   // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
-  // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
-
   // if there are duplicates, add the probabilities and delete the duplicates
-  // for (let pred of recognition.data.predictions) {
-  //   let totalProbability = recognition.data.predictions
-  //     .filter((p) => p.name === pred.name)
-  //     .reduce((total, p) => total + p.probability, 0);
+  for (let pred of recognition.data.predictions) {
+    let totalProbability = recognition.data.predictions
+      .filter((p) => p.name === pred.name)
+      .reduce((total, p) => total + p.probability, 0);
 
-  //   if (totalProbability !== pred.probability) {
-  //     pred.probability = totalProbability;
-  //     recognition.data.predictions = recognition.data.predictions.filter(
-  //       (p) => p.name !== pred.name
-  //     );
-  //     recognition.data.predictions.unshift(pred);
-  //   }
-  // }
+    if (totalProbability !== pred.probability) {
+      pred.probability = totalProbability;
+      recognition.data.predictions = recognition.data.predictions.filter(
+        (p) => p.name !== pred.name
+      );
+      recognition.data.predictions.unshift(pred);
+    }
+  }
 
-  // // sort by the new probabilities
-  // recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
-  //   return b.probability - a.probability;
-  // });
+  // sort by the new probabilities
+  recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
+    return b.probability - a.probability;
+  });
   // -------------- end of duplicate checking code
 
   return recognition.data;
@@ -749,7 +747,6 @@ let getAlerts = (recognition) => {
   let taxa = recognition.data.predictions[0].taxa.items.filter(
     (prediction) => prediction.probability > 0.02
   );
-
 
   taxa = taxa.filter((taxon) => {
     return taxonAlerts["Pest species"].includes(taxon.scientific_name);
@@ -789,11 +786,8 @@ let getId = async (req) => {
 
     const results = await Promise.all(promises);
 
-
-
     let recognition = await augmentRecognition(req, results[0]);
     recognition.application = req.body.application;
-
 
     recognition.alerts = getAlerts(results[results.length - 1]);
 
@@ -877,14 +871,14 @@ app.get("/refreshtaxonimages", cacheLimiter, async (req, res) => {
  * @api {post} / Identify species from image
  * @apiName IdentifySpecies
  * @apiGroup Identification
- * 
+ *
  * @apiDescription Identifies species from uploaded images using AI.
- * 
+ *
  * @apiParam {File} image Image file(s) to be analyzed.
  * @apiParam {String} [application] Name of the application making the request.
- * 
+ *
  * @apiSuccess {Object} json Identification results including predictions and taxa information.
- * 
+ *
  * @apiError (500) {String} InternalServerError An error occurred during processing.
  */
 app.post("/", idLimiter, upload.array("image"), async (req, res) => {
