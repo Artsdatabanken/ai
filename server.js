@@ -1,22 +1,3 @@
-/**
- * @fileoverview Main server file for the AI-powered species identification API.
- * This API provides endpoints for image-based species identification, taxon information retrieval,
- * and various utility functions related to species data management.
- *
- * @requires axios
- * @requires form-data
- * @requires fs
- * @requires express
- * @requires body-parser
- * @requires multer
- * @requires cors
- * @requires dotenv
- * @requires ./resources/taxonMapping
- * @requires node-cron
- * @requires express-rate-limit
- * @requires sanitize-filename
- */
-
 const axios = require("axios");
 const FormData = require("form-data");
 const fs = require("fs");
@@ -25,15 +6,10 @@ const bodyParser = require("body-parser");
 const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const taxonMapper = require("./resources/taxonMapping");
+const taxonMapper = require("./taxonMapping");
 const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
 const sanitize = require("sanitize-filename");
-
-/**
- * Rate limiter for cache-related requests.
- * @type {Function}
- */
 
 const cacheLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // Timeframe
@@ -77,6 +53,23 @@ const apiLimiter = rateLimit({
   },
 });
 
+const authLimiter = rateLimit({
+  windowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW || 15) * 60 * 1000, // Default: 15 minutes
+  max: parseInt(process.env.AUTH_RATE_LIMIT_MAX || 5), // Default: 5 attempts per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (request, response, next, options) => {
+    writeErrorLog(
+      `Too many authentication attempts`,
+      `IP ${request.client._peername.address}`
+    );
+    return response.status(options.statusCode).json({
+      error: "Too many authentication attempts. Please try again later.",
+      retryAfter: Math.round(options.windowMs / 1000)
+    });
+  },
+});
+
 // Use the crypto library for encryption and decryption
 const crypto = require("crypto");
 const encryption_algorithm = "aes-256-ctr";
@@ -84,20 +77,62 @@ const encryption_algorithm = "aes-256-ctr";
 const initVect = crypto.randomBytes(16);
 
 let appInsights = require("applicationinsights");
-const { off } = require("process");
-const { type } = require("os");
 
 // --- Reading env variables
 dotenv.config({ path: "./config/config.env" });
 dotenv.config({ path: "./config/secrets.env" });
 
+// --- Authentication Configuration
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+const TOKENS_FILE = './config/tokens.json';
+
+// Load tokens from file
+let validTokens = {};
+const loadTokens = () => {
+  try {
+    if (fs.existsSync(TOKENS_FILE)) {
+      const rawTokens = JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8'));
+      
+      // Validate tokens have required fields
+      validTokens = {};
+      let validCount = 0;
+      
+      for (const [token, data] of Object.entries(rawTokens)) {
+        if (data.application && data.name) {
+          // Set default enabled state if not specified
+          if (data.enabled === undefined) {
+            data.enabled = true;
+          }
+          validTokens[token] = data;
+          validCount++;
+        } else {
+          console.warn(`Token ${token.substring(0, 8)}... missing required fields (application, name). Skipping.`);
+        }
+      }
+      
+      console.log(`Loaded ${validCount} valid tokens from ${TOKENS_FILE}`);
+    } else {
+      console.warn(`Tokens file ${TOKENS_FILE} not found. Creating empty tokens file.`);
+      fs.writeFileSync(TOKENS_FILE, JSON.stringify({}, null, 2));
+    }
+  } catch (error) {
+    console.error('Error loading tokens file:', error);
+    validTokens = {};
+  }
+};
+
+// Load tokens on startup
+loadTokens();
+
+// Warn if no admin token is set
+if (!ADMIN_TOKEN) {
+  console.warn('WARNING: No ADMIN_TOKEN set. Admin functionality will be disabled.');
+}
+
 // --- Setting files and locations
 const logdir = "./log";
-const taxadir = "./resources/taxoncache";
-const resourcesdir = "./resources";
-
-const pictureFile = `${resourcesdir}/taxonPictures.json`;
-const alertsFile = `${resourcesdir}/taxonAlerts.json`;
+const taxadir = `${logdir}/taxa`;
+const pictureFile = `${logdir}/taxonPictures.json`;
 const uploadsdir = "./uploads";
 
 // --- Get the taxon picture ids from file on start
@@ -106,25 +141,34 @@ if (fs.existsSync(pictureFile)) {
   taxonPics = JSON.parse(fs.readFileSync(pictureFile));
 }
 
-// --- Get the taxon alerts from file on start
-var taxonAlerts = {};
-if (fs.existsSync(alertsFile)) {
-  taxonAlerts = JSON.parse(fs.readFileSync(alertsFile));
-}
-
 // --- Getting the date as a nice Norwegian-time string no matter where the server runs
 const dateStr = (resolution = `d`, date = false) => {
   if (!date) {
     date = new Date();
   }
 
-  let dateStr = date.toLocaleString("lt", { timeZone: "Europe/Oslo" });
+  let iso = date
+    .toLocaleString("en-CA", { timeZone: "Europe/Oslo", hour12: false })
+    .replace(", ", "T");
+  iso = iso.replace("T24", "T00");
+  iso += "." + date.getMilliseconds().toString().padStart(3, "0");
+  const lie = new Date(iso + "Z");
+  const offset = -(lie - date) / 60 / 1000;
 
-  if (resolution === `d`) {
-    return dateStr.split(" ")[0];
+  if (resolution === `m`) {
+    return `${new Date(date.getTime() - offset * 60 * 1000)
+      .toISOString()
+      .substring(0, 7)}`;
+  } else if (resolution === `s`) {
+    return `${new Date(date.getTime() - offset * 60 * 1000)
+      .toISOString()
+      .substring(0, 19)
+      .replace("T", " ")}`;
   }
 
-  return dateStr;
+  return `${new Date(date.getTime() - offset * 60 * 1000)
+    .toISOString()
+    .substring(0, 10)}`;
 };
 
 const writeErrorLog = (message, error) => {
@@ -141,25 +185,100 @@ const writeErrorLog = (message, error) => {
   }
 };
 
-// --- Make sure the resources directory exists
-if (!fs.existsSync(resourcesdir)) {
-  fs.mkdirSync(resourcesdir);
-}
-
-// --- Make sure the log directory exists
-if (!fs.existsSync(logdir)) {
-  fs.mkdirSync(logdir);
-}
-
-// --- Make sure the upload directory exists
-if (!fs.existsSync(uploadsdir)) {
-  fs.mkdirSync(uploadsdir);
-}
-
 // --- Make sure the taxon cache directory exists
 if (!fs.existsSync(taxadir)) {
   fs.mkdirSync(taxadir);
 }
+
+// --- Authentication Middleware Functions
+const authenticateAdminToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    writeErrorLog('Authentication failed: No token provided', `IP ${req.ip}`);
+    return res.status(401).json({ 
+      error: 'Access denied. No token provided.',
+      message: 'Please include a valid Bearer token in the Authorization header.' 
+    });
+  }
+
+  // Check if it's the admin token
+  if (token === ADMIN_TOKEN) {
+    req.auth = { type: 'admin', token: token, application: 'admin' };
+    return next();
+  }
+
+  writeErrorLog('Authentication failed: Invalid admin token', `IP ${req.ip}, Token: ${token.substring(0, 10)}...`);
+  return res.status(403).json({ 
+    error: 'Invalid token.',
+    message: 'The provided token is invalid or you do not have sufficient permissions.' 
+  });
+};
+
+const authenticateApiToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) {
+    writeErrorLog('Authentication failed: No token provided', `IP ${req.ip}`);
+    return res.status(401).json({ 
+      error: 'Access denied. No token provided.',
+      message: 'Please include a valid Bearer token in the Authorization header.' 
+    });
+  }
+
+  // Check if it's the admin token (full access)
+  if (token === ADMIN_TOKEN) {
+    req.auth = { type: 'admin', token: token, application: 'admin' };
+    return next();
+  }
+
+  // Check if it's a valid API token from the tokens file
+  if (validTokens[token] && validTokens[token].enabled === true) {
+    req.auth = { 
+      type: 'api', 
+      token: token, 
+      name: validTokens[token].name,
+      application: validTokens[token].application 
+    };
+    return next();
+  }
+
+  writeErrorLog('Authentication failed: Invalid token', `IP ${req.ip}, Token: ${token.substring(0, 10)}...`);
+  return res.status(403).json({ 
+    error: 'Invalid token.',
+    message: 'The provided token is invalid.' 
+  });
+};
+
+// Function to reload tokens from file (useful for token management)
+const reloadTokens = () => {
+  loadTokens();
+};
+
+// Function to save tokens to file
+const saveTokens = () => {
+  try {
+    // Ensure directory exists
+    const configDir = './config';
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(TOKENS_FILE, JSON.stringify(validTokens, null, 2));
+    return true;
+  } catch (error) {
+    console.error('Error saving tokens file:', error);
+    return false;
+  }
+};
+
+// Function to generate a secure random token
+const generateSecureToken = () => {
+  const crypto = require('crypto');
+  return crypto.randomBytes(32).toString('hex');
+};
 
 /** Filter for not logging requests for root url when success */
 var filteringAiFunction = (envelope, context) => {
@@ -203,14 +322,6 @@ app.use(function (req, res, next) {
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
-// Serve OpenAPI documentation
-app.use("/api-docs", express.static("openapi.yaml"));
-
-/**
- * Retrieves a picture URL for a given scientific name.
- * @param {string} sciName - The scientific name of the species.
- * @returns {string|null} The URL of the picture, or null if not found.
- */
 let getPicture = (sciName) => {
   // Special characters do not work in all cases
   sciName = sciName.replaceAll("×", "x").replaceAll("ë", "e");
@@ -223,15 +334,21 @@ let getPicture = (sciName) => {
   return null;
 };
 
-let writelog = (req, json) => {
+let writelog = (req, json, auth = null) => {
   let application;
-  if (req.body.application) {
+  
+  // Prefer application from token (more secure), fallback to request body
+  if (auth && auth.application) {
+    application = sanitize(auth.application);
+  } else if (req.body.application) {
     application = sanitize(req.body.application);
   }
 
-  if (!fs.existsSync(`${logdir}/${application}_${dateStr(`d`)}.csv`)) {
+  let logPrefix = application;
+
+  if (!fs.existsSync(`${logdir}/${logPrefix}_${dateStr(`d`)}.csv`)) {
     fs.appendFileSync(
-      `${logdir}/${application}_${dateStr(`d`)}.csv`,
+      `${logdir}/${logPrefix}_${dateStr(`d`)}.csv`,
       "Datetime," +
         "Number_of_pictures," +
         "Result_1_name,Result_1_group,Result_1_probability," +
@@ -241,9 +358,6 @@ let writelog = (req, json) => {
         "Result_5_name,Result_5_group,Result_5_probability\n"
     );
   }
-
-  // TODO
-  // Add encrypted IP (req.client._peername.address)
 
   let row = `${dateStr(`s`)},${
     Array.isArray(req.files) ? req.files.length : 0
@@ -610,195 +724,370 @@ let refreshtaxonimages = async () => {
   return Object.keys(taxa).length;
 };
 
-let retrieveRecognition = async (req, token) => {
-  const form = new FormData();
-  const formHeaders = form.getHeaders();
-  const receivedParams = Object.keys(req.body);
-
-  receivedParams.forEach((key, index) => {
-    form.append(key, req.body[key]);
-  });
-
-  var stream = require("stream");
-
-  for (const file of req.files) {
-    var bufferStream = new stream.PassThrough();
-    bufferStream.end(file.buffer);
-    form.append("image", bufferStream, {
-      filename: "" + Date.now() + "." + file.mimetype.split("image/").pop(),
-    });
-  }
-
-  return axios
-    .post(
-      `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
-      form,
-      {
-        headers: {
-          ...formHeaders,
-        },
-        auth: {
-          username: process.env.NATURALIS_USERNAME,
-          password: process.env.NATURALIS_PASSWORD,
-        },
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
-      }
-    )
-    .catch((error) => {
-      writeErrorLog(
-        `Naturalis API v2 lookup with token ${token} failed`,
-        error
-      );
-      throw "";
-    });
-};
-
-let augmentRecognition = async (req, recognition) => {
-  if (
-    !recognition.data.predictions[0].taxa ||
-    !recognition.data.predictions[0].taxa.items
-  ) {
-    throw `Naturalis API v2 lookup gave no predictions.\n${JSON.stringify(
-      recognition.data
-    )}`;
-  }
-
-  let taxa = recognition.data.predictions[0].taxa.items;
-
-  // get the best 5
-  taxa = taxa.slice(0, 5);
-  filteredTaxa = taxa.filter((taxon) => taxon.probability >= 0.02);
-
-  if (filteredTaxa.length) {
-    taxa = filteredTaxa;
-  } else {
-    taxa = taxa.slice(0, 2);
-  }
-
-  // Check against list of misspellings and unknown synonyms
-  taxa = taxa.map((pred) => {
-    pred.scientific_name =
-      taxonMapper.taxa[pred.scientific_name] || pred.scientific_name;
-    return pred;
-  });
-
-  // Get the data from the APIs (including accepted names of synonyms)
-
-  for (let pred of taxa) {
-    try {
-      let nameResult;
-      if (
-        req.body.application &&
-        req.body.application.toLowerCase() === "artsobservasjoner"
-      ) {
-        pred.name = pred.scientific_name;
-      } else {
-        nameResult = await getName(pred.scientific_name);
-
-        pred.vernacularName = nameResult.vernacularName;
-        pred.groupName = nameResult.groupName;
-        pred.scientificNameID = nameResult.scientificNameID;
-        pred.name = nameResult.scientificName;
-        pred.infoUrl = nameResult.infoUrl;
-      }
-
-      pred.picture = getPicture(pred.scientific_name);
-    } catch (error) {
-      writeErrorLog(
-        `Error while processing getName(${
-          pred.scientific_name
-        }). You can force a recache on ${encodeURI(
-          "https://ai.test.artsdatabanken.no/cachetaxon/" + pred.scientific_name
-        )}.`,
-        error
-      );
-    }
-  }
-
-  recognition.data.predictions[0].taxa.items = taxa;
-
-  // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
-  // if there are duplicates, add the probabilities and delete the duplicates
-  for (let pred of recognition.data.predictions) {
-    let totalProbability = recognition.data.predictions
-      .filter((p) => p.name === pred.name)
-      .reduce((total, p) => total + p.probability, 0);
-
-    if (totalProbability !== pred.probability) {
-      pred.probability = totalProbability;
-      recognition.data.predictions = recognition.data.predictions.filter(
-        (p) => p.name !== pred.name
-      );
-      recognition.data.predictions.unshift(pred);
-    }
-  }
-
-  // sort by the new probabilities
-  recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
-    return b.probability - a.probability;
-  });
-  // -------------- end of duplicate checking code
-
-  return recognition.data;
-};
-
-let getAlerts = (recognition) => {
-  let taxa = recognition.data.predictions[0].taxa.items.filter(
-    (prediction) => prediction.probability > 0.02
-  );
-
-  taxa = taxa.filter((taxon) => {
-    return taxonAlerts["Pest species"].includes(taxon.scientific_name);
-  });
-
-  taxa = taxa.map((taxon) => {
-    taxon.alert = {
-      type: "pest",
-      message:
-        "Pest species in Norway, mandatory reporting to the Norwegian Food Safety Authority",
-    };
-    return taxon;
-  });
-
-  return taxa;
-};
-
 let getId = async (req) => {
-  const receivedParams = Object.keys(req.body);
-
   try {
-    let tokens = [];
-    if (
-      !receivedParams.model ||
-      !receivedParams.model.toLowerCase() === "global"
-    ) {
-      tokens.push(process.env.SP_TOKEN); // Norwegian token
-    }
+    const form = new FormData();
+    const formHeaders = form.getHeaders();
+    const receivedParams = Object.keys(req.body);
 
-    tokens.push(process.env.SH_TOKEN); // Shared token
-
-    let promises = [];
-
-    tokens.forEach((token) => {
-      promises.push(retrieveRecognition(req, token));
+    receivedParams.forEach((key, index) => {
+      form.append(key, req.body[key]);
     });
 
-    const results = await Promise.all(promises);
+    var stream = require("stream");
 
-    let recognition = await augmentRecognition(req, results[0]);
-    recognition.application = req.body.application;
+    for (const file of req.files) {
+      var bufferStream = new stream.PassThrough();
+      bufferStream.end(file.buffer);
+      form.append("image", bufferStream, {
+        filename: "" + Date.now() + "." + file.mimetype.split("image/").pop(),
+      });
+    }
 
-    recognition.alerts = getAlerts(results[results.length - 1]);
+    let token;
+    if (
+      receivedParams.model &&
+      receivedParams.model.toLowerCase() === "global"
+    ) {
+      token = process.env.SH_TOKEN; // Shared token
+    } else {
+      token = process.env.SP_TOKEN; // Specialized (Norwegian) token
+    }
 
-    return recognition;
+    let recognition;
+
+    recognition = await axios
+      .post(
+        `https://multi-source.identify.biodiversityanalysis.eu/v2/observation/identify/token/${token}`,
+        form,
+        {
+          headers: {
+            ...formHeaders,
+          },
+          auth: {
+            username: process.env.NATURALIS_USERNAME,
+            password: process.env.NATURALIS_PASSWORD,
+          },
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
+        }
+      )
+      .catch((error) => {
+        writeErrorLog(
+          `Naturalis API v2 lookup with token ${token} failed`,
+          error
+        );
+        throw "";
+      });
+
+    if (
+      !recognition.data.predictions[0].taxa ||
+      !recognition.data.predictions[0].taxa.items
+    ) {
+      throw `Naturalis API v2 lookup gave no predictions.\n${JSON.stringify(
+        recognition.data
+      )}`;
+    }
+
+    let taxa = recognition.data.predictions[0].taxa.items;
+
+    // get the best 5
+    taxa = taxa.slice(0, 5);
+    filteredTaxa = taxa.filter((taxon) => taxon.probability >= 0.02);
+
+    if (filteredTaxa.length) {
+      taxa = filteredTaxa;
+    } else {
+      taxa = taxa.slice(0, 2);
+    }
+
+    // Check against list of misspellings and unknown synonyms
+    taxa = taxa.map((pred) => {
+      pred.scientific_name =
+        taxonMapper.taxa[pred.scientific_name] || pred.scientific_name;
+      return pred;
+    });
+
+    // Get the data from the APIs (including accepted names of synonyms)
+    for (let pred of taxa) {
+      try {
+        let nameResult;
+        if (
+          req.body.application &&
+          req.body.application.toLowerCase() === "artsobservasjoner"
+        ) {
+          pred.name = pred.scientific_name;
+        } else {
+          nameResult = await getName(pred.scientific_name);
+
+          pred.vernacularName = nameResult.vernacularName;
+          pred.groupName = nameResult.groupName;
+          pred.scientificNameID = nameResult.scientificNameID;
+          pred.name = nameResult.scientificName;
+          pred.infoUrl = nameResult.infoUrl;
+        }
+
+        pred.picture = getPicture(pred.scientific_name);
+      } catch (error) {
+        writeErrorLog(
+          `Error while processing getName(${
+            pred.scientific_name
+          }). You can force a recache on ${encodeURI(
+            "https://ai.test.artsdatabanken.no/cachetaxon/" +
+              pred.scientific_name
+          )}.`,
+          error
+        );
+      }
+    }
+
+    recognition.data.predictions[0].taxa.items = taxa;
+
+    // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
+    // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
+
+    // if there are duplicates, add the probabilities and delete the duplicates
+    // for (let pred of recognition.data.predictions) {
+    //   let totalProbability = recognition.data.predictions
+    //     .filter((p) => p.name === pred.name)
+    //     .reduce((total, p) => total + p.probability, 0);
+
+    //   if (totalProbability !== pred.probability) {
+    //     pred.probability = totalProbability;
+    //     recognition.data.predictions = recognition.data.predictions.filter(
+    //       (p) => p.name !== pred.name
+    //     );
+    //     recognition.data.predictions.unshift(pred);
+    //   }
+    // }
+
+    // // sort by the new probabilities
+    // recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
+    //   return b.probability - a.probability;
+    // });
+    // -------------- end of duplicate checking code
+
+    recognition.data.application = req.body.application;
+    return recognition.data;
   } catch (error) {
-    writeErrorLog(`Error while running getId()`, error);
     throw error;
   }
 };
 
-app.get("/taxonimage/*", apiLimiter, (req, res) => {
+// --- Secured Species Identification Endpoint
+app.post("/identify", idLimiter, authenticateApiToken, upload.array("image"), async (req, res) => {
+  try {
+    json = await getId(req);
+
+    // Write to the log with authentication info
+    writelog(req, json, req.auth);
+
+    if (req.body.application === undefined) {
+      json = simplifyJson(json);
+    }
+
+    res.status(200).json(json);
+
+    // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
+    if (json.predictions && json.predictions[0] && json.predictions[0].taxa) {
+      json.predictions[0].taxa.items.forEach((taxon) => {
+        if (Math.random() < 0.05) {
+          let filename = `${taxadir}/${encodeURIComponent(
+            taxon.scientific_name
+          )}.json`;
+          if (fs.existsSync(filename)) {
+            fs.stat(filename, function (err, stats) {
+              if ((new Date() - stats.mtime) / (1000 * 60 * 60 * 24) > 10) {
+                getName(taxon.scientific_name, (force = true));
+              }
+            });
+          }
+        }
+      });
+    }
+  } catch (error) {
+    writeErrorLog(`Error while running getId() on /identify endpoint`, error);
+    res.status(500).end();
+  }
+});
+
+// --- Token Management Endpoints (Admin only)
+app.get("/admin/tokens", apiLimiter, authenticateAdminToken, (req, res) => {
+  try {
+    const tokenList = Object.keys(validTokens).map(token => ({
+      token: token.substring(0, 8) + '...',
+      name: validTokens[token].name,
+      application: validTokens[token].application,
+      enabled: validTokens[token].enabled,
+      created: validTokens[token].created
+    }));
+    res.status(200).json({
+      count: tokenList.length,
+      tokens: tokenList
+    });
+  } catch (error) {
+    writeErrorLog('Error listing tokens', error);
+    res.status(500).json({ error: 'Unable to list tokens' });
+  }
+});
+
+app.post("/admin/tokens/reload", apiLimiter, authenticateAdminToken, (req, res) => {
+  try {
+    reloadTokens();
+    res.status(200).json({
+      message: 'Tokens reloaded successfully',
+      count: Object.keys(validTokens).length
+    });
+  } catch (error) {
+    writeErrorLog('Error reloading tokens', error);
+    res.status(500).json({ error: 'Unable to reload tokens' });
+  }
+});
+
+app.post("/admin/tokens", apiLimiter, authenticateAdminToken, (req, res) => {
+  try {
+    const { name, application, description } = req.body;
+    
+    // Validate required fields
+    if (!name || !application) {
+      return res.status(400).json({
+        error: 'Bad request',
+        message: 'name and application are required fields'
+      });
+    }
+    
+    // Generate secure token
+    const newToken = generateSecureToken();
+    
+    // Create token object
+    const tokenData = {
+      name: name.trim(),
+      application: application.trim(),
+      enabled: true,
+      created: new Date().toISOString(),
+      description: description ? description.trim() : `Token for ${name}`
+    };
+    
+    // Add to valid tokens
+    validTokens[newToken] = tokenData;
+    
+    // Save to file
+    if (!saveTokens()) {
+      return res.status(500).json({
+        error: 'Unable to save token to file'
+      });
+    }
+    
+    // Return token info (including the full token for initial setup)
+    res.status(201).json({
+      message: 'Token created successfully',
+      token: newToken,
+      name: tokenData.name,
+      application: tokenData.application,
+      enabled: tokenData.enabled,
+      created: tokenData.created,
+      warning: 'Store this token securely. It will not be shown again in full.'
+    });
+    
+    writeErrorLog(`Token created successfully`, `Name: ${name}, Application: ${application}, Admin IP: ${req.ip}`);
+  } catch (error) {
+    writeErrorLog('Error creating token', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Unable to create token'
+    });
+  }
+});
+
+app.patch("/admin/tokens/:tokenPrefix/enable", apiLimiter, authenticateAdminToken, (req, res) => {
+  try {
+    const tokenPrefix = req.params.tokenPrefix;
+    
+    // Find token by prefix
+    const fullToken = Object.keys(validTokens).find(token => 
+      token.startsWith(tokenPrefix) || token.substring(0, 8) === tokenPrefix
+    );
+    
+    if (!fullToken || !validTokens[fullToken]) {
+      return res.status(404).json({
+        error: 'Token not found',
+        message: 'No token found matching the provided prefix'
+      });
+    }
+    
+    // Enable the token
+    validTokens[fullToken].enabled = true;
+    
+    // Save to file
+    if (!saveTokens()) {
+      return res.status(500).json({
+        error: 'Unable to save token changes to file'
+      });
+    }
+    
+    res.status(200).json({
+      message: 'Token enabled successfully',
+      token: fullToken.substring(0, 8) + '...',
+      name: validTokens[fullToken].name,
+      application: validTokens[fullToken].application,
+      enabled: true
+    });
+    
+    writeErrorLog(`Token enabled`, `Token: ${fullToken.substring(0, 8)}..., Admin IP: ${req.ip}`);
+  } catch (error) {
+    writeErrorLog('Error enabling token', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Unable to enable token'
+    });
+  }
+});
+
+app.patch("/admin/tokens/:tokenPrefix/disable", apiLimiter, authenticateAdminToken, (req, res) => {
+  try {
+    const tokenPrefix = req.params.tokenPrefix;
+    
+    // Find token by prefix
+    const fullToken = Object.keys(validTokens).find(token => 
+      token.startsWith(tokenPrefix) || token.substring(0, 8) === tokenPrefix
+    );
+    
+    if (!fullToken || !validTokens[fullToken]) {
+      return res.status(404).json({
+        error: 'Token not found',
+        message: 'No token found matching the provided prefix'
+      });
+    }
+    
+    // Disable the token
+    validTokens[fullToken].enabled = false;
+    
+    // Save to file
+    if (!saveTokens()) {
+      return res.status(500).json({
+        error: 'Unable to save token changes to file'
+      });
+    }
+    
+    res.status(200).json({
+      message: 'Token disabled successfully',
+      token: fullToken.substring(0, 8) + '...',
+      name: validTokens[fullToken].name,
+      application: validTokens[fullToken].application,
+      enabled: false
+    });
+    
+    writeErrorLog(`Token disabled`, `Token: ${fullToken.substring(0, 8)}..., Admin IP: ${req.ip}`);
+  } catch (error) {
+    writeErrorLog('Error disabling token', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Unable to disable token'
+    });
+  }
+});
+
+app.get("/taxonimage/*", apiLimiter, authenticateAdminToken, (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/taxonimage/", ""));
     res.status(200).send(getPicture(taxon));
@@ -808,7 +1097,7 @@ app.get("/taxonimage/*", apiLimiter, (req, res) => {
   }
 });
 
-app.get("/taxonimages", apiLimiter, (req, res) => {
+app.get("/taxonimages", apiLimiter, authenticateAdminToken, (req, res) => {
   try {
     res.status(200).json(taxonPics);
   } catch (error) {
@@ -842,7 +1131,7 @@ app.get("/taxonimages/view", apiLimiter, (req, res) => {
   }
 });
 
-app.get("/cachetaxon/*", cacheLimiter, async (req, res) => {
+app.get("/cachetaxon/*", cacheLimiter, authenticateAdminToken, async (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
     let name = await getName(taxon, (force = true));
@@ -853,7 +1142,7 @@ app.get("/cachetaxon/*", cacheLimiter, async (req, res) => {
   }
 });
 
-app.get("/refreshtaxonimages", cacheLimiter, async (req, res) => {
+app.get("/refreshtaxonimages", cacheLimiter, authenticateAdminToken, async (req, res) => {
   try {
     // Read the file first in case the fetches fail, so it can still be uploaded manually
     if (fs.existsSync(pictureFile)) {
@@ -867,28 +1156,8 @@ app.get("/refreshtaxonimages", cacheLimiter, async (req, res) => {
   }
 });
 
-/**
- * @api {post} / Identify species from image
- * @apiName IdentifySpecies
- * @apiGroup Identification
- *
- * @apiDescription Identifies species from uploaded images using AI.
- *
- * @apiParam {File} image Image file(s) to be analyzed.
- * @apiParam {String} [application] Name of the application making the request.
- *
- * @apiSuccess {Object} json Identification results including predictions and taxa information.
- *
- * @apiError (500) {String} InternalServerError An error occurred during processing.
- */
 app.post("/", idLimiter, upload.array("image"), async (req, res) => {
-  // Future simple token check
-
-  // if (req.headers["authorization"] !== `Bearer ${process.env.AI_TOKEN}`) {
-  //   res.status(401).end("Unauthorized");
-  //   return true;
-  // }
-
+  // Legacy endpoint - no authentication required for backward compatibility
   try {
     json = await getId(req);
 
@@ -931,7 +1200,7 @@ app.post("/", idLimiter, upload.array("image"), async (req, res) => {
   }
 });
 
-app.post("/save", apiLimiter, upload.array("image"), async (req, res) => {
+app.post("/save", apiLimiter, authenticateAdminToken, upload.array("image"), async (req, res) => {
   // image saving request from the orakel service
   try {
     json = await saveImagesAndGetToken(req);
@@ -955,7 +1224,7 @@ app.get("/", apiLimiter, (req, res) => {
   });
 });
 
-app.get("/image/*", apiLimiter, (req, res) => {
+app.get("/image/*", apiLimiter, authenticateAdminToken, (req, res) => {
   // image request from the orakel service
   // On the form /image/id&password
 
@@ -1006,37 +1275,39 @@ app.get("/image/*", apiLimiter, (req, res) => {
   });
 });
 
-app.get("/loglist/*", cacheLimiter, (req, res) => {
-  const token = process.env.SP_TOKEN;
-  let requestToken = req.originalUrl.replace("/loglist/", "");
-  if (requestToken !== token) {
-    res.status(403).send(`Nope`);
-  } else {
+app.get("/loglist/*", cacheLimiter, authenticateAdminToken, (req, res) => {
+  // Access control is now handled by authenticateToken middleware
+  try {
     var json = [];
     fs.readdir("./log", function (err, files) {
+      if (err) {
+        writeErrorLog(`Error reading log directory`, err);
+        return res.status(500).end();
+      }
       files.forEach(function (file, index) {
         json.push(file);
       });
       res.status(200).json(json);
     });
+  } catch (error) {
+    writeErrorLog(`Error in loglist endpoint`, error);
+    res.status(500).end();
   }
 });
 
-app.get("/getlog/*", idLimiter, (req, res) => {
-  const token = process.env.SP_TOKEN;
-  let [requestToken, filename] = req.originalUrl
-    .replace("/getlog/", "")
-    .split("/");
-
-  if (requestToken !== token) {
-    res.status(403).end();
-  } else {
+app.get("/getlog/*", idLimiter, authenticateAdminToken, (req, res) => {
+  // Access control is now handled by authenticateToken middleware
+  try {
+    let filename = req.originalUrl.replace("/getlog/", "");
     const file = `./log/${decodeURI(filename)}`;
     if (fs.existsSync(file)) {
       res.download(file);
     } else {
       res.status(404).end();
     }
+  } catch (error) {
+    writeErrorLog(`Error in getlog endpoint`, error);
+    res.status(500).end();
   }
 });
 
