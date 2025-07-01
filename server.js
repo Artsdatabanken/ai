@@ -16,10 +16,11 @@ const cacheLimiter = rateLimit({
   max: 30, // Max requests per timeframe per ip
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  keyGenerator: getClientIP, // Use safe IP extraction
   handler: (request, response, next, options) => {
     writeErrorLog(
       `Too many cache requests`,
-      `IP ${request.client._peername.address}`
+      `IP ${getClientIP(request)}`
     );
     return response.status(options.statusCode).send(options.message);
   },
@@ -30,10 +31,11 @@ const idLimiter = rateLimit({
   max: 9999, // Max requests per timeframe per ip
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  keyGenerator: getClientIP, // Use safe IP extraction
   handler: (request, response, next, options) => {
     writeErrorLog(
       `Too many ID requests`,
-      `IP ${request.client._peername.address}`
+      `IP ${getClientIP(request)}`
     );
     return response.status(options.statusCode).send(options.message);
   },
@@ -44,10 +46,11 @@ const apiLimiter = rateLimit({
   max: 30, // Max requests per timeframe per ip
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  keyGenerator: getClientIP, // Use safe IP extraction
   handler: (request, response, next, options) => {
     writeErrorLog(
       `Too many misc API requests`,
-      `IP ${request.client._peername.address}`
+      `IP ${getClientIP(request)}`
     );
     return response.status(options.statusCode).send(options.message);
   },
@@ -58,10 +61,11 @@ const authLimiter = rateLimit({
   max: parseInt(process.env.AUTH_RATE_LIMIT_MAX || 5), // Default: 5 attempts per window
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: getClientIP, // Use safe IP extraction
   handler: (request, response, next, options) => {
     writeErrorLog(
       `Too many authentication attempts`,
-      `IP ${request.client._peername.address}`
+      `IP ${getClientIP(request)}`
     );
     return response.status(options.statusCode).json({
       error: "Too many authentication attempts. Please try again later.",
@@ -299,6 +303,35 @@ if (process.env.IKEY) {
 
 const app = express();
 const port = process.env.PORT;
+
+// Configure Express to trust proxy headers
+// You can set TRUST_PROXY environment variable to configure this
+// Examples: TRUST_PROXY=1 (trust first proxy), TRUST_PROXY=2 (trust first 2 proxies)
+// TRUST_PROXY=loopback (trust localhost), TRUST_PROXY=false (no proxy trust)
+const trustProxyConfig = process.env.TRUST_PROXY || '1';
+if (trustProxyConfig === 'false') {
+  // Explicitly disable proxy trust
+  app.set('trust proxy', false);
+} else if (/^\d+$/.test(trustProxyConfig)) {
+  // If it's a number, trust that many hops
+  app.set('trust proxy', parseInt(trustProxyConfig));
+} else {
+  // Otherwise use the string value (could be 'loopback', IP addresses, etc.)
+  app.set('trust proxy', trustProxyConfig);
+}
+
+// Helper function to safely extract client IP for rate limiting
+// This handles cases where proxies might include port numbers or invalid data
+const getClientIP = (req) => {
+  if (!req.ip) {
+    console.warn('Warning: request.ip is missing, falling back to socket address');
+    return req.socket.remoteAddress || 'unknown';
+  }
+  
+  // Some proxies (like Azure Application Gateway) include port numbers in X-Forwarded-For
+  // Strip port numbers to prevent rate limit bypass
+  return req.ip.replace(/:\d+[^:]*$/, '');
+};
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -1221,6 +1254,20 @@ app.get("/", apiLimiter, (req, res) => {
     res
       .status(200)
       .send(`<h3>Aiaiai!</h3><hr/> ${v}<br/>${dateStr("s", stats.mtime)}`);
+  });
+});
+
+// Diagnostic endpoints for checking IP configuration (admin only)
+app.get("/admin/ip-debug", apiLimiter, authenticateAdminToken, (req, res) => {
+  res.json({
+    'req.ip': req.ip,
+    'getClientIP()': getClientIP(req),
+    'req.socket.remoteAddress': req.socket.remoteAddress,
+    'x-forwarded-for': req.headers['x-forwarded-for'],
+    'x-real-ip': req.headers['x-real-ip'],
+    'cf-connecting-ip': req.headers['cf-connecting-ip'],
+    'true-client-ip': req.headers['true-client-ip'],
+    'trust-proxy-setting': req.app.get('trust proxy')
   });
 });
 
