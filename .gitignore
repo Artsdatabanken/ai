@@ -25,8 +25,7 @@ log/*.txt
 resources/taxoncache
 resources/taxonPictures.json
 /uploads
-
+/auth
 
 config/secrets.env
-config/tokens.json
 .aider*

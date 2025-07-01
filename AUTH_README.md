@@ -9,7 +9,7 @@ This API implements a simplified token-based authentication system. The existing
 ### Token Types
 
 1. **Admin Token** - Stored in environment variable, provides full access to all endpoints
-2. **API Tokens** - Stored in `config/tokens.json`, provides access to the identification endpoint only
+2. **API Tokens** - Stored in `auth/tokens.json`, provides access to the identification endpoint only
 
 ### Endpoints
 
@@ -76,7 +76,7 @@ ADMIN_TOKEN=your-super-secure-admin-token-change-this-immediately
 
 ### Tokens File
 
-API tokens are managed in `config/tokens.json`. Each token must be associated with an application:
+API tokens are managed in `auth/tokens.json`. Each token must be associated with an application:
 
 ```json
 {
@@ -150,7 +150,7 @@ curl -X PATCH https://your-api-domain.com/admin/tokens/a1b2c3d4/disable \
 
 ### Manual Token Management (Alternative)
 
-1. Edit `config/tokens.json` directly
+1. Edit `auth/tokens.json` directly
 2. Add/modify entries with required fields: `name`, `application`, `enabled`, `created`
 3. Reload tokens:
    ```bash

@@ -103,7 +103,7 @@ dotenv.config({ path: "./config/secrets.env" });
 
 // --- Authentication Configuration
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
-const TOKENS_FILE = './config/tokens.json';
+const TOKENS_FILE = './auth/tokens.json';
 
 // Load tokens from file
 let validTokens = {};
