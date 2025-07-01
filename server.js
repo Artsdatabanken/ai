@@ -150,8 +150,12 @@ if (!ADMIN_TOKEN) {
 
 // --- Setting files and locations
 const logdir = "./log";
-const taxadir = `${logdir}/taxa`;
-const pictureFile = `${logdir}/taxonPictures.json`;
+const authdir = "./auth";
+const cachedir = "./cache";
+
+
+const taxadir = `${cachedir}/taxa`;
+const pictureFile = `${cachedir}/taxonPictures.json`;
 const uploadsdir = "./uploads";
 
 // --- Get the taxon picture ids from file on start
