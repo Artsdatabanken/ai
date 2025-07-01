@@ -11,6 +11,21 @@ const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
 const sanitize = require("sanitize-filename");
 
+
+
+// Helper function to safely extract client IP for rate limiting
+// This handles cases where proxies might include port numbers or invalid data
+const getClientIP = (req) => {
+  if (!req.ip) {
+    console.warn('Warning: request.ip is missing, falling back to socket address');
+    return req.socket.remoteAddress || 'unknown';
+  }
+  
+  // Some proxies (like Azure Application Gateway) include port numbers in X-Forwarded-For
+  // Strip port numbers to prevent rate limit bypass
+  return req.ip.replace(/:\d+[^:]*$/, '');
+};
+
 const cacheLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // Timeframe
   max: 30, // Max requests per timeframe per ip
@@ -320,18 +335,6 @@ if (trustProxyConfig === 'false') {
   app.set('trust proxy', trustProxyConfig);
 }
 
-// Helper function to safely extract client IP for rate limiting
-// This handles cases where proxies might include port numbers or invalid data
-const getClientIP = (req) => {
-  if (!req.ip) {
-    console.warn('Warning: request.ip is missing, falling back to socket address');
-    return req.socket.remoteAddress || 'unknown';
-  }
-  
-  // Some proxies (like Azure Application Gateway) include port numbers in X-Forwarded-For
-  // Strip port numbers to prevent rate limit bypass
-  return req.ip.replace(/:\d+[^:]*$/, '');
-};
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));

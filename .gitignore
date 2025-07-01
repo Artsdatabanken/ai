@@ -28,4 +28,5 @@ resources/taxonPictures.json
 
 
 config/secrets.env
+config/tokens.json
 .aider*
