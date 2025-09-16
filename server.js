@@ -459,6 +459,7 @@ let getName = async (sciName, force = false) => {
 
   let nameResult = {
     vernacularName: sciName,
+    vernacularNames: {},
     groupName: "",
     scientificName: sciName,
   };
@@ -540,9 +541,89 @@ let getName = async (sciName, force = false) => {
     nameResult.scientificNameID =
       retrievedTaxon.data.AcceptedNameUsage.ScientificNameId;
 
+    // Extract all RecommendedVernacularName fields for different languages
+    for (const [key, value] of Object.entries(retrievedTaxon.data)) {
+      if (key.startsWith("RecommendedVernacularName_") && value) {
+        let langCode = key.replace("RecommendedVernacularName_", "");
+        langCode = langCode.split("-")[0]
+        nameResult.vernacularNames[langCode] = value;
+      }
+    }
+
+    // Fetch Swedish name from Dyntaxa API
+    try {
+      const swedishUrl = encodeURI(`https://nos-api.artdatabanken.se/api/search?searchType=exact&search=${nameResult.scientificName}`);
+      const swedishResponse = await axios
+        .get(swedishUrl, {
+          timeout: 3000,
+        })
+        .catch((error) => {
+          console.log(`Failed to get Swedish name for ${nameResult.scientificName}:`, error.message);
+          return null;
+        });
+
+      if (swedishResponse && swedishResponse.data && Array.isArray(swedishResponse.data)) {
+        const matchingTaxon = swedishResponse.data.find(
+          item => item.scientificName &&
+          item.scientificName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+          item.swedishName
+        );
+
+        if (matchingTaxon && matchingTaxon.swedishName) {
+          nameResult.vernacularNames.sv = matchingTaxon.swedishName;
+        }
+      }
+    } catch (error) {
+      console.log(`Error fetching Swedish name for ${nameResult.scientificName}:`, error.message);
+    }
+
+    // Fetch vernacular names from Catalog of Life via GBIF (English, Dutch, Spanish)
+    try {
+      const gbifUrl = encodeURI(`https://api.gbif.org/v1/species/search?datasetKey=7ddf754f-d193-4cc9-b351-99906754a03b&nameType=SCIENTIFIC&q=${nameResult.scientificName}`);
+      const gbifResponse = await axios
+        .get(gbifUrl, {
+          timeout: 3000,
+        })
+        .catch((error) => {
+          console.log(`Failed to get GBIF names for ${nameResult.scientificName}:`, error.message);
+          return null;
+        });
+
+      if (gbifResponse && gbifResponse.data && gbifResponse.data.results && Array.isArray(gbifResponse.data.results)) {
+        const matchingResult = gbifResponse.data.results.find(
+          item => item.canonicalName &&
+          item.canonicalName.toLowerCase() === nameResult.scientificName.toLowerCase()
+        );
+
+        if (matchingResult && matchingResult.vernacularNames && Array.isArray(matchingResult.vernacularNames)) {
+          // Map three-letter codes to two-letter codes
+          const languageMap = {
+            'eng': 'en',
+            'nld': 'nl',
+            'spa': 'es'
+          };
+
+          for (const [threeLetterCode, twoLetterCode] of Object.entries(languageMap)) {
+            // Find the first vernacular name for this language
+            const nameEntry = matchingResult.vernacularNames.find(
+              vn => vn.language === threeLetterCode && vn.vernacularName
+            );
+
+            if (nameEntry && nameEntry.vernacularName) {
+              nameResult.vernacularNames[twoLetterCode] = nameEntry.vernacularName;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.log(`Error fetching GBIF names for ${nameResult.scientificName}:`, error.message);
+    }
+
+    // Set the default vernacularName for backward compatibility
     nameResult.vernacularName =
-      retrievedTaxon.data["RecommendedVernacularName_nb-NO"] ||
-      retrievedTaxon.data["RecommendedVernacularName_nn-NO"] ||
+      nameResult.vernacularNames.nb ||
+      nameResult.vernacularNames.nn ||
+      nameResult.vernacularNames.en ||
       nameResult.scientificName ||
       sciName;
 
@@ -861,6 +942,7 @@ let getId = async (req) => {
           nameResult = await getName(pred.scientific_name);
 
           pred.vernacularName = nameResult.vernacularName;
+          pred.vernacularNames = nameResult.vernacularNames;
           pred.groupName = nameResult.groupName;
           pred.scientificNameID = nameResult.scientificNameID;
           pred.name = nameResult.scientificName;
