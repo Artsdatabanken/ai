@@ -590,27 +590,44 @@ let getName = async (sciName, force = false) => {
         });
 
       if (gbifResponse && gbifResponse.data && gbifResponse.data.results && Array.isArray(gbifResponse.data.results)) {
-        const matchingResult = gbifResponse.data.results.find(
+        // Get all matching results
+        const matchingResults = gbifResponse.data.results.filter(
           item => item.canonicalName &&
-          item.canonicalName.toLowerCase() === nameResult.scientificName.toLowerCase()
+          item.canonicalName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+          item.vernacularNames && item.vernacularNames.length > 0
         );
 
-        if (matchingResult && matchingResult.vernacularNames && Array.isArray(matchingResult.vernacularNames)) {
-          // Map three-letter codes to two-letter codes
-          const languageMap = {
-            'eng': 'en',
-            'nld': 'nl',
-            'spa': 'es'
-          };
+        // Map three-letter codes to two-letter codes
+        const languageMap = {
+          'eng': 'en',
+          'nld': 'nl',
+          'spa': 'es'
+        };
 
-          for (const [threeLetterCode, twoLetterCode] of Object.entries(languageMap)) {
-            // Find the first vernacular name for this language
-            const nameEntry = matchingResult.vernacularNames.find(
-              vn => vn.language === threeLetterCode && vn.vernacularName
-            );
+        // Track which languages we've found names for
+        const foundLanguages = new Set();
 
-            if (nameEntry && nameEntry.vernacularName) {
-              nameResult.vernacularNames[twoLetterCode] = nameEntry.vernacularName;
+        for (const result of matchingResults) {
+          if (result.vernacularNames && Array.isArray(result.vernacularNames)) {
+            for (const [threeLetterCode, twoLetterCode] of Object.entries(languageMap)) {
+              if (foundLanguages.has(twoLetterCode)) {
+                continue;
+              }
+
+              // Find the first vernacular name for this language in this result
+              const nameEntry = result.vernacularNames.find(
+                vn => vn.language === threeLetterCode && vn.vernacularName
+              );
+
+              if (nameEntry && nameEntry.vernacularName) {
+                nameResult.vernacularNames[twoLetterCode] = nameEntry.vernacularName;
+                foundLanguages.add(twoLetterCode);
+              }
+            }
+
+            // If we've found names for all languages, we can stop
+            if (foundLanguages.size === Object.keys(languageMap).length) {
+              break;
             }
           }
         }
