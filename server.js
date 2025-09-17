@@ -541,7 +541,7 @@ let getName = async (sciName, force = false) => {
     nameResult.scientificNameID =
       retrievedTaxon.data.AcceptedNameUsage.ScientificNameId;
 
-    // Extract all RecommendedVernacularName fields for different languages
+    // Extract all RecommendedVernacularName fields for different languages from Artsdatabanken
     for (const [key, value] of Object.entries(retrievedTaxon.data)) {
       if (key.startsWith("RecommendedVernacularName_") && value) {
         let langCode = key.replace("RecommendedVernacularName_", "");
@@ -550,90 +550,143 @@ let getName = async (sciName, force = false) => {
       }
     }
 
-    // Fetch Swedish name from Dyntaxa API
-    try {
-      const swedishUrl = encodeURI(`https://nos-api.artdatabanken.se/api/search?searchType=exact&search=${nameResult.scientificName}`);
-      const swedishResponse = await axios
-        .get(swedishUrl, {
-          timeout: 3000,
-        })
-        .catch((error) => {
-          console.log(`Failed to get Swedish name for ${nameResult.scientificName}:`, error.message);
-          return null;
-        });
+    // Define target languages to fetch (excluding those typically found in Artsdatabanken)
+    const targetLanguages = ['sv', 'nl', 'en', 'es'];
+    const missingLanguages = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
 
-      if (swedishResponse && swedishResponse.data && Array.isArray(swedishResponse.data)) {
-        const matchingTaxon = swedishResponse.data.find(
-          item => item.scientificName &&
-          item.scientificName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
-          item.swedishName
-        );
+    // If all languages are already filled, skip further fetching
+    if (missingLanguages.length === 0) {
+      console.log(`All vernacular names already found for ${nameResult.scientificName}`);
+    } else {
+      // Priority 1: GBIF (Catalog of Life)
+      if (missingLanguages.length > 0) {
+        try {
+          const gbifUrl = encodeURI(`https://api.gbif.org/v1/species/search?datasetKey=7ddf754f-d193-4cc9-b351-99906754a03b&nameType=SCIENTIFIC&q=${nameResult.scientificName}`);
+          const gbifResponse = await axios
+            .get(gbifUrl, { timeout: 3000 })
+            .catch((error) => {
+              console.log(`Failed to get GBIF names for ${nameResult.scientificName}:`, error.message);
+              return null;
+            });
 
-        if (matchingTaxon && matchingTaxon.swedishName) {
-          nameResult.vernacularNames.sv = matchingTaxon.swedishName;
+          if (gbifResponse && gbifResponse.data && gbifResponse.data.results && Array.isArray(gbifResponse.data.results)) {
+            const matchingResults = gbifResponse.data.results.filter(
+              item => item.canonicalName &&
+              item.canonicalName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+              item.vernacularNames && item.vernacularNames.length > 0
+            );
+
+            const languageMap = {
+              'swe': 'sv',
+              'eng': 'en',
+              'nld': 'nl',
+              'spa': 'es'
+            };
+
+            for (const result of matchingResults) {
+              if (result.vernacularNames && Array.isArray(result.vernacularNames)) {
+                for (const [threeLetterCode, twoLetterCode] of Object.entries(languageMap)) {
+                  if (!nameResult.vernacularNames[twoLetterCode]) {
+                    const nameEntry = result.vernacularNames.find(
+                      vn => vn.language === threeLetterCode && vn.vernacularName
+                    );
+                    if (nameEntry && nameEntry.vernacularName) {
+                      nameResult.vernacularNames[twoLetterCode] = nameEntry.vernacularName;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.log(`Error fetching GBIF names for ${nameResult.scientificName}:`, error.message);
         }
       }
-    } catch (error) {
-      console.log(`Error fetching Swedish name for ${nameResult.scientificName}:`, error.message);
-    }
 
-    // Fetch vernacular names from Catalog of Life via GBIF (English, Dutch, Spanish)
-    try {
-      const gbifUrl = encodeURI(`https://api.gbif.org/v1/species/search?datasetKey=7ddf754f-d193-4cc9-b351-99906754a03b&nameType=SCIENTIFIC&q=${nameResult.scientificName}`);
-      const gbifResponse = await axios
-        .get(gbifUrl, {
-          timeout: 3000,
-        })
-        .catch((error) => {
-          console.log(`Failed to get GBIF names for ${nameResult.scientificName}:`, error.message);
-          return null;
-        });
+      // Priority 2: Artdatabanken.se (Swedish)
+      if (!nameResult.vernacularNames.sv) {
+        try {
+          const swedishUrl = encodeURI(`https://nos-api.artdatabanken.se/api/search?searchType=exact&search=${nameResult.scientificName}`);
+          const swedishResponse = await axios
+            .get(swedishUrl, { timeout: 3000 })
+            .catch((error) => {
+              console.log(`Failed to get Swedish name for ${nameResult.scientificName}:`, error.message);
+              return null;
+            });
 
-      if (gbifResponse && gbifResponse.data && gbifResponse.data.results && Array.isArray(gbifResponse.data.results)) {
-        // Get all matching results
-        const matchingResults = gbifResponse.data.results.filter(
-          item => item.canonicalName &&
-          item.canonicalName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
-          item.vernacularNames && item.vernacularNames.length > 0
-        );
+          if (swedishResponse && swedishResponse.data && Array.isArray(swedishResponse.data)) {
+            const matchingTaxon = swedishResponse.data.find(
+              item => item.scientificName &&
+              item.scientificName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+              item.swedishName
+            );
 
-        // Map three-letter codes to two-letter codes
-        const languageMap = {
-          'eng': 'en',
-          'nld': 'nl',
-          'spa': 'es'
-        };
+            if (matchingTaxon && matchingTaxon.swedishName) {
+              nameResult.vernacularNames.sv = matchingTaxon.swedishName;
+            }
+          }
+        } catch (error) {
+          console.log(`Error fetching Swedish name for ${nameResult.scientificName}:`, error.message);
+        }
+      }
 
-        // Track which languages we've found names for
-        const foundLanguages = new Set();
+      // Priority 3: Wikipedia
+      const remainingLangs = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
+      if (remainingLangs.length > 0) {
+        try {
+          const wikiSpeciesUrl = encodeURI(`https://api.wikimedia.org/core/v1/wikispecies/page/${nameResult.scientificName.replace(' ', '_')}/links/language`);
+          const wikiResponse = await axios
+            .get(wikiSpeciesUrl, { timeout: 3000 })
+            .catch((error) => {
+              console.log(`Failed to get Wikipedia names for ${nameResult.scientificName}:`, error.message);
+              return null;
+            });
 
-        for (const result of matchingResults) {
-          if (result.vernacularNames && Array.isArray(result.vernacularNames)) {
-            for (const [threeLetterCode, twoLetterCode] of Object.entries(languageMap)) {
-              if (foundLanguages.has(twoLetterCode)) {
-                continue;
+          if (wikiResponse && wikiResponse.data && Array.isArray(wikiResponse.data)) {
+            for (const link of wikiResponse.data) {
+              if (remainingLangs.includes(link.code) && !nameResult.vernacularNames[link.code]) {
+                // Remove parentheses and their contents from the title
+                let cleanTitle = link.title.replace(/\s*\([^)]*\)/g, '').trim();
+                if (cleanTitle && cleanTitle !== nameResult.scientificName) {
+                  nameResult.vernacularNames[link.code] = cleanTitle;
+                }
               }
+            }
+          }
+        } catch (error) {
+          console.log(`Error fetching Wikipedia names for ${nameResult.scientificName}:`, error.message);
+        }
+      }
 
-              // Find the first vernacular name for this language in this result
-              const nameEntry = result.vernacularNames.find(
-                vn => vn.language === threeLetterCode && vn.vernacularName
+      // Priority 4: iNaturalist
+      const stillMissingLangs = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
+      if (stillMissingLangs.length > 0) {
+        for (const lang of stillMissingLangs) {
+          try {
+            const iNatUrl = encodeURI(`https://api.inaturalist.org/v1/taxa/autocomplete?q=${nameResult.scientificName.replace(' ', '+')}&per_page=1&locale=${lang}`);
+            const iNatResponse = await axios
+              .get(iNatUrl, { timeout: 3000 })
+              .catch((error) => {
+                console.log(`Failed to get iNaturalist ${lang} name for ${nameResult.scientificName}:`, error.message);
+                return null;
+              });
+
+            if (iNatResponse && iNatResponse.data && iNatResponse.data.results && Array.isArray(iNatResponse.data.results)) {
+              const result = iNatResponse.data.results.find(
+                item => item.name &&
+                item.name.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+                item.preferred_common_name
               );
 
-              if (nameEntry && nameEntry.vernacularName) {
-                nameResult.vernacularNames[twoLetterCode] = nameEntry.vernacularName;
-                foundLanguages.add(twoLetterCode);
+              if (result && result.preferred_common_name) {
+                nameResult.vernacularNames[lang] = result.preferred_common_name;
               }
             }
-
-            // If we've found names for all languages, we can stop
-            if (foundLanguages.size === Object.keys(languageMap).length) {
-              break;
-            }
+          } catch (error) {
+            console.log(`Error fetching iNaturalist ${lang} name for ${nameResult.scientificName}:`, error.message);
           }
         }
       }
-    } catch (error) {
-      console.log(`Error fetching GBIF names for ${nameResult.scientificName}:`, error.message);
     }
 
     // Set the default vernacularName for backward compatibility
