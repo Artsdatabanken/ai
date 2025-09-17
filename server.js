@@ -1348,6 +1348,46 @@ app.get("/refreshtaxonimages", cacheLimiter, authenticateAdminToken, async (req,
   }
 });
 
+app.delete("/admin/cache/taxa", apiLimiter, authenticateAdminToken, async (req, res) => {
+  try {
+    let deletedCount = 0;
+    let errorCount = 0;
+
+    // Read all files in the taxa cache directory
+    const files = fs.readdirSync(taxadir);
+
+    for (const file of files) {
+      // Only delete .json files
+      if (file.endsWith('.json')) {
+        const filePath = `${taxadir}/${file}`;
+        try {
+          fs.unlinkSync(filePath);
+          deletedCount++;
+        } catch (error) {
+          errorCount++;
+          writeErrorLog(`Failed to delete cached taxon file ${file}`, error);
+        }
+      }
+    }
+
+    const message = `Cleared ${deletedCount} cached taxa files${errorCount > 0 ? ` (${errorCount} errors)` : ''}`;
+    writeErrorLog(message, `Admin IP: ${req.ip}`);
+
+    res.status(200).json({
+      message: message,
+      deleted: deletedCount,
+      errors: errorCount,
+      totalFiles: files.length
+    });
+  } catch (error) {
+    writeErrorLog('Error clearing taxa cache', error);
+    res.status(500).json({
+      error: 'Failed to clear taxa cache',
+      message: error.message
+    });
+  }
+});
+
 app.post("/", idLimiter, upload.array("image"), async (req, res) => {
   // Legacy endpoint - no authentication required for backward compatibility
   try {
