@@ -20,7 +20,7 @@ const getClientIP = (req) => {
     console.warn('Warning: request.ip is missing, falling back to socket address');
     return req.socket.remoteAddress || 'unknown';
   }
-  
+
   // Some proxies (like Azure Application Gateway) include port numbers in X-Forwarded-For
   // Strip port numbers to prevent rate limit bypass
   return req.ip.replace(/:\d+[^:]*$/, '');
@@ -119,11 +119,11 @@ const loadTokens = () => {
   try {
     if (fs.existsSync(TOKENS_FILE)) {
       const rawTokens = JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8'));
-      
+
       // Validate tokens have required fields
       validTokens = {};
       let validCount = 0;
-      
+
       for (const [token, data] of Object.entries(rawTokens)) {
         if (data.application && data.name) {
           // Set default enabled state if not specified
@@ -136,7 +136,7 @@ const loadTokens = () => {
           console.warn(`Token ${token.substring(0, 8)}... missing required fields (application, name). Skipping.`);
         }
       }
-      
+
       console.log(`Loaded ${validCount} valid tokens from ${TOKENS_FILE}`);
     } else {
       console.warn(`Tokens file ${TOKENS_FILE} not found. Creating empty tokens file.`);
@@ -228,9 +228,9 @@ const authenticateAdminToken = (req, res, next) => {
 
   if (!token) {
     writeErrorLog('Authentication failed: No token provided', `IP ${req.ip}`);
-    return res.status(401).json({ 
+    return res.status(401).json({
       error: 'Access denied. No token provided.',
-      message: 'Please include a valid Bearer token in the Authorization header.' 
+      message: 'Please include a valid Bearer token in the Authorization header.'
     });
   }
 
@@ -241,9 +241,9 @@ const authenticateAdminToken = (req, res, next) => {
   }
 
   writeErrorLog('Authentication failed: Invalid admin token', `IP ${req.ip}, Token: ${token.substring(0, 10)}...`);
-  return res.status(403).json({ 
+  return res.status(403).json({
     error: 'Invalid token.',
-    message: 'The provided token is invalid or you do not have sufficient permissions.' 
+    message: 'The provided token is invalid or you do not have sufficient permissions.'
   });
 };
 
@@ -253,9 +253,9 @@ const authenticateApiToken = (req, res, next) => {
 
   if (!token) {
     writeErrorLog('Authentication failed: No token provided', `IP ${req.ip}`);
-    return res.status(401).json({ 
+    return res.status(401).json({
       error: 'Access denied. No token provided.',
-      message: 'Please include a valid Bearer token in the Authorization header.' 
+      message: 'Please include a valid Bearer token in the Authorization header.'
     });
   }
 
@@ -267,19 +267,19 @@ const authenticateApiToken = (req, res, next) => {
 
   // Check if it's a valid API token from the tokens file
   if (validTokens[token] && validTokens[token].enabled === true) {
-    req.auth = { 
-      type: 'api', 
-      token: token, 
+    req.auth = {
+      type: 'api',
+      token: token,
       name: validTokens[token].name,
-      application: validTokens[token].application 
+      application: validTokens[token].application
     };
     return next();
   }
 
   writeErrorLog('Authentication failed: Invalid token', `IP ${req.ip}, Token: ${token.substring(0, 10)}...`);
-  return res.status(403).json({ 
+  return res.status(403).json({
     error: 'Invalid token.',
-    message: 'The provided token is invalid.' 
+    message: 'The provided token is invalid.'
   });
 };
 
@@ -296,7 +296,7 @@ const saveTokens = () => {
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
     }
-    
+
     fs.writeFileSync(TOKENS_FILE, JSON.stringify(validTokens, null, 2));
     return true;
   } catch (error) {
@@ -384,7 +384,7 @@ let getPicture = (sciName) => {
 
 let writelog = (req, json, auth = null) => {
   let application;
-  
+
   // Prefer application from token (more secure), fallback to request body
   if (auth && auth.application) {
     application = sanitize(auth.application);
@@ -398,18 +398,17 @@ let writelog = (req, json, auth = null) => {
     fs.appendFileSync(
       `${logdir}/${logPrefix}_${dateStr(`d`)}.csv`,
       "Datetime," +
-        "Number_of_pictures," +
-        "Result_1_name,Result_1_group,Result_1_probability," +
-        "Result_2_name,Result_2_group,Result_2_probability," +
-        "Result_3_name,Result_3_group,Result_3_probability," +
-        "Result_4_name,Result_4_group,Result_4_probability," +
-        "Result_5_name,Result_5_group,Result_5_probability\n"
+      "Number_of_pictures," +
+      "Result_1_name,Result_1_group,Result_1_probability," +
+      "Result_2_name,Result_2_group,Result_2_probability," +
+      "Result_3_name,Result_3_group,Result_3_probability," +
+      "Result_4_name,Result_4_group,Result_4_probability," +
+      "Result_5_name,Result_5_group,Result_5_probability\n"
     );
   }
 
-  let row = `${dateStr(`s`)},${
-    Array.isArray(req.files) ? req.files.length : 0
-  }`;
+  let row = `${dateStr(`s`)},${Array.isArray(req.files) ? req.files.length : 0
+    }`;
 
   for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
     const prediction = json.predictions[0].taxa.items[i];
@@ -485,8 +484,7 @@ let getName = async (sciName, force = false) => {
       })
       .catch((error) => {
         writeErrorLog(
-          `Failed to ${
-            !force ? "get info for" : "*recache*"
+          `Failed to ${!force ? "get info for" : "*recache*"
           } ${sciName} from ${url}.`,
           error
         );
@@ -518,8 +516,7 @@ let getName = async (sciName, force = false) => {
         })
         .catch((error) => {
           writeErrorLog(
-            `Failed to ${
-              !force ? "get info for" : "*recache*"
+            `Failed to ${!force ? "get info for" : "*recache*"
             } ${sciName} from ${url}.`,
             error
           );
@@ -533,8 +530,7 @@ let getName = async (sciName, force = false) => {
         })
         .catch((error) => {
           writeErrorLog(
-            `Failed to ${
-              !force ? "get info for" : "*recache*"
+            `Failed to ${!force ? "get info for" : "*recache*"
             } ${sciName} from ${url}.`,
             error
           );
@@ -580,8 +576,8 @@ let getName = async (sciName, force = false) => {
           if (gbifResponse && gbifResponse.data && gbifResponse.data.results && Array.isArray(gbifResponse.data.results)) {
             const matchingResults = gbifResponse.data.results.filter(
               item => item.canonicalName &&
-              item.canonicalName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
-              item.vernacularNames && item.vernacularNames.length > 0
+                item.canonicalName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+                item.vernacularNames && item.vernacularNames.length > 0
             );
 
             const languageMap = {
@@ -625,8 +621,8 @@ let getName = async (sciName, force = false) => {
           if (swedishResponse && swedishResponse.data && Array.isArray(swedishResponse.data)) {
             const matchingTaxon = swedishResponse.data.find(
               item => item.scientificName &&
-              item.scientificName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
-              item.swedishName
+                item.scientificName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+                item.swedishName
             );
 
             if (matchingTaxon && matchingTaxon.swedishName) {
@@ -682,8 +678,8 @@ let getName = async (sciName, force = false) => {
             if (iNatResponse && iNatResponse.data && iNatResponse.data.results && Array.isArray(iNatResponse.data.results)) {
               const result = iNatResponse.data.results.find(
                 item => item.name &&
-                item.name.toLowerCase() === nameResult.scientificName.toLowerCase() &&
-                item.preferred_common_name
+                  item.name.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+                  item.preferred_common_name
               );
 
               if (result && result.preferred_common_name) {
@@ -730,8 +726,7 @@ let getName = async (sciName, force = false) => {
       })
       .catch((error) => {
         writeErrorLog(
-          `Failed to ${
-            !force ? "get info for" : "*recache*"
+          `Failed to ${!force ? "get info for" : "*recache*"
           } ${sciName} from ${url}.`,
           error
         );
@@ -1037,8 +1032,8 @@ let getId = async (req) => {
     if (receivedParams.includes('model') && req.body.model && req.body.model.toLowerCase() === "global") {
       token = process.env.SH_TOKEN; // Global/European model
       modelUsed = 'European';
-    } else if (country === 'Norway') {
-      // Use Norwegian model for Norway
+    } else if (country === 'Norway' || country === 'Unknown') {
+      // Use Norwegian model for Norway, and assume Norway if country is unknown
       token = process.env.SP_TOKEN; // Specialized (Norwegian) token
       modelUsed = 'Norwegian';
     } else {
@@ -1124,11 +1119,10 @@ let getId = async (req) => {
         pred.picture = getPicture(pred.scientific_name);
       } catch (error) {
         writeErrorLog(
-          `Error while processing getName(${
-            pred.scientific_name
+          `Error while processing getName(${pred.scientific_name
           }). You can force a recache on ${encodeURI(
             "https://ai.test.artsdatabanken.no/cachetaxon/" +
-              pred.scientific_name
+            pred.scientific_name
           )}.`,
           error
         );
@@ -1249,7 +1243,7 @@ app.post("/admin/tokens/reload", apiLimiter, authenticateAdminToken, (req, res) 
 app.post("/admin/tokens", apiLimiter, authenticateAdminToken, (req, res) => {
   try {
     const { name, application, description } = req.body;
-    
+
     // Validate required fields
     if (!name || !application) {
       return res.status(400).json({
@@ -1257,10 +1251,10 @@ app.post("/admin/tokens", apiLimiter, authenticateAdminToken, (req, res) => {
         message: 'name and application are required fields'
       });
     }
-    
+
     // Generate secure token
     const newToken = generateSecureToken();
-    
+
     // Create token object
     const tokenData = {
       name: name.trim(),
@@ -1269,17 +1263,17 @@ app.post("/admin/tokens", apiLimiter, authenticateAdminToken, (req, res) => {
       created: new Date().toISOString(),
       description: description ? description.trim() : `Token for ${name}`
     };
-    
+
     // Add to valid tokens
     validTokens[newToken] = tokenData;
-    
+
     // Save to file
     if (!saveTokens()) {
       return res.status(500).json({
         error: 'Unable to save token to file'
       });
     }
-    
+
     // Return token info (including the full token for initial setup)
     res.status(201).json({
       message: 'Token created successfully',
@@ -1290,7 +1284,7 @@ app.post("/admin/tokens", apiLimiter, authenticateAdminToken, (req, res) => {
       created: tokenData.created,
       warning: 'Store this token securely. It will not be shown again in full.'
     });
-    
+
     writeErrorLog(`Token created successfully`, `Name: ${name}, Application: ${application}, Admin IP: ${req.ip}`);
   } catch (error) {
     writeErrorLog('Error creating token', error);
@@ -1304,29 +1298,29 @@ app.post("/admin/tokens", apiLimiter, authenticateAdminToken, (req, res) => {
 app.patch("/admin/tokens/:tokenPrefix/enable", apiLimiter, authenticateAdminToken, (req, res) => {
   try {
     const tokenPrefix = req.params.tokenPrefix;
-    
+
     // Find token by prefix
-    const fullToken = Object.keys(validTokens).find(token => 
+    const fullToken = Object.keys(validTokens).find(token =>
       token.startsWith(tokenPrefix) || token.substring(0, 8) === tokenPrefix
     );
-    
+
     if (!fullToken || !validTokens[fullToken]) {
       return res.status(404).json({
         error: 'Token not found',
         message: 'No token found matching the provided prefix'
       });
     }
-    
+
     // Enable the token
     validTokens[fullToken].enabled = true;
-    
+
     // Save to file
     if (!saveTokens()) {
       return res.status(500).json({
         error: 'Unable to save token changes to file'
       });
     }
-    
+
     res.status(200).json({
       message: 'Token enabled successfully',
       token: fullToken.substring(0, 8) + '...',
@@ -1334,7 +1328,7 @@ app.patch("/admin/tokens/:tokenPrefix/enable", apiLimiter, authenticateAdminToke
       application: validTokens[fullToken].application,
       enabled: true
     });
-    
+
     writeErrorLog(`Token enabled`, `Token: ${fullToken.substring(0, 8)}..., Admin IP: ${req.ip}`);
   } catch (error) {
     writeErrorLog('Error enabling token', error);
@@ -1348,29 +1342,29 @@ app.patch("/admin/tokens/:tokenPrefix/enable", apiLimiter, authenticateAdminToke
 app.patch("/admin/tokens/:tokenPrefix/disable", apiLimiter, authenticateAdminToken, (req, res) => {
   try {
     const tokenPrefix = req.params.tokenPrefix;
-    
+
     // Find token by prefix
-    const fullToken = Object.keys(validTokens).find(token => 
+    const fullToken = Object.keys(validTokens).find(token =>
       token.startsWith(tokenPrefix) || token.substring(0, 8) === tokenPrefix
     );
-    
+
     if (!fullToken || !validTokens[fullToken]) {
       return res.status(404).json({
         error: 'Token not found',
         message: 'No token found matching the provided prefix'
       });
     }
-    
+
     // Disable the token
     validTokens[fullToken].enabled = false;
-    
+
     // Save to file
     if (!saveTokens()) {
       return res.status(500).json({
         error: 'Unable to save token changes to file'
       });
     }
-    
+
     res.status(200).json({
       message: 'Token disabled successfully',
       token: fullToken.substring(0, 8) + '...',
@@ -1378,7 +1372,7 @@ app.patch("/admin/tokens/:tokenPrefix/disable", apiLimiter, authenticateAdminTok
       application: validTokens[fullToken].application,
       enabled: false
     });
-    
+
     writeErrorLog(`Token disabled`, `Token: ${fullToken.substring(0, 8)}..., Admin IP: ${req.ip}`);
   } catch (error) {
     writeErrorLog('Error disabling token', error);
