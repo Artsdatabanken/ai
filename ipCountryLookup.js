@@ -106,8 +106,8 @@ class IPCountryLookup {
       return null;
     }
 
-    // Trim whitespace and remove IPv6 prefix
-    ip = ip.trim().replace(/^::ffff:/, '');
+    // Remove IPv6 prefix
+    ip = ip.replace(/^::ffff:/, '');
 
     if (net.isIPv4(ip)) {
       const ipNum = this.ipToNumber(ip);

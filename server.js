@@ -398,6 +398,11 @@ let writelog = (req, json, auth = null) => {
     fs.appendFileSync(
       `${logdir}/${logPrefix}_${dateStr(`d`)}.csv`,
       "Datetime," +
+      "IP," +
+      "Latitude," +
+      "Longitude," +
+      "Country," +
+      "Model," +
       "Number_of_pictures," +
       "Result_1_name,Result_1_group,Result_1_probability," +
       "Result_2_name,Result_2_group,Result_2_probability," +
@@ -407,7 +412,16 @@ let writelog = (req, json, auth = null) => {
     );
   }
 
-  let row = `${dateStr(`s`)},${Array.isArray(req.files) ? req.files.length : 0
+  // Extract IP
+  const clientIP = getClientIP(req);
+
+  // Get location data and model info from the json response
+  const latitude = req.body.latitude || '';
+  const longitude = req.body.longitude || '';
+  const country = json.modelInfo ? json.modelInfo.country : '';
+  const model = json.modelInfo ? json.modelInfo.model : '';
+
+  let row = `${dateStr(`s`)},"${clientIP}","${latitude}","${longitude}","${country}","${model}",${Array.isArray(req.files) ? req.files.length : 0
     }`;
 
   for (let i = 0; i < json.predictions[0].taxa.items.length; i++) {
@@ -953,7 +967,7 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
       }
     }
 
-    // Use test IP if provided, otherwise get client IP
+    // Get client IP
     const clientIP = getClientIP(req);
     if (clientIP && clientIP !== 'unknown') {
       const cleanIP = clientIP.replace(/^::ffff:/, '');
@@ -1177,7 +1191,7 @@ app.post("/identify", idLimiter, authenticateApiToken, upload.array("image"), as
   try {
     json = await getId(req);
 
-    // Write to the log with authentication info
+    // Write to the log with authentication info (includes IP, location, model)
     writelog(req, json, req.auth);
 
     if (req.body.application === undefined) {
@@ -1499,7 +1513,7 @@ app.post("/", idLimiter, upload.array("image"), async (req, res) => {
   try {
     json = await getId(req);
 
-    // Write to the log
+    // Write to the log (includes IP, location, model)
     writelog(req, json);
 
     if (req.body.application === undefined) {
