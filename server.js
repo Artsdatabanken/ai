@@ -1137,8 +1137,7 @@ let getId = async (req) => {
     recognition.data.modelInfo = {
       model: modelUsed,
       country: country || 'Unknown',
-      locationSource: locationSource,
-      detectedIP: detectedIP
+      locationSource: locationSource
     };
 
     return recognition.data;
