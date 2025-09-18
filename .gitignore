@@ -30,3 +30,5 @@ resources/taxonPictures.json
 
 config/secrets.env
 .aider*
+geoip/geo-asn-country-ipv4.csv
+.gitignore

@@ -95,6 +95,14 @@ const encryption_algorithm = "aes-256-ctr";
 // Generate a secure, pseudo random initialization vector for encryption
 const initVect = crypto.randomBytes(16);
 
+// Import country-coder for accurate country detection
+const CountryCoder = require('@rapideditor/country-coder');
+
+// Import IP to country lookup
+const IPCountryLookup = require('./ipCountryLookup');
+const ipLookup = new IPCountryLookup();
+let ipLookupReady = false;
+
 let appInsights = require("applicationinsights");
 
 // --- Reading env variables
@@ -790,6 +798,17 @@ cron.schedule("30 * * * *", () => {
   });
 });
 
+// Update GeoIP database weekly (every Sunday at 3 AM)
+cron.schedule("0 3 * * 0", async () => {
+  console.log('Running weekly GeoIP database update...');
+  try {
+    await ipLookup.updateDatabase();
+    console.log('GeoIP database update completed');
+  } catch (error) {
+    writeErrorLog('Failed to update GeoIP database', error);
+  }
+});
+
 function encrypt(file, password) {
   // Create a new cipher using the algorithm, key, and initVect
   const cipher = crypto.createCipheriv(
@@ -915,6 +934,67 @@ let refreshtaxonimages = async () => {
   return Object.keys(taxa).length;
 };
 
+const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
+  try {
+    if (latitude && longitude) {
+      const lat = parseFloat(latitude);
+      const lon = parseFloat(longitude);
+
+      if (!isNaN(lat) && !isNaN(lon)) {
+        // Use country-coder for accurate country detection
+        const location = CountryCoder.iso1A2Code([lon, lat]);
+
+        if (location) {
+          // Get the full country name
+          const feature = CountryCoder.feature(location);
+          const countryName = feature ? feature.properties.nameEn : location;
+
+          console.log(`Country from coordinates (${lat}, ${lon}): ${countryName} (${location})`);
+          return countryName;
+        } else {
+          console.log(`Country from coordinates (${lat}, ${lon}): No country found (likely ocean or international waters)`);
+          return 'Unknown';
+        }
+      }
+    }
+
+    // Use test IP if provided, otherwise get client IP
+    const clientIP = getClientIP(req);
+    if (clientIP && clientIP !== 'unknown') {
+      const cleanIP = clientIP.replace(/^::ffff:/, '');
+
+      // Check if it's a private IP
+      if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|::1|localhost)/.test(cleanIP)) {
+        console.log(`Private/local IP detected: ${cleanIP}`);
+        return null;
+      }
+
+      // Look up country from IP
+      if (!ipLookupReady) {
+        console.log(`IP geolocation not ready yet for IP: ${cleanIP}`);
+        return null;
+      }
+
+      const countryCode = ipLookup.lookupCountry(cleanIP);
+      if (countryCode) {
+        // Get full country name from country code
+        const feature = CountryCoder.feature(countryCode);
+        const countryName = feature ? feature.properties.nameEn : countryCode;
+
+        console.log(`Country from IP (${cleanIP}): ${countryName} (${countryCode})`);
+        return countryName;
+      } else {
+        console.log(`Unable to determine country from IP: ${cleanIP} (DB entries: ${ipLookup.ipv4Ranges.length})`);
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.log(`Error in getCountryFromCoordinatesOrIP: ${error.message}`);
+    return null;
+  }
+};
+
 let getId = async (req) => {
   try {
     const form = new FormData();
@@ -935,14 +1015,36 @@ let getId = async (req) => {
       });
     }
 
+    // Determine country for model selection
+    const country = getCountryFromCoordinatesOrIP(
+      req.body.latitude,
+      req.body.longitude,
+      req
+    );
+
+    // Determine location source for response
+    let locationSource = 'unknown';
+    if (req.body.latitude && req.body.longitude) {
+      locationSource = 'coordinates';
+    } else if (country) {
+      locationSource = 'ip';
+    }
+
     let token;
-    if (
-      receivedParams.model &&
-      receivedParams.model.toLowerCase() === "global"
-    ) {
-      token = process.env.SH_TOKEN; // Shared token
-    } else {
+    let modelUsed;
+
+    // Check if user explicitly requested global model
+    if (receivedParams.includes('model') && req.body.model && req.body.model.toLowerCase() === "global") {
+      token = process.env.SH_TOKEN; // Global/European model
+      modelUsed = 'European';
+    } else if (country === 'Norway') {
+      // Use Norwegian model for Norway
       token = process.env.SP_TOKEN; // Specialized (Norwegian) token
+      modelUsed = 'Norwegian';
+    } else {
+      // Use global model for all other countries
+      token = process.env.SH_TOKEN; // Global/European model
+      modelUsed = 'European';
     }
 
     let recognition;
@@ -1060,6 +1162,14 @@ let getId = async (req) => {
     // -------------- end of duplicate checking code
 
     recognition.data.application = req.body.application;
+
+    // Add model and location information
+    recognition.data.modelInfo = {
+      model: modelUsed,
+      country: country || 'Unknown',
+      locationSource: locationSource
+    };
+
     return recognition.data;
   } catch (error) {
     throw error;
@@ -1565,4 +1675,13 @@ app.get("/robots933456.txt", apiLimiter, (req, res) => {
 // --- Serve a favicon, prevents 404 in the logs
 app.use("/favicon.ico", apiLimiter, express.static("favicon.ico"));
 
-app.listen(port, console.log(`Server now running on port ${port}`));
+// Initialize IP lookup database before starting server
+ipLookup.initialize().then(() => {
+  ipLookupReady = true;
+  console.log('IP geolocation database loaded successfully');
+  app.listen(port, console.log(`Server now running on port ${port}`));
+}).catch(error => {
+  console.error('Failed to initialize IP lookup database:', error);
+  ipLookupReady = false;
+  app.listen(port, console.log(`Server running on port ${port} (IP geolocation unavailable)`));
+});

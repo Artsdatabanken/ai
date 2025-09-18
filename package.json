@@ -10,6 +10,7 @@
   "author": "Wouter Koch",
   "license": "MIT",
   "dependencies": {
+    "@rapideditor/country-coder": "^5.5.1",
     "applicationinsights": "^2.7.0",
     "axios": "^0.21.1",
     "body-parser": "^1.20.2",
