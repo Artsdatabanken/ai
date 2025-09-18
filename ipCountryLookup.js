@@ -8,7 +8,7 @@ class IPCountryLookup {
     this.ipv4Ranges = [];
     this.ipv6Ranges = [];
     this.lastUpdate = null;
-    this.dbPath = path.join(__dirname, 'geoip');
+    this.dbPath = path.join(__dirname, 'cache', 'geoip');
   }
 
   async initialize() {

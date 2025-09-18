@@ -27,8 +27,8 @@ resources/taxonPictures.json
 /uploads
 /auth
 /cache
+/geoip
 
 config/secrets.env
 .aider*
-geoip/geo-asn-country-ipv4.csv
 .gitignore
