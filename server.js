@@ -961,13 +961,13 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
       // Check if it's a private IP
       if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|::1|localhost)/.test(cleanIP)) {
         console.log(`Private/local IP detected: ${cleanIP}`);
-        return null;
+        return 'Unknown';
       }
 
       // Look up country from IP
       if (!ipLookupReady) {
         console.log(`IP geolocation not ready yet for IP: ${cleanIP}`);
-        return null;
+        return 'Unknown';
       }
 
       const countryCode = ipLookup.lookupCountry(cleanIP);
@@ -983,10 +983,10 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
       }
     }
 
-    return null;
+    return 'Unknown';
   } catch (error) {
     console.log(`Error in getCountryFromCoordinatesOrIP: ${error.message}`);
-    return null;
+    return 'Unknown';
   }
 };
 
@@ -1027,6 +1027,8 @@ let getId = async (req) => {
 
     let token;
     let modelUsed;
+
+    console.log(country)
 
     // Check if user explicitly requested global model
     if (receivedParams.includes('model') && req.body.model && req.body.model.toLowerCase() === "global") {
