@@ -13,10 +13,7 @@ const sanitize = require("sanitize-filename");
 
 
 
-// Helper function to safely extract client IP for rate limiting
-// This handles cases where proxies might include port numbers or invalid data
 const getClientIP = (req) => {
-  // Try various headers that might contain the real IP
   const realIP =
     req.headers['x-real-ip'] ||
     req.headers['x-forwarded-for']?.split(',')[0].trim() ||
@@ -32,13 +29,10 @@ const getClientIP = (req) => {
     return 'unknown';
   }
 
-  // Clean up the IP (remove port, IPv6 prefix, etc.)
   const cleanIP = realIP
-    .replace(/^::ffff:/, '') // Remove IPv6 prefix
-    .replace(/:\d+[^:]*$/, '') // Remove port
+    .replace(/^::ffff:/, '')
+    .replace(/:\d+[^:]*$/, '')
     .trim();
-
-  // No debug logging needed anymore
 
   return cleanIP;
 };
@@ -106,44 +100,34 @@ const authLimiter = rateLimit({
   },
 });
 
-// Use the crypto library for encryption and decryption
 const crypto = require("crypto");
 const encryption_algorithm = "aes-256-ctr";
-// Generate a secure, pseudo random initialization vector for encryption
 const initVect = crypto.randomBytes(16);
 
-// Import country-coder for accurate country detection
 const CountryCoder = require('@rapideditor/country-coder');
-
-// Import IP to country lookup
 const IPCountryLookup = require('./ipCountryLookup');
 const ipLookup = new IPCountryLookup();
 let ipLookupReady = false;
 
 let appInsights = require("applicationinsights");
 
-// --- Reading env variables
 dotenv.config({ path: "./config/config.env" });
 dotenv.config({ path: "./config/secrets.env" });
 
-// --- Authentication Configuration
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 const TOKENS_FILE = './auth/tokens.json';
 
-// Load tokens from file
 let validTokens = {};
 const loadTokens = () => {
   try {
     if (fs.existsSync(TOKENS_FILE)) {
       const rawTokens = JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8'));
 
-      // Validate tokens have required fields
       validTokens = {};
       let validCount = 0;
 
       for (const [token, data] of Object.entries(rawTokens)) {
         if (data.application && data.name) {
-          // Set default enabled state if not specified
           if (data.enabled === undefined) {
             data.enabled = true;
           }
@@ -165,15 +149,12 @@ const loadTokens = () => {
   }
 };
 
-// Load tokens on startup
 loadTokens();
 
-// Warn if no admin token is set
 if (!ADMIN_TOKEN) {
   console.warn('WARNING: No ADMIN_TOKEN set. Admin functionality will be disabled.');
 }
 
-// --- Setting files and locations
 const logdir = "./log";
 const authdir = "./auth";
 const cachedir = "./cache";
@@ -183,13 +164,11 @@ const taxadir = `${cachedir}/taxa`;
 const pictureFile = `${cachedir}/taxonPictures.json`;
 const uploadsdir = "./uploads";
 
-// --- Get the taxon picture ids from file on start
 var taxonPics = {};
 if (fs.existsSync(pictureFile)) {
   taxonPics = JSON.parse(fs.readFileSync(pictureFile));
 }
 
-// --- Getting the date as a nice Norwegian-time string no matter where the server runs
 const dateStr = (resolution = `d`, date = false) => {
   if (!date) {
     date = new Date();
@@ -233,12 +212,10 @@ const writeErrorLog = (message, error) => {
   }
 };
 
-// --- Make sure the taxon cache directory exists
 if (!fs.existsSync(taxadir)) {
   fs.mkdirSync(taxadir);
 }
 
-// --- Authentication Middleware Functions
 const authenticateAdminToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
@@ -251,7 +228,6 @@ const authenticateAdminToken = (req, res, next) => {
     });
   }
 
-  // Check if it's the admin token
   if (token === ADMIN_TOKEN) {
     req.auth = { type: 'admin', token: token, application: 'admin' };
     return next();
@@ -276,13 +252,11 @@ const authenticateApiToken = (req, res, next) => {
     });
   }
 
-  // Check if it's the admin token (full access)
   if (token === ADMIN_TOKEN) {
     req.auth = { type: 'admin', token: token, application: 'admin' };
     return next();
   }
 
-  // Check if it's a valid API token from the tokens file
   if (validTokens[token] && validTokens[token].enabled === true) {
     req.auth = {
       type: 'api',
@@ -300,15 +274,12 @@ const authenticateApiToken = (req, res, next) => {
   });
 };
 
-// Function to reload tokens from file (useful for token management)
 const reloadTokens = () => {
   loadTokens();
 };
 
-// Function to save tokens to file
 const saveTokens = () => {
   try {
-    // Ensure directory exists
     const configDir = './config';
     if (!fs.existsSync(configDir)) {
       fs.mkdirSync(configDir, { recursive: true });
@@ -322,7 +293,6 @@ const saveTokens = () => {
   }
 };
 
-// Function to generate a secure random token
 const generateSecureToken = () => {
   const crypto = require('crypto');
   return crypto.randomBytes(32).toString('hex');
@@ -348,19 +318,12 @@ if (process.env.IKEY) {
 const app = express();
 const port = process.env.PORT;
 
-// Configure Express to trust proxy headers
-// You can set TRUST_PROXY environment variable to configure this
-// Examples: TRUST_PROXY=1 (trust first proxy), TRUST_PROXY=2 (trust first 2 proxies)
-// TRUST_PROXY=loopback (trust localhost), TRUST_PROXY=false (no proxy trust)
 const trustProxyConfig = process.env.TRUST_PROXY || '1';
 if (trustProxyConfig === 'false') {
-  // Explicitly disable proxy trust
   app.set('trust proxy', false);
 } else if (/^\d+$/.test(trustProxyConfig)) {
-  // If it's a number, trust that many hops
   app.set('trust proxy', parseInt(trustProxyConfig));
 } else {
-  // Otherwise use the string value (could be 'loopback', IP addresses, etc.)
   app.set('trust proxy', trustProxyConfig);
 }
 
@@ -388,7 +351,6 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 let getPicture = (sciName) => {
-  // Special characters do not work in all cases
   sciName = sciName.replaceAll("×", "x").replaceAll("ë", "e");
 
   let pic = taxonPics[sciName];
@@ -402,7 +364,6 @@ let getPicture = (sciName) => {
 let writelog = (req, json, auth = null) => {
   let application;
 
-  // Prefer application from token (more secure), fallback to request body
   if (auth && auth.application) {
     application = sanitize(auth.application);
   } else if (req.body.application) {
@@ -429,12 +390,10 @@ let writelog = (req, json, auth = null) => {
     );
   }
 
-  // Get location data and model info from the json response
   const latitude = req.body.latitude || '';
   const longitude = req.body.longitude || '';
   const country = json.modelInfo ? json.modelInfo.country : '';
   const model = json.modelInfo ? json.modelInfo.model : '';
-  // Use the actual IP that was used for geolocation (if coordinates were provided, no IP was used)
   const clientIP = json.modelInfo && json.modelInfo.detectedIP ? json.modelInfo.detectedIP : '';
 
   let row = `${dateStr(`s`)},"${clientIP}","${latitude}","${longitude}","${country}","${model}",${Array.isArray(req.files) ? req.files.length : 0

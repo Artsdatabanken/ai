@@ -32,3 +32,4 @@ resources/taxonPictures.json
 config/secrets.env
 .aider*
 .gitignore
+CLAUDE.md
