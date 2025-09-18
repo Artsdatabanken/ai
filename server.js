@@ -927,11 +927,7 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
         const location = CountryCoder.iso1A2Code([lon, lat]);
 
         if (location) {
-          // Get the full country name
-          const feature = CountryCoder.feature(location);
-          const countryName = feature ? feature.properties.nameEn : location;
-
-          return { country: countryName, detectedIP: null };
+          return { country: location, detectedIP: null };
         } else {
           return { country: 'Unknown', detectedIP: null };
         }
@@ -955,11 +951,7 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
 
       const countryCode = ipLookup.lookupCountry(cleanIP);
       if (countryCode) {
-        // Get full country name from country code
-        const feature = CountryCoder.feature(countryCode);
-        const countryName = feature ? feature.properties.nameEn : countryCode;
-
-        return { country: countryName, detectedIP: cleanIP };
+        return { country: countryCode, detectedIP: cleanIP };
       } else {
         return { country: 'Unknown', detectedIP: cleanIP };
       }
@@ -1016,7 +1008,7 @@ let getId = async (req) => {
     if (receivedParams.includes('model') && req.body.model && req.body.model.toLowerCase() === "global") {
       token = process.env.SH_TOKEN; // Global/European model
       modelUsed = 'European';
-    } else if (country === 'Norway' || country === 'Unknown') {
+    } else if (country === 'NO' || country === 'Unknown') {
       // Use Norwegian model for Norway, and assume Norway if country is unknown
       token = process.env.SP_TOKEN; // Specialized (Norwegian) token
       modelUsed = 'Norwegian';
