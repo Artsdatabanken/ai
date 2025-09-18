@@ -38,36 +38,7 @@ const getClientIP = (req) => {
     .replace(/:\d+[^:]*$/, '') // Remove port
     .trim();
 
-  // Log IP detection details for debugging
-  const timestamp = dateStr('s');
-  const debugInfo = {
-    timestamp: timestamp,
-    cleanIP: cleanIP,
-    isPrivate: /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/.test(cleanIP),
-    headers: {
-      'x-real-ip': req.headers['x-real-ip'],
-      'x-forwarded-for': req.headers['x-forwarded-for'],
-      'cf-connecting-ip': req.headers['cf-connecting-ip'],
-      'x-client-ip': req.headers['x-client-ip'],
-      'true-client-ip': req.headers['true-client-ip'],
-      'x-cluster-client-ip': req.headers['x-cluster-client-ip']
-    },
-    'req.ip': req.ip,
-    'req.socket.remoteAddress': req.socket?.remoteAddress,
-    'trust-proxy-setting': req.app.get('trust proxy'),
-    userAgent: req.headers['user-agent']?.substring(0, 100) // First 100 chars of user agent
-  };
-
-  // Always log to debug file for analysis
-  fs.appendFileSync(
-    `${logdir}/ip_debug_${dateStr('d')}.json`,
-    JSON.stringify(debugInfo) + '\n'
-  );
-
-  // Console warning if private IP detected
-  if (debugInfo.isPrivate) {
-    console.log(`Warning: Private IP detected (${cleanIP}). Details logged to ${logdir}/ip_debug_${dateStr('d')}.json`);
-  }
+  // No debug logging needed anymore
 
   return cleanIP;
 };
@@ -458,14 +429,13 @@ let writelog = (req, json, auth = null) => {
     );
   }
 
-  // Extract IP
-  const clientIP = getClientIP(req);
-
   // Get location data and model info from the json response
   const latitude = req.body.latitude || '';
   const longitude = req.body.longitude || '';
   const country = json.modelInfo ? json.modelInfo.country : '';
   const model = json.modelInfo ? json.modelInfo.model : '';
+  // Use the actual IP that was used for geolocation (if coordinates were provided, no IP was used)
+  const clientIP = json.modelInfo && json.modelInfo.detectedIP ? json.modelInfo.detectedIP : '';
 
   let row = `${dateStr(`s`)},"${clientIP}","${latitude}","${longitude}","${country}","${model}",${Array.isArray(req.files) ? req.files.length : 0
     }`;
@@ -1002,9 +972,9 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
           const feature = CountryCoder.feature(location);
           const countryName = feature ? feature.properties.nameEn : location;
 
-          return countryName;
+          return { country: countryName, detectedIP: null };
         } else {
-          return 'Unknown';
+          return { country: 'Unknown', detectedIP: null };
         }
       }
     }
@@ -1016,13 +986,12 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
 
       // Check if it's a private IP
       if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|::1|localhost)/.test(cleanIP)) {
-        return 'Unknown';
+        return { country: 'Unknown', detectedIP: cleanIP };
       }
 
       // Look up country from IP
       if (!ipLookupReady) {
-        console.log(`IP geolocation not ready yet for IP: ${cleanIP}`);
-        return 'Unknown';
+        return { country: 'Unknown', detectedIP: cleanIP };
       }
 
       const countryCode = ipLookup.lookupCountry(cleanIP);
@@ -1031,14 +1000,16 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
         const feature = CountryCoder.feature(countryCode);
         const countryName = feature ? feature.properties.nameEn : countryCode;
 
-        return countryName;
+        return { country: countryName, detectedIP: cleanIP };
+      } else {
+        return { country: 'Unknown', detectedIP: cleanIP };
       }
     }
 
-    return 'Unknown';
+    return { country: 'Unknown', detectedIP: null };
   } catch (error) {
     console.log(`Error in getCountryFromCoordinatesOrIP: ${error.message}`);
-    return 'Unknown';
+    return { country: 'Unknown', detectedIP: null };
   }
 };
 
@@ -1063,17 +1034,19 @@ let getId = async (req) => {
     }
 
     // Determine country for model selection
-    const country = getCountryFromCoordinatesOrIP(
+    const geoResult = getCountryFromCoordinatesOrIP(
       req.body.latitude,
       req.body.longitude,
       req
     );
+    const country = geoResult.country;
+    const detectedIP = geoResult.detectedIP;
 
     // Determine location source for response
     let locationSource = 'unknown';
     if (req.body.latitude && req.body.longitude) {
       locationSource = 'coordinates';
-    } else if (country) {
+    } else if (country !== 'Unknown') {
       locationSource = 'ip';
     }
 
@@ -1213,7 +1186,8 @@ let getId = async (req) => {
     recognition.data.modelInfo = {
       model: modelUsed,
       country: country || 'Unknown',
-      locationSource: locationSource
+      locationSource: locationSource,
+      detectedIP: detectedIP
     };
 
     return recognition.data;
@@ -1612,44 +1586,6 @@ app.get("/", apiLimiter, (req, res) => {
   });
 });
 
-// Diagnostic endpoints for checking IP configuration (admin only)
-app.get("/admin/ip-debug", apiLimiter, authenticateAdminToken, (req, res) => {
-  // Current request debug info
-  const currentRequest = {
-    'req.ip': req.ip,
-    'getClientIP()': getClientIP(req),
-    'req.socket.remoteAddress': req.socket.remoteAddress,
-    'x-forwarded-for': req.headers['x-forwarded-for'],
-    'x-real-ip': req.headers['x-real-ip'],
-    'cf-connecting-ip': req.headers['cf-connecting-ip'],
-    'true-client-ip': req.headers['true-client-ip'],
-    'trust-proxy-setting': req.app.get('trust proxy')
-  };
-
-  // Read recent logs from debug file
-  let recentLogs = [];
-  const debugFile = `${logdir}/ip_debug_${dateStr('d')}.json`;
-  if (fs.existsSync(debugFile)) {
-    try {
-      const logs = fs.readFileSync(debugFile, 'utf8')
-        .trim()
-        .split('\n')
-        .filter(line => line)
-        .map(line => JSON.parse(line));
-
-      // Get last 10 logs
-      recentLogs = logs.slice(-10);
-    } catch (error) {
-      recentLogs = [{ error: 'Failed to parse debug logs' }];
-    }
-  }
-
-  res.json({
-    currentRequest,
-    recentLogs,
-    debugLogFile: debugFile
-  });
-});
 
 app.get("/image/*", apiLimiter, authenticateAdminToken, (req, res) => {
   // image request from the orakel service
