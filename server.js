@@ -16,14 +16,60 @@ const sanitize = require("sanitize-filename");
 // Helper function to safely extract client IP for rate limiting
 // This handles cases where proxies might include port numbers or invalid data
 const getClientIP = (req) => {
-  if (!req.ip) {
-    console.warn('Warning: request.ip is missing, falling back to socket address');
-    return req.socket.remoteAddress || 'unknown';
+  // Try various headers that might contain the real IP
+  const realIP =
+    req.headers['x-real-ip'] ||
+    req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+    req.headers['cf-connecting-ip'] || // Cloudflare
+    req.headers['x-client-ip'] ||
+    req.headers['true-client-ip'] || // Some CDNs
+    req.headers['x-cluster-client-ip'] || // Some proxies
+    req.ip || // Express's processed IP (respects trust proxy setting)
+    req.socket?.remoteAddress;
+
+  if (!realIP) {
+    console.warn('Warning: Could not determine client IP');
+    return 'unknown';
   }
 
-  // Some proxies (like Azure Application Gateway) include port numbers in X-Forwarded-For
-  // Strip port numbers to prevent rate limit bypass
-  return req.ip.replace(/:\d+[^:]*$/, '');
+  // Clean up the IP (remove port, IPv6 prefix, etc.)
+  const cleanIP = realIP
+    .replace(/^::ffff:/, '') // Remove IPv6 prefix
+    .replace(/:\d+[^:]*$/, '') // Remove port
+    .trim();
+
+  // Log IP detection details for debugging
+  const timestamp = dateStr('s');
+  const debugInfo = {
+    timestamp: timestamp,
+    cleanIP: cleanIP,
+    isPrivate: /^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.)/.test(cleanIP),
+    headers: {
+      'x-real-ip': req.headers['x-real-ip'],
+      'x-forwarded-for': req.headers['x-forwarded-for'],
+      'cf-connecting-ip': req.headers['cf-connecting-ip'],
+      'x-client-ip': req.headers['x-client-ip'],
+      'true-client-ip': req.headers['true-client-ip'],
+      'x-cluster-client-ip': req.headers['x-cluster-client-ip']
+    },
+    'req.ip': req.ip,
+    'req.socket.remoteAddress': req.socket?.remoteAddress,
+    'trust-proxy-setting': req.app.get('trust proxy'),
+    userAgent: req.headers['user-agent']?.substring(0, 100) // First 100 chars of user agent
+  };
+
+  // Always log to debug file for analysis
+  fs.appendFileSync(
+    `${logdir}/ip_debug_${dateStr('d')}.json`,
+    JSON.stringify(debugInfo) + '\n'
+  );
+
+  // Console warning if private IP detected
+  if (debugInfo.isPrivate) {
+    console.log(`Warning: Private IP detected (${cleanIP}). Details logged to ${logdir}/ip_debug_${dateStr('d')}.json`);
+  }
+
+  return cleanIP;
 };
 
 const cacheLimiter = rateLimit({
@@ -573,9 +619,7 @@ let getName = async (sciName, force = false) => {
     const missingLanguages = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
 
     // If all languages are already filled, skip further fetching
-    if (missingLanguages.length === 0) {
-      console.log(`All vernacular names already found for ${nameResult.scientificName}`);
-    } else {
+    if (missingLanguages.length !== 0) {
       // Priority 1: GBIF (Catalog of Life)
       if (missingLanguages.length > 0) {
         try {
@@ -958,10 +1002,8 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
           const feature = CountryCoder.feature(location);
           const countryName = feature ? feature.properties.nameEn : location;
 
-          console.log(`Country from coordinates (${lat}, ${lon}): ${countryName} (${location})`);
           return countryName;
         } else {
-          console.log(`Country from coordinates (${lat}, ${lon}): No country found (likely ocean or international waters)`);
           return 'Unknown';
         }
       }
@@ -974,7 +1016,6 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
 
       // Check if it's a private IP
       if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|::1|localhost)/.test(cleanIP)) {
-        console.log(`Private/local IP detected: ${cleanIP}`);
         return 'Unknown';
       }
 
@@ -990,10 +1031,7 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
         const feature = CountryCoder.feature(countryCode);
         const countryName = feature ? feature.properties.nameEn : countryCode;
 
-        console.log(`Country from IP (${cleanIP}): ${countryName} (${countryCode})`);
         return countryName;
-      } else {
-        console.log(`Unable to determine country from IP: ${cleanIP} (DB entries: ${ipLookup.ipv4Ranges.length})`);
       }
     }
 
@@ -1041,8 +1079,6 @@ let getId = async (req) => {
 
     let token;
     let modelUsed;
-
-    console.log(country)
 
     // Check if user explicitly requested global model
     if (receivedParams.includes('model') && req.body.model && req.body.model.toLowerCase() === "global") {
@@ -1578,7 +1614,8 @@ app.get("/", apiLimiter, (req, res) => {
 
 // Diagnostic endpoints for checking IP configuration (admin only)
 app.get("/admin/ip-debug", apiLimiter, authenticateAdminToken, (req, res) => {
-  res.json({
+  // Current request debug info
+  const currentRequest = {
     'req.ip': req.ip,
     'getClientIP()': getClientIP(req),
     'req.socket.remoteAddress': req.socket.remoteAddress,
@@ -1587,6 +1624,30 @@ app.get("/admin/ip-debug", apiLimiter, authenticateAdminToken, (req, res) => {
     'cf-connecting-ip': req.headers['cf-connecting-ip'],
     'true-client-ip': req.headers['true-client-ip'],
     'trust-proxy-setting': req.app.get('trust proxy')
+  };
+
+  // Read recent logs from debug file
+  let recentLogs = [];
+  const debugFile = `${logdir}/ip_debug_${dateStr('d')}.json`;
+  if (fs.existsSync(debugFile)) {
+    try {
+      const logs = fs.readFileSync(debugFile, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(line => line)
+        .map(line => JSON.parse(line));
+
+      // Get last 10 logs
+      recentLogs = logs.slice(-10);
+    } catch (error) {
+      recentLogs = [{ error: 'Failed to parse debug logs' }];
+    }
+  }
+
+  res.json({
+    currentRequest,
+    recentLogs,
+    debugLogFile: debugFile
   });
 });
 
