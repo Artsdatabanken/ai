@@ -1629,6 +1629,23 @@ app.get("/robots933456.txt", apiLimiter, (req, res) => {
   res.status(200).send("Hi, Azure");
 });
 
+// --- RSS feed endpoint
+app.get("/rss", apiLimiter, (_req, res) => {
+  res.type("application/rss+xml");
+  res.sendFile(__dirname + "/cache/feed.rss");
+});
+
+// --- Admin endpoint to upload RSS file
+app.post("/admin/rss", apiLimiter, authenticateAdminToken, express.text({ type: 'application/rss+xml', limit: '1mb' }), (req, res) => {
+  try {
+    fs.writeFileSync(__dirname + "/cache/feed.rss", req.body);
+    res.status(200).json({ message: "RSS feed updated successfully" });
+  } catch (error) {
+    console.error("Error updating RSS feed:", error);
+    res.status(500).json({ error: "Failed to update RSS feed" });
+  }
+});
+
 // --- Serve a favicon, prevents 404 in the logs
 app.use("/favicon.ico", apiLimiter, express.static("favicon.ico"));
 
