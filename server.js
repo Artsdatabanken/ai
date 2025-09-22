@@ -1636,9 +1636,12 @@ app.get("/rss", apiLimiter, (_req, res) => {
 });
 
 // --- Admin endpoint to upload RSS file
-app.post("/admin/rss", apiLimiter, authenticateAdminToken, express.text({ type: 'application/rss+xml', limit: '1mb' }), (req, res) => {
+app.post("/admin/rss", apiLimiter, authenticateAdminToken, upload.single("rss"), (req, res) => {
   try {
-    fs.writeFileSync(__dirname + "/cache/feed.rss", req.body);
+    if (!req.file) {
+      return res.status(400).json({ error: "No RSS file provided" });
+    }
+    fs.writeFileSync(__dirname + "/cache/feed.rss", req.file.buffer);
     res.status(200).json({ message: "RSS feed updated successfully" });
   } catch (error) {
     console.error("Error updating RSS feed:", error);
