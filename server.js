@@ -409,7 +409,7 @@ let writelog = (req, json, auth = null) => {
   fs.appendFileSync(`${logdir}/${application}_${dateStr(`d`)}.csv`, row);
 };
 
-let getName = async (sciName, force = false) => {
+let getName = async (sciName, force = false, country = null) => {
   let unencoded_jsonfilename = `${taxadir}/${sanitize(sciName)}.json`;
   let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`;
 
@@ -430,7 +430,16 @@ let getName = async (sciName, force = false) => {
   if (fs.existsSync(jsonfilename)) {
     if (!force) {
       try {
-        return JSON.parse(fs.readFileSync(jsonfilename));
+        const cachedData = JSON.parse(fs.readFileSync(jsonfilename));
+        if (country === 'NO') {
+          if (cachedData.redListCategories && cachedData.redListCategories.NO) {
+            cachedData.redListCategory = cachedData.redListCategories.NO;
+          }
+          if (cachedData.invasiveCategories && cachedData.invasiveCategories.NO) {
+            cachedData.invasiveCategory = cachedData.invasiveCategories.NO;
+          }
+        }
+        return cachedData;
       } catch (error) {
         writeErrorLog(`Could not parse "${jsonfilename}"`, error);
 
@@ -458,6 +467,8 @@ let getName = async (sciName, force = false) => {
     vernacularNames: {},
     groupName: "",
     scientificName: sciName,
+    redListCategories: {},
+    invasiveCategories: {},
   };
   let name;
 
@@ -486,6 +497,28 @@ let getName = async (sciName, force = false) => {
 
     if (!!acceptedtaxon) {
       retrievedTaxon.data = acceptedtaxon;
+
+      if (acceptedtaxon.Tags && Array.isArray(acceptedtaxon.Tags)) {
+        const redListCodes = ['CR', 'EN', 'VU', 'NT', 'DD', 'LC'];
+        const invasiveCodes = ['NK', 'LO', 'PH', 'HI', 'SE'];
+
+        for (const tag of acceptedtaxon.Tags) {
+          if (tag.startsWith('Kategori/')) {
+            const code = tag.split('/')[1];
+            if (redListCodes.includes(code)) {
+              nameResult.redListCategories.NO = code;
+              if (country === 'NO') {
+                nameResult.redListCategory = code;
+              }
+            } else if (invasiveCodes.includes(code)) {
+              nameResult.invasiveCategories.NO = code;
+              if (country === 'NO') {
+                nameResult.invasiveCategory = code;
+              }
+            }
+          }
+        }
+      }
     } else {
       let hit = taxon.data.find((t) =>
         t.ScientificNames.find((sn) =>
@@ -527,6 +560,28 @@ let getName = async (sciName, force = false) => {
         });
 
       retrievedTaxon.data = taxon.data;
+
+      if (taxon.data.Tags && Array.isArray(taxon.data.Tags)) {
+        const redListCodes = ['CR', 'EN', 'VU', 'NT', 'DD', 'LC'];
+        const invasiveCodes = ['NK', 'LO', 'PH', 'HI', 'SE'];
+
+        for (const tag of taxon.data.Tags) {
+          if (tag.startsWith('Kategori/')) {
+            const code = tag.split('/')[1];
+            if (redListCodes.includes(code)) {
+              nameResult.redListCategories.NO = code;
+              if (country === 'NO') {
+                nameResult.redListCategory = code;
+              }
+            } else if (invasiveCodes.includes(code)) {
+              nameResult.invasiveCategories.NO = code;
+              if (country === 'NO') {
+                nameResult.invasiveCategory = code;
+              }
+            }
+          }
+        }
+      }
     }
 
     nameResult.scientificName =
@@ -1082,7 +1137,7 @@ let getId = async (req) => {
         ) {
           pred.name = pred.scientific_name;
         } else {
-          nameResult = await getName(pred.scientific_name);
+          nameResult = await getName(pred.scientific_name, false, country);
 
           pred.vernacularName = nameResult.vernacularName;
           pred.vernacularNames = nameResult.vernacularNames;
@@ -1090,6 +1145,12 @@ let getId = async (req) => {
           pred.scientificNameID = nameResult.scientificNameID;
           pred.name = nameResult.scientificName;
           pred.infoUrl = nameResult.infoUrl;
+          if (nameResult.redListCategory) {
+            pred.redListCategory = nameResult.redListCategory;
+          }
+          if (nameResult.invasiveCategory) {
+            pred.invasiveCategory = nameResult.invasiveCategory;
+          }
         }
 
         pred.picture = getPicture(pred.scientific_name);
@@ -1170,7 +1231,7 @@ app.post("/identify", idLimiter, authenticateApiToken, upload.array("image"), as
           if (fs.existsSync(filename)) {
             fs.stat(filename, function (err, stats) {
               if ((new Date() - stats.mtime) / (1000 * 60 * 60 * 24) > 10) {
-                getName(taxon.scientific_name, (force = true));
+                getName(taxon.scientific_name, true);
               }
             });
           }
@@ -1406,7 +1467,7 @@ app.get("/taxonimages/view", apiLimiter, (req, res) => {
 app.get("/cachetaxon/*", cacheLimiter, authenticateAdminToken, async (req, res) => {
   try {
     let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
-    let name = await getName(taxon, (force = true));
+    let name = await getName(taxon, true);
     res.status(200).json(name);
   } catch (error) {
     writeErrorLog(`Error for ${req.originalUrl}`, error);
@@ -1499,7 +1560,7 @@ app.post("/", idLimiter, upload.array("image"), async (req, res) => {
           if (fs.existsSync(filename)) {
             fs.stat(filename, function (err, stats) {
               if ((new Date() - stats.mtime) / (1000 * 60 * 60 * 24) > 10) {
-                getName(taxon.scientific_name, (force = true));
+                getName(taxon.scientific_name, true);
               }
             });
           }
