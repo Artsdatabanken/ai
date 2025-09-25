@@ -11,7 +11,32 @@ const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
 const sanitize = require("sanitize-filename");
 
+const groupNameTranslations = {
+  'biller': { 'nb': 'Biller', 'nn': 'Biller', 'en': 'Beetles', 'sv': 'Skalbaggar', 'se': ' Coleoptera ', 'nl': 'Kevers', 'es': 'Escarabajos' },
+  'bløtdyr': { 'nb': 'Bløtdyr', 'nn': 'Blautdyr', 'en': 'Molluscs', 'sv': 'Blötdjur', 'se': 'Šlieddaealli', 'nl': 'Weekdieren', 'es': 'Moluscos' },
+  'døgnfluer osv': { 'nb': 'Døgnfluer osv', 'nn': 'Døgnfluger osv', 'en': 'Mayflies etc', 'sv': 'Dagsländor etc', 'se': 'Ephemeroptera jna', 'nl': 'Eendagsvliegen etc', 'es': 'Efímeras etc' },
+  'edderkoppdyr': { 'nb': 'Edderkoppdyr', 'nn': 'Edderkoppdyr', 'en': 'Arachnids', 'sv': 'Spindeldjur', 'se': 'Heavnnit', 'nl': 'Spinachtigen', 'es': 'Arácnidos' },
+  'fisker': { 'nb': 'Fisker', 'nn': 'Fiskar', 'en': 'Fish', 'sv': 'Fiskar', 'se': 'Guolli', 'nl': 'Vissen', 'es': 'Peces' },
+  'fugler': { 'nb': 'Fugler', 'nn': 'Fuglar', 'en': 'Birds', 'sv': 'Fåglar', 'se': 'Lottit', 'nl': 'Vogels', 'es': 'Aves' },
+  'karplanter': { 'nb': 'Karplanter', 'nn': 'Karplantar', 'en': 'Vascular plants', 'sv': 'Kärlväxter', 'se': 'Šattut', 'nl': 'Vaatplanten', 'es': 'Plantas vasculares' },
+  'lav': { 'nb': 'Lav', 'nn': 'Lav', 'en': 'Lichens', 'sv': 'Lavar', 'se': 'Čuovggat', 'nl': 'Korstmossen', 'es': 'Líquenes' },
+  'moser': { 'nb': 'Moser', 'nn': 'Mosar', 'en': 'Mosses', 'sv': 'Mossor', 'se': 'Muohta', 'nl': 'Mossen', 'es': 'Musgos' },
+  'nebbmunner': { 'nb': 'Nebbmunner', 'nn': 'Nebbmunnar', 'en': 'Hemipterans', 'sv': 'Halvvingar', 'se': 'Hemiptera', 'nl': 'Halfvleugeligen', 'es': 'Hemípteros' },
+  'nettvinger osv': { 'nb': 'Nettvinger osv', 'nn': 'Nettvenger osv', 'en': 'Lacewings etc', 'sv': 'Nätvingar etc', 'se': 'Neuroptera jna', 'nl': 'Netvleugeligen etc', 'es': 'Neurópteros etc' },
+  'pattedyr': { 'nb': 'Pattedyr', 'nn': 'Pattedyr', 'en': 'Mammals', 'sv': 'Däggdjur', 'se': 'Njiččehasat', 'nl': 'Zoogdieren', 'es': 'Mamíferos' },
+  'pigghuder osv': { 'nb': 'Pigghuder osv', 'nn': 'Pigghudingar osv', 'en': 'Echinoderms etc', 'sv': 'Tagghudingar etc', 'se': 'Echinodermata jna', 'nl': 'Stekelhuidigen etc', 'es': 'Equinodermos etc' },
+  'reptiler osv': { 'nb': 'Reptiler osv', 'nn': 'Reptilar osv', 'en': 'Reptiles etc', 'sv': 'Reptiler etc', 'se': 'Njoammut jna', 'nl': 'Reptielen etc', 'es': 'Reptiles etc' },
+  'sommerfugler': { 'nb': 'Sommerfugler', 'nn': 'Sommarfuglar', 'en': 'Butterflies & moths', 'sv': 'Fjärilar', 'se': 'Beaivelottit', 'nl': 'Vlinders', 'es': 'Mariposas y polillas' },
+  'sopper': { 'nb': 'Sopper', 'nn': 'Soppar', 'en': 'Fungi', 'sv': 'Svampar', 'se': 'Guobbarat', 'nl': 'Schimmels', 'es': 'Hongos' },
+  'tovinger': { 'nb': 'Tovinger', 'nn': 'Tovenger', 'en': 'Flies', 'sv': 'Tvåvingar', 'se': 'Diptera', 'nl': 'Tweevleugeligen', 'es': 'Dípteros' },
+  'unknown': { 'nb': 'Unknown', 'nn': 'Ukjend', 'en': 'Unknown', 'sv': 'Okänd', 'se': 'Dovdameahttun', 'nl': 'Onbekend', 'es': 'Desconocido' },
+  'veps': { 'nb': 'Veps', 'nn': 'Veps', 'en': 'Wasps', 'sv': 'Getingar', 'se': 'Hymenoptera', 'nl': 'Wespen', 'es': 'Avispas' }
+};
 
+const capitalizeFirstLetter = (str) => {
+  if (!str) return str;
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+};
 
 const getClientIP = (req) => {
   const realIP =
@@ -466,6 +491,7 @@ let getName = async (sciName, force = false, country = null) => {
     vernacularName: sciName,
     vernacularNames: {},
     groupName: "",
+    groupNames: {},
     scientificName: sciName,
     redListCategories: {},
     invasiveCategories: {},
@@ -791,9 +817,24 @@ let getName = async (sciName, force = false, country = null) => {
         dp.Properties.find((p) => p.Value === "Artsobservasjoner")
     );
 
-    if (artsobsname && artsobsname.Value) {
-      nameResult.groupName = artsobsname.Value;
+    if (artsobsname && artsobsname.Value && artsobsname.Value.trim()) {
+      const rawGroupName = artsobsname.Value.toLowerCase();
+      const capitalizedGroupName = capitalizeFirstLetter(artsobsname.Value);
+
+      if (groupNameTranslations[rawGroupName]) {
+        nameResult.groupNames = groupNameTranslations[rawGroupName];
+        nameResult.groupName = capitalizedGroupName;
+      } else {
+        nameResult.groupName = capitalizedGroupName;
+        nameResult.groupNames = { 'nb': capitalizedGroupName, 'nn': capitalizedGroupName, 'se': capitalizedGroupName };
+      }
+    } else {
+      nameResult.groupName = 'Unknown';
+      nameResult.groupNames = groupNameTranslations['unknown'];
     }
+  } else {
+    nameResult.groupName = 'Unknown';
+    nameResult.groupNames = groupNameTranslations['unknown'];
   }
 
   if (force || !fs.existsSync(jsonfilename)) {
@@ -1142,6 +1183,7 @@ let getId = async (req) => {
           pred.vernacularName = nameResult.vernacularName;
           pred.vernacularNames = nameResult.vernacularNames;
           pred.groupName = nameResult.groupName;
+          pred.groupNames = nameResult.groupNames;
           pred.scientificNameID = nameResult.scientificNameID;
           pred.name = nameResult.scientificName;
           pred.infoUrl = nameResult.infoUrl;
