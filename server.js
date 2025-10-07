@@ -1032,8 +1032,16 @@ const evaluateWarning = (warning, context) => {
     }
   }
 
-  if (conditions.country && context.country !== conditions.country) {
-    return false;
+  if (conditions.country) {
+    if (Array.isArray(conditions.country)) {
+      if (!conditions.country.includes(context.country)) {
+        return false;
+      }
+    } else {
+      if (context.country !== conditions.country) {
+        return false;
+      }
+    }
   }
 
   if (conditions.invasiveCategory && !matchesCondition(context.invasiveCategory, conditions.invasiveCategory)) {

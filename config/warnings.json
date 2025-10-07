@@ -8,14 +8,6 @@
         "sopper"
       ]
     },
-    "title": {
-      "nb": "",
-      "nn": "",
-      "en": "",
-      "sv": "",
-      "nl": "",
-      "es": ""
-    },
     "message": {
       "nb": "Aldri spis noe basert på forslagene - de kan være feil!",
       "nn": "Aldri et noko basert på forslaga - dei kan vere feil!",
@@ -28,7 +20,7 @@
   {
     "id": "norwegian-pest-species",
     "type": "prediction",
-    "category": "info",
+    "category": "warning",
     "conditions": {
       "country": "NO",
       "scientificName": [

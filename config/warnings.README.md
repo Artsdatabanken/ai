@@ -79,10 +79,12 @@ Match against the scientific name. Can be:
 ```
 
 ### `country`
-Match against the ISO country code (e.g., "NO", "SE").
+Match against the ISO country code. Can be:
+- Single country: `"country": "NO"`
+- Array of countries: `"country": ["NO", "SE", "FI"]`
 
 ```json
-"country": "NO"
+"country": ["NO", "SE"]
 ```
 
 ### `invasiveCategory`
