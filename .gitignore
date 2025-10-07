@@ -33,3 +33,4 @@ config/secrets.env
 .aider*
 .gitignore
 CLAUDE.md
+.claude

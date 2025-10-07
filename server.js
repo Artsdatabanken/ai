@@ -137,7 +137,7 @@ let ipLookupReady = false;
 let appInsights = require("applicationinsights");
 
 dotenv.config({ path: "./config/config.env" });
-dotenv.config({ path: "./config/secrets.env" });
+dotenv.config({ path: "./auth/secrets.env" });
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 const TOKENS_FILE = './auth/tokens.json';
@@ -1100,17 +1100,27 @@ let getId = async (req) => {
     let token;
     let modelUsed;
 
+    // By default, use the Norwegian credentials
+    let username = process.env.NATURALIS_USERNAME_NORWAY
+    let password = process.env.NATURALIS_PASSWORD_NORWAY
+
+
     // Check if user explicitly requested global model
     if (receivedParams.includes('model') && req.body.model && req.body.model.toLowerCase() === "global") {
-      token = process.env.SH_TOKEN; // Global/European model
+      token = process.env.NATURALIS_TOKEN_EUROPE;
       modelUsed = 'European';
+    } else if (country === 'SE') {
+      username = process.env.NATURALIS_USERNAME_SWEDEN
+      password = process.env.NATURALIS_PASSWORD_SWEDEN
+      token = process.env.NATURALIS_TOKEN_SWEDEN;
+      modelUsed = 'Swedish';
     } else if (country === 'NO' || country === 'Unknown') {
       // Use Norwegian model for Norway, and assume Norway if country is unknown
-      token = process.env.SP_TOKEN; // Specialized (Norwegian) token
+      token = process.env.NATURALIS_TOKEN_NORWAY;
       modelUsed = 'Norwegian';
     } else {
-      // Use global model for all other countries
-      token = process.env.SH_TOKEN; // Global/European model
+      // Otherwise it is a different but known country; use European
+      token = process.env.NATURALIS_TOKEN_EUROPE;
       modelUsed = 'European';
     }
 
@@ -1125,8 +1135,8 @@ let getId = async (req) => {
             ...formHeaders,
           },
           auth: {
-            username: process.env.NATURALIS_USERNAME,
-            password: process.env.NATURALIS_PASSWORD,
+            username: username,
+            password: password,
           },
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
