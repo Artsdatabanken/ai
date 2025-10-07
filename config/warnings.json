@@ -1,0 +1,74 @@
+[
+  {
+    "id": "fungi-general",
+    "type": "general",
+    "category": "info",
+    "conditions": {
+      "groupNames": [
+        "sopper"
+      ]
+    },
+    "title": {
+      "nb": "",
+      "nn": "",
+      "en": "",
+      "sv": "",
+      "nl": "",
+      "es": ""
+    },
+    "message": {
+      "nb": "Aldri spis noe basert på forslagene - de kan være feil!",
+      "nn": "Aldri et noko basert på forslaga - dei kan vere feil!",
+      "en": "Never eat anything based on the suggestions - they may be wrong!",
+      "sv": "Ät aldrig något baserat på förslagen - de kan vara fel!",
+      "nl": "Eet nooit iets op basis van de suggesties - ze kunnen fout zijn!",
+      "es": "Nunca comas nada basándote en las sugerencias - ¡pueden estar equivocadas!"
+    }
+  },
+  {
+    "id": "norwegian-pest-species",
+    "type": "prediction",
+    "category": "info",
+    "conditions": {
+      "country": "NO",
+      "scientificName": [
+        
+        "Agrilus planipennis",
+        "Anoplophora chinensis",
+        "Anoplophora glabripennis",
+        "Aromia bungi",
+        "Erwinia amylovora",
+        "Helicoverpa armigera",
+        "Obama nungara",
+        "Opogona sacchari",
+        "Popillia japonica",
+        "Spodoptera litura",
+        "Spodoptera litturalis"
+      ]
+    },
+    "title": {
+      "nb": "Meldepliktig art",
+      "nn": "Meldepliktig art",
+      "en": "Mandatory Reporting Species",
+      "sv": "Anmälningspliktig art",
+      "nl": "Meldingsplichtige soort",
+      "es": "Especie de notificación obligatoria"
+    },
+    "message": {
+      "nb": "Dette er en skadegjører med meldeplikt hos mattilsynet. Hvis du tror at det kan være denne bør du melde det inn hos Mattilsynet ved å trykke her.",
+      "nn": "Dette er ein skadegjerar med meldeplikt hos mattilsynet. Dersom du trur at det kan vere denne bør du melde det inn hos Mattilsynet ved å trykke her.",
+      "en": "This is a pest species that must be reported to the Norwegian Food Safety Authority. If you think this identification may be correct, please report it by clicking here (in Norwegian).",
+      "sv": "Detta är en skadedjursart som måste rapporteras till Mattilsynet (norska livsmedelsverket). Om du tror att denna identifiering kan vara korrekt, rapportera den genom att klicka här (på norska).",
+      "nl": "Dit is een plaagsoort die moet worden gemeld aan de Noorse voedselveiligheidsautoriteit. Als u denkt dat deze identificatie correct kan zijn, meld het dan door hier te klikken (in het Noors).",
+      "es": "Esta es una especie de plaga que debe notificarse a la Autoridad Noruega de Seguridad Alimentaria. Si cree que esta identificación puede ser correcta, repórtela haciendo clic aquí (en noruego)."
+    },
+    "link": {
+      "nb": "https://www.mattilsynet.no/skjemaer/planter-og-planteskadegjorer/skjema/om-varselet",
+      "nn": "https://www.mattilsynet.no/skjemaer/varsle-om-planter-eller-planteskadegjerar/skjema/om-bekymringa",
+      "en": "https://www.mattilsynet.no/skjemaer/planter-og-planteskadegjorer/skjema/om-varselet",
+      "sv": "https://www.mattilsynet.no/skjemaer/planter-og-planteskadegjorer/skjema/om-varselet",
+      "nl": "https://www.mattilsynet.no/skjemaer/planter-og-planteskadegjorer/skjema/om-varselet",
+      "es": "https://www.mattilsynet.no/skjemaer/planter-og-planteskadegjorer/skjema/om-varselet"
+    }
+  }
+]
