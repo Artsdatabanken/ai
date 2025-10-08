@@ -24,14 +24,16 @@
     "conditions": {
       "country": "NO",
       "scientificName": [
-        "Vipera berus",
         "Agrilus planipennis",
         "Anoplophora chinensis",
         "Anoplophora glabripennis",
         "Aromia bungi",
+        "Cacoecimorpha pronubana",
         "Erwinia amylovora",
+        "Epitrix cucumeris",
         "Helicoverpa armigera",
-        "Obama nungara",
+        "Leptinotarsa decemlineata",
+        "Liriomyza",
         "Opogona sacchari",
         "Popillia japonica",
         "Spodoptera litura",
