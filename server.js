@@ -441,9 +441,11 @@ let writelog = (req, json, auth = null) => {
   fs.appendFileSync(`${logdir}/${application}_${dateStr(`d`)}.csv`, row);
 };
 
-let getName = async (sciName, force = false, country = null) => {
-  let unencoded_jsonfilename = `${taxadir}/${sanitize(sciName)}.json`;
-  let jsonfilename = `${taxadir}/${encodeURIComponent(sciName)}.json`;
+let getName = async (sciNameId, sciName, force = false, country = null) => {
+
+  let filename = (!!sciNameId ? (sciNameId) : "") + "_" + sciName
+  let unencoded_jsonfilename = `${taxadir}/${sanitize(filename)}.json`;
+  let jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
 
   if (
     fs.existsSync(unencoded_jsonfilename) &&
@@ -503,71 +505,88 @@ let getName = async (sciName, force = false, country = null) => {
     redListCategories: {},
     invasiveCategories: {},
   };
-  let name;
 
-  let retrievedTaxon = { data: [] };
+  let resourceObject, scientificNameIdObject;
 
-  try {
-    let url = encodeURI(
-      `https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`
-    );
-    let taxon = await axios
-      .get(url, {
-        timeout: 3000,
-      })
-      .catch((error) => {
-        writeErrorLog(
-          `Failed to ${!force ? "get info for" : "*recache*"
-          } ${sciName} from ${url}.`,
-          error
-        );
-        throw "";
-      });
-
-    let acceptedtaxon = taxon.data.find(
-      (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
-    );
-
-    if (!!acceptedtaxon) {
-      retrievedTaxon.data = acceptedtaxon;
-
-      if (acceptedtaxon.Tags && Array.isArray(acceptedtaxon.Tags)) {
-        const redListCodes = ['CR', 'EN', 'VU', 'NT', 'DD', 'LC'];
-        const invasiveCodes = ['NK', 'LO', 'PH', 'HI', 'SE'];
-
-        for (const tag of acceptedtaxon.Tags) {
-          if (tag.startsWith('Kategori/')) {
-            const code = tag.split('/')[1];
-            if (redListCodes.includes(code)) {
-              nameResult.redListCategories.NO = code;
-              if (country === 'NO') {
-                nameResult.redListCategory = code;
-              }
-            } else if (invasiveCodes.includes(code)) {
-              nameResult.invasiveCategories.NO = code;
-              if (country === 'NO') {
-                nameResult.invasiveCategory = code;
-              }
-            }
-          }
-        }
-      }
-    } else {
-      let hit = taxon.data.find((t) =>
-        t.ScientificNames.find((sn) =>
-          sn.HigherClassification.find((h) => h.ScientificName === sciName)
-        )
+  if (sciNameId) {
+    try {
+      let url = encodeURI(
+        `https://artsdatabanken.no/Api/Taxon/ScientificName/${sciNameId}`
       );
-      if (!hit) throw "No HigherClassification hit";
-      hit = hit.ScientificNames.find((sn) =>
-        sn.HigherClassification.find((h) => h.ScientificName === sciName)
-      );
-      hit = hit.HigherClassification.find((h) => h.ScientificName === sciName);
-      hit = hit.ScientificNameId;
-      url = `https://artsdatabanken.no/api/Resource/ScientificName/${hit}`;
-      taxon = await axios
+      scientificNameIdObject = await axios
         .get(url, {
           timeout: 3000,
+          headers: {
+            'Accept-Encoding': 'gzip',
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+          }
+        })
+        .catch((error) => {
+          writeErrorLog(
+            `Failed to ${!force ? "get info for" : "*recache*"
+            } ${sciName} from ${url}.`,
+            error
+          );
+          throw "";
+        });
+      scientificNameIdObject = scientificNameIdObject.data
+    }
+    catch (error) {
+      writeErrorLog(
+        `Error in getName(${sciNameId}). Retry: ${encodeURI(
+          "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
+        )}.`,
+        error
+      );
+      return nameResult;
+    }
+
+    let taxonId = scientificNameIdObject.taxonID
+
+    try {
+      let url = encodeURI(
+        `https://artsdatabanken.no/Api/Resource/Taxon/${taxonId}`
+      );
+      resourceObject = await axios
+        .get(url, {
+          timeout: 3000,
+          headers: {
+            'Accept-Encoding': 'gzip',
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+          }
+        })
+        .catch((error) => {
+          writeErrorLog(
+            `Failed to ${!force ? "get info for" : "*recache*"
+            } ${taxonId} from ${url}.`,
+            error
+          );
+          throw "";
+        });
+      resourceObject = resourceObject.data
+    }
+    catch (error) {
+      writeErrorLog(
+        `Error in getName(${sciNameId}). Retry: ${encodeURI(
+          "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
+        )}.`,
+        error
+      );
+      return nameResult;
+    }
+  }
+  else {
+    try {
+      let url = encodeURI(
+        `https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`
+      );
+      let taxon = await axios
+        .get(url, {
+          timeout: 3000,
+          headers: {
+            'Accept-Encoding': 'gzip',
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+          }
         })
         .catch((error) => {
           writeErrorLog(
@@ -578,10 +597,35 @@ let getName = async (sciName, force = false, country = null) => {
           throw "";
         });
 
-      url = `https://artsdatabanken.no/api/Resource/Taxon/${taxon.data.Taxon.TaxonId}`;
-      taxon = await axios
+      resourceObject = taxon.data.find(
+        // Includes makes sure we find the synonyms in the list
+        (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
+      );
+    }
+    catch (error) {
+      writeErrorLog(
+        `Error in getName(${sciName}). Retry: ${encodeURI(
+          "https://ai.test.artsdatabanken.no/cachetaxon/name/" + sciName
+        )}.`,
+        error
+      );
+      return nameResult;
+    }
+
+    let sciNameIdFromName = resourceObject.AcceptedNameUsage.ScientificNameId
+
+
+    try {
+      let url = encodeURI(
+        `https://artsdatabanken.no/Api/Taxon/ScientificName/${sciNameIdFromName}`
+      );
+      scientificNameIdObject = await axios
         .get(url, {
           timeout: 3000,
+          headers: {
+            'Accept-Encoding': 'gzip',
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+          }
         })
         .catch((error) => {
           writeErrorLog(
@@ -591,234 +635,66 @@ let getName = async (sciName, force = false, country = null) => {
           );
           throw "";
         });
-
-      retrievedTaxon.data = taxon.data;
-
-      if (taxon.data.Tags && Array.isArray(taxon.data.Tags)) {
-        const redListCodes = ['CR', 'EN', 'VU', 'NT', 'DD', 'LC'];
-        const invasiveCodes = ['NK', 'LO', 'PH', 'HI', 'SE'];
-
-        for (const tag of taxon.data.Tags) {
-          if (tag.startsWith('Kategori/')) {
-            const code = tag.split('/')[1];
-            if (redListCodes.includes(code)) {
-              nameResult.redListCategories.NO = code;
-              if (country === 'NO') {
-                nameResult.redListCategory = code;
-              }
-            } else if (invasiveCodes.includes(code)) {
-              nameResult.invasiveCategories.NO = code;
-              if (country === 'NO') {
-                nameResult.invasiveCategory = code;
-              }
-            }
-          }
-        }
-      }
+      scientificNameIdObject = scientificNameIdObject.data
     }
-
-    nameResult.scientificName =
-      retrievedTaxon.data.AcceptedNameUsage.ScientificName;
-    nameResult.scientificNameID =
-      retrievedTaxon.data.AcceptedNameUsage.ScientificNameId;
-
-    // Extract all RecommendedVernacularName fields for different languages from Artsdatabanken
-    for (const [key, value] of Object.entries(retrievedTaxon.data)) {
-      if (key.startsWith("RecommendedVernacularName_") && value) {
-        let langCode = key.replace("RecommendedVernacularName_", "");
-        langCode = langCode.split("-")[0]
-        nameResult.vernacularNames[langCode] = value;
-      }
-    }
-
-    // Define target languages to fetch (excluding those typically found in Artsdatabanken)
-    const targetLanguages = ['sv', 'nl', 'en', 'es'];
-    const missingLanguages = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
-
-    // If all languages are already filled, skip further fetching
-    if (missingLanguages.length !== 0) {
-      // Priority 1: GBIF (Catalog of Life)
-      if (missingLanguages.length > 0) {
-        try {
-          const gbifUrl = encodeURI(`https://api.gbif.org/v1/species/search?datasetKey=7ddf754f-d193-4cc9-b351-99906754a03b&nameType=SCIENTIFIC&q=${nameResult.scientificName}`);
-          const gbifResponse = await axios
-            .get(gbifUrl, { timeout: 3000 })
-            .catch((error) => {
-              console.log(`Failed to get GBIF names for ${nameResult.scientificName}:`, error.message);
-              return null;
-            });
-
-          if (gbifResponse && gbifResponse.data && gbifResponse.data.results && Array.isArray(gbifResponse.data.results)) {
-            const matchingResults = gbifResponse.data.results.filter(
-              item => item.canonicalName &&
-                item.canonicalName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
-                item.vernacularNames && item.vernacularNames.length > 0
-            );
-
-            const languageMap = {
-              'swe': 'sv',
-              'eng': 'en',
-              'nld': 'nl',
-              'spa': 'es'
-            };
-
-            for (const result of matchingResults) {
-              if (result.vernacularNames && Array.isArray(result.vernacularNames)) {
-                for (const [threeLetterCode, twoLetterCode] of Object.entries(languageMap)) {
-                  if (!nameResult.vernacularNames[twoLetterCode]) {
-                    const nameEntry = result.vernacularNames.find(
-                      vn => vn.language === threeLetterCode && vn.vernacularName
-                    );
-                    if (nameEntry && nameEntry.vernacularName) {
-                      nameResult.vernacularNames[twoLetterCode] = nameEntry.vernacularName;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.log(`Error fetching GBIF names for ${nameResult.scientificName}:`, error.message);
-        }
-      }
-
-      // Priority 2: Artdatabanken.se (Swedish)
-      if (!nameResult.vernacularNames.sv) {
-        try {
-          const swedishUrl = encodeURI(`https://nos-api.artdatabanken.se/api/search?searchType=exact&search=${nameResult.scientificName}`);
-          const swedishResponse = await axios
-            .get(swedishUrl, { timeout: 3000 })
-            .catch((error) => {
-              console.log(`Failed to get Swedish name for ${nameResult.scientificName}:`, error.message);
-              return null;
-            });
-
-          if (swedishResponse && swedishResponse.data && Array.isArray(swedishResponse.data)) {
-            const matchingTaxon = swedishResponse.data.find(
-              item => item.scientificName &&
-                item.scientificName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
-                item.swedishName
-            );
-
-            if (matchingTaxon && matchingTaxon.swedishName) {
-              nameResult.vernacularNames.sv = matchingTaxon.swedishName;
-            }
-          }
-        } catch (error) {
-          console.log(`Error fetching Swedish name for ${nameResult.scientificName}:`, error.message);
-        }
-      }
-
-      // Priority 3: Wikipedia
-      const remainingLangs = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
-      if (remainingLangs.length > 0) {
-        try {
-          const wikiSpeciesUrl = encodeURI(`https://api.wikimedia.org/core/v1/wikispecies/page/${nameResult.scientificName.replace(' ', '_')}/links/language`);
-          const wikiResponse = await axios
-            .get(wikiSpeciesUrl, { timeout: 3000 })
-            .catch((error) => {
-              console.log(`Failed to get Wikipedia names for ${nameResult.scientificName}:`, error.message);
-              return null;
-            });
-
-          if (wikiResponse && wikiResponse.data && Array.isArray(wikiResponse.data)) {
-            for (const link of wikiResponse.data) {
-              if (remainingLangs.includes(link.code) && !nameResult.vernacularNames[link.code]) {
-                // Remove parentheses and their contents from the title
-                let cleanTitle = link.title.replace(/\s*\([^)]*\)/g, '').trim();
-                if (cleanTitle && cleanTitle !== nameResult.scientificName) {
-                  nameResult.vernacularNames[link.code] = cleanTitle;
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.log(`Error fetching Wikipedia names for ${nameResult.scientificName}:`, error.message);
-        }
-      }
-
-      // Priority 4: iNaturalist
-      const stillMissingLangs = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
-      if (stillMissingLangs.length > 0) {
-        for (const lang of stillMissingLangs) {
-          try {
-            const iNatUrl = encodeURI(`https://api.inaturalist.org/v1/taxa/autocomplete?q=${nameResult.scientificName.replace(' ', '+')}&per_page=1&locale=${lang}`);
-            const iNatResponse = await axios
-              .get(iNatUrl, { timeout: 3000 })
-              .catch((error) => {
-                console.log(`Failed to get iNaturalist ${lang} name for ${nameResult.scientificName}:`, error.message);
-                return null;
-              });
-
-            if (iNatResponse && iNatResponse.data && iNatResponse.data.results && Array.isArray(iNatResponse.data.results)) {
-              const result = iNatResponse.data.results.find(
-                item => item.name &&
-                  item.name.toLowerCase() === nameResult.scientificName.toLowerCase() &&
-                  item.preferred_common_name
-              );
-
-              if (result && result.preferred_common_name) {
-                nameResult.vernacularNames[lang] = result.preferred_common_name;
-              }
-            }
-          } catch (error) {
-            console.log(`Error fetching iNaturalist ${lang} name for ${nameResult.scientificName}:`, error.message);
-          }
-        }
-      }
-    }
-
-    // Set the default vernacularName for backward compatibility
-    nameResult.vernacularName =
-      nameResult.vernacularNames.nb ||
-      nameResult.vernacularNames.nn ||
-      nameResult.vernacularNames.en ||
-      nameResult.scientificName ||
-      sciName;
-
-    if (retrievedTaxon.data.Description) {
-      const description =
-        retrievedTaxon.data.Description.find(
-          (desc) =>
-            desc.Language == "nb" ||
-            desc.Language == "no" ||
-            desc.Language == "nn"
-        ) || retrievedTaxon.data.Description[0];
-
-      nameResult.infoUrl = description.Id.replace(
-        "Nodes/",
-        "https://artsdatabanken.no/Pages/"
+    catch (error) {
+      writeErrorLog(
+        `Error in getName(${sciNameId}). Retry: ${encodeURI(
+          "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
+        )}.`,
+        error
       );
-    } else {
-      nameResult.infoUrl =
-        "https://artsdatabanken.no/" + retrievedTaxon.data.Id;
+      return nameResult;
     }
-
-    url = encodeURI(`https://artsdatabanken.no/Api/${retrievedTaxon.data.Id}`);
-    name = await axios
-      .get(url, {
-        timeout: 3000,
-      })
-      .catch((error) => {
-        writeErrorLog(
-          `Failed to ${!force ? "get info for" : "*recache*"
-          } ${sciName} from ${url}.`,
-          error
-        );
-        throw "";
-      });
-  } catch (error) {
-    writeErrorLog(
-      `Error in getName(${sciName}). Retry: ${encodeURI(
-        "https://ai.test.artsdatabanken.no/cachetaxon/" + sciName
-      )}.`,
-      error
-    );
-    return nameResult;
   }
 
-  if (name && name.data.AcceptedName.dynamicProperties) {
-    let artsobsname = name.data.AcceptedName.dynamicProperties.find(
+
+  // We should now have the objects we need to get and store the json
+
+  nameResult.scientificName = resourceObject.AcceptedNameUsage.ScientificName
+
+  console.log(scientificNameIdObject.dynamicProperties)
+
+
+  let redListCategories = scientificNameIdObject.dynamicProperties.filter(
+    (dp) =>
+      !!dp.Properties.find(prop => prop.Value.startsWith("Rødliste"))
+  );
+
+
+  if (redListCategories.length > 0) {
+    redListCategories.sort((a, b) => {
+      const aAar = a.Properties?.find(p => p.Name == "Aar");
+      const bAar = b.Properties?.find(p => p.Name == "Aar");
+      const aValue = aAar?.Value ? +aAar.Value : 0;
+      const bValue = bAar?.Value ? +bAar.Value : 0;
+      return bValue - aValue;
+    });
+
+    console.log("Cats:", redListCategories)
+    nameResult.redListCategories.NO = redListCategories[0].Value;
+  }
+
+
+  let invasiveCategories = scientificNameIdObject.dynamicProperties.filter(
+    (dp) =>
+      dp.Properties.find(prop => prop.Value.startsWith("Fremmedart"))
+  );
+
+  if (invasiveCategories.length > 0) {
+    invasiveCategories.sort((a, b) => {
+      const aAar = a.Properties?.find(p => p.Name == "Aar");
+      const bAar = b.Properties?.find(p => p.Name == "Aar");
+      const aValue = aAar?.Value ? +aAar.Value : 0;
+      const bValue = bAar?.Value ? +bAar.Value : 0;
+      return bValue - aValue;
+    });
+    nameResult.invasiveCategories.NO = invasiveCategories[0].Value;
+  }
+
+
+  if (scientificNameIdObject.dynamicProperties) {
+    let artsobsname = scientificNameIdObject.dynamicProperties.find(
       (dp) =>
         dp.Name === "GruppeNavn" &&
         dp.Properties.find((p) => p.Value === "Artsobservasjoner")
@@ -843,6 +719,301 @@ let getName = async (sciName, force = false, country = null) => {
     nameResult.groupName = 'Unknown';
     nameResult.groupNames = groupNameTranslations['unknown'];
   }
+
+
+  // Extract all RecommendedVernacularName fields for different languages from Artsdatabanken
+  for (const [key, value] of Object.entries(resourceObject)) {
+    if (key.startsWith("RecommendedVernacularName_") && value) {
+      let langCode = key.replace("RecommendedVernacularName_", "");
+      langCode = langCode.split("-")[0]
+      nameResult.vernacularNames[langCode] = value;
+    }
+  }
+
+  // Define target languages to fetch (excluding those typically found in Artsdatabanken)
+  const targetLanguages = ['sv', 'nl', 'en', 'es'];
+  const missingLanguages = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
+
+  // If all languages are already filled, skip further fetching
+  if (missingLanguages.length !== 0) {
+    // Priority 1: GBIF (Catalog of Life)
+    if (missingLanguages.length > 0) {
+      try {
+        const gbifUrl = encodeURI(`https://api.gbif.org/v1/species/search?datasetKey=7ddf754f-d193-4cc9-b351-99906754a03b&nameType=SCIENTIFIC&q=${nameResult.scientificName}`);
+        const gbifResponse = await axios
+          .get(gbifUrl, {
+            timeout: 3000,
+            headers: {
+              'Accept-Encoding': 'gzip',
+              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+            }
+          })
+          .catch((error) => {
+            console.log(`Failed to get GBIF names for ${nameResult.scientificName}:`, error.message);
+            return null;
+          });
+
+        if (gbifResponse && gbifResponse.data && gbifResponse.data.results && Array.isArray(gbifResponse.data.results)) {
+          const matchingResults = gbifResponse.data.results.filter(
+            item => item.canonicalName &&
+              item.canonicalName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+              item.vernacularNames && item.vernacularNames.length > 0
+          );
+
+          const languageMap = {
+            'swe': 'sv',
+            'eng': 'en',
+            'nld': 'nl',
+            'spa': 'es'
+          };
+
+          for (const result of matchingResults) {
+            if (result.vernacularNames && Array.isArray(result.vernacularNames)) {
+              for (const [threeLetterCode, twoLetterCode] of Object.entries(languageMap)) {
+                if (!nameResult.vernacularNames[twoLetterCode]) {
+                  const nameEntry = result.vernacularNames.find(
+                    vn => vn.language === threeLetterCode && vn.vernacularName
+                  );
+                  if (nameEntry && nameEntry.vernacularName) {
+                    nameResult.vernacularNames[twoLetterCode] = nameEntry.vernacularName;
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.log(`Error fetching GBIF names for ${nameResult.scientificName}:`, error.message);
+      }
+    }
+
+    // Priority 2: Artdatabanken.se (Swedish)
+    if (!nameResult.vernacularNames.sv) {
+      try {
+        const swedishUrl = encodeURI(`https://nos-api.artdatabanken.se/api/search?searchType=exact&search=${nameResult.scientificName}`);
+        const swedishResponse = await axios
+          .get(swedishUrl, {
+            timeout: 3000,
+            headers: {
+              'Accept-Encoding': 'gzip',
+              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+            }
+          })
+          .catch((error) => {
+            console.log(`Failed to get Swedish name for ${nameResult.scientificName}:`, error.message);
+            return null;
+          });
+
+        if (swedishResponse && swedishResponse.data && Array.isArray(swedishResponse.data)) {
+          const matchingTaxon = swedishResponse.data.find(
+            item => item.scientificName &&
+              item.scientificName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+              item.swedishName
+          );
+
+          if (matchingTaxon && matchingTaxon.swedishName) {
+            nameResult.vernacularNames.sv = matchingTaxon.swedishName;
+          }
+        }
+      } catch (error) {
+        console.log(`Error fetching Swedish name for ${nameResult.scientificName}:`, error.message);
+      }
+    }
+
+    // Priority 3: Wikipedia
+    const remainingLangs = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
+    if (remainingLangs.length > 0) {
+      try {
+        const wikiSpeciesUrl = encodeURI(`https://api.wikimedia.org/core/v1/wikispecies/page/${nameResult.scientificName.replace(' ', '_')}/links/language`);
+        const wikiResponse = await axios
+          .get(wikiSpeciesUrl, {
+            timeout: 3000,
+            headers: {
+              'Accept-Encoding': 'gzip',
+              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+            }
+          })
+          .catch((error) => {
+            console.log(`Failed to get Wikipedia names for ${nameResult.scientificName}:`, error.message);
+            return null;
+          });
+
+        if (wikiResponse && wikiResponse.data && Array.isArray(wikiResponse.data)) {
+          for (const link of wikiResponse.data) {
+            if (remainingLangs.includes(link.code) && !nameResult.vernacularNames[link.code]) {
+              // Remove parentheses and their contents from the title
+              let cleanTitle = link.title.replace(/\s*\([^)]*\)/g, '').trim();
+              if (cleanTitle && cleanTitle !== nameResult.scientificName) {
+                nameResult.vernacularNames[link.code] = cleanTitle;
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.log(`Error fetching Wikipedia names for ${nameResult.scientificName}:`, error.message);
+      }
+    }
+
+    // Priority 4: iNaturalist
+    const stillMissingLangs = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
+    if (stillMissingLangs.length > 0) {
+      for (const lang of stillMissingLangs) {
+        try {
+          const iNatUrl = encodeURI(`https://api.inaturalist.org/v1/taxa/autocomplete?q=${nameResult.scientificName.replace(' ', '+')}&per_page=1&locale=${lang}`);
+          const iNatResponse = await axios
+            .get(iNatUrl, {
+              timeout: 3000,
+              headers: {
+                'Accept-Encoding': 'gzip',
+                'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+              }
+            })
+            .catch((error) => {
+              console.log(`Failed to get iNaturalist ${lang} name for ${nameResult.scientificName}:`, error.message);
+              return null;
+            });
+
+          if (iNatResponse && iNatResponse.data && iNatResponse.data.results && Array.isArray(iNatResponse.data.results)) {
+            const result = iNatResponse.data.results.find(
+              item => item.name &&
+                item.name.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+                item.preferred_common_name
+            );
+
+            if (result && result.preferred_common_name) {
+              nameResult.vernacularNames[lang] = result.preferred_common_name;
+            }
+          }
+        } catch (error) {
+          console.log(`Error fetching iNaturalist ${lang} name for ${nameResult.scientificName}:`, error.message);
+        }
+      }
+    }
+  }
+
+  // Set the default vernacularName for backward compatibility
+  nameResult.vernacularName =
+    nameResult.vernacularNames.nb ||
+    nameResult.vernacularNames.nn ||
+    nameResult.scientificName ||
+    sciName;
+
+  if (resourceObject.Description) {
+    const description =
+      resourceObject.Description.find(
+        (desc) =>
+          desc.Language == "nb" ||
+          desc.Language == "no" ||
+          desc.Language == "nn"
+      ) || resourceObject.Description[0];
+
+    nameResult.infoUrl = description.Id.replace(
+      "Nodes/",
+      "https://artsdatabanken.no/Pages/"
+    );
+  } else {
+    nameResult.infoUrl =
+      "https://artsdatabanken.no/" + resourceObject.Id;
+  }
+
+
+  // I don't think we need to get higher taxa anymore, but this needs testing
+
+  // try {
+  //   let url = encodeURI(
+  //     `https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`
+  //   );
+  //   let taxon = await axios
+  //     .get(url, {
+  //       timeout: 3000,
+  //     })
+  //     .catch((error) => {
+  //       writeErrorLog(
+  //         `Failed to ${!force ? "get info for" : "*recache*"
+  //         } ${sciName} from ${url}.`,
+  //         error
+  //       );
+  //       throw "";
+  //     });
+
+  //   let acceptedtaxon = taxon.data.find(
+  //     (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
+  //   );
+
+  //   if (!!acceptedtaxon) {
+  //     retrievedTaxon.data = acceptedtaxon;
+  //   } else {
+  //     let hit = taxon.data.find((t) =>
+  //       t.ScientificNames.find((sn) =>
+  //         sn.HigherClassification.find((h) => h.ScientificName === sciName)
+  //       )
+  //     );
+  //     if (!hit) throw "No HigherClassification hit";
+  //     hit = hit.ScientificNames.find((sn) =>
+  //       sn.HigherClassification.find((h) => h.ScientificName === sciName)
+  //     );
+  //     hit = hit.HigherClassification.find((h) => h.ScientificName === sciName);
+  //     hit = hit.ScientificNameId;
+  //     url = `https://artsdatabanken.no/api/Resource/ScientificName/${hit}`;
+  //     taxon = await axios
+  //       .get(url, {
+  //         timeout: 3000,
+  //       })
+  //       .catch((error) => {
+  //         writeErrorLog(
+  //           `Failed to ${!force ? "get info for" : "*recache*"
+  //           } ${sciName} from ${url}.`,
+  //           error
+  //         );
+  //         throw "";
+  //       });
+
+  //     url = `https://artsdatabanken.no/api/Resource/Taxon/${taxon.data.Taxon.TaxonId}`;
+  //     taxon = await axios
+  //       .get(url, {
+  //         timeout: 3000,
+  //       })
+  //       .catch((error) => {
+  //         writeErrorLog(
+  //           `Failed to ${!force ? "get info for" : "*recache*"
+  //           } ${sciName} from ${url}.`,
+  //           error
+  //         );
+  //         throw "";
+  //       });
+
+  //     retrievedTaxon.data = taxon.data;
+  //   }
+
+  //   nameResult.scientificNameID =
+  //     retrievedTaxon.data.AcceptedNameUsage.ScientificNameId;
+
+
+
+  //   url = encodeURI(`https://artsdatabanken.no/Api/${retrievedTaxon.data.Id}`);
+
+  //   name = await axios
+  //     .get(url, {
+  //       timeout: 3000,
+  //     })
+  //     .catch((error) => {
+  //       writeErrorLog(
+  //         `Failed to ${!force ? "get info for" : "*recache*"
+  //         } ${sciName} from ${url}.`,
+  //         error
+  //       );
+  //       throw "";
+  //     });
+  // } catch (error) {
+  //   writeErrorLog(
+  //     `Error in getName(${sciName}). Retry: ${encodeURI(
+  //       "https://ai.test.artsdatabanken.no/cachetaxon/" + sciName
+  //     )}.`,
+  //     error
+  //   );
+  //   return nameResult;
+  // }
+
 
   if (force || !fs.existsSync(jsonfilename)) {
     let data = JSON.stringify(nameResult);
@@ -1170,6 +1341,10 @@ let refreshtaxonimages = async () => {
     let page = await axios
       .get(url, {
         timeout: 10000,
+        headers: {
+          'Accept-Encoding': 'gzip',
+          'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+        }
       })
       .catch((error) => {
         writeErrorLog(
@@ -1317,6 +1492,7 @@ let getId = async (req) => {
         {
           headers: {
             ...formHeaders,
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
           },
           auth: {
             username: username,
@@ -1356,45 +1532,54 @@ let getId = async (req) => {
     }
 
     // Check against list of misspellings and unknown synonyms
-    taxa = taxa.map((pred) => {
-      pred.scientific_name =
-        taxonMapper.taxa[pred.scientific_name] || pred.scientific_name;
-      return pred;
-    });
+    // As we are now looking up using the id, commenting this for now
+    // taxa = taxa.map((pred) => {
+    //   pred.scientific_name =
+    //     taxonMapper.taxa[pred.scientific_name] || pred.scientific_name;
+    //   return pred;
+    // });
 
     // Get the data from the APIs (including accepted names of synonyms)
     for (let pred of taxa) {
+
       try {
         let nameResult;
+
         if (
           req.body.application &&
           req.body.application.toLowerCase() === "artsobservasjoner"
         ) {
           pred.name = pred.scientific_name;
         } else {
-          nameResult = await getName(pred.scientific_name, false, country);
 
-          pred.vernacularName = nameResult.vernacularName;
-          pred.vernacularNames = nameResult.vernacularNames;
-          pred.groupName = nameResult.groupName;
-          pred.groupNames = nameResult.groupNames;
-          pred.scientificNameID = nameResult.scientificNameID;
-          pred.name = nameResult.scientificName;
-          pred.infoUrl = nameResult.infoUrl;
-          if (nameResult.redListCategory) {
-            pred.redListCategory = nameResult.redListCategory;
-          }
-          if (nameResult.invasiveCategory) {
-            pred.invasiveCategory = nameResult.invasiveCategory;
-          }
+          let splitId = pred.scientific_name_id.split(":")
+          let sciNameId = (splitId[0] === "NBIC" ? splitId[1] : null)
+
+          nameResult = await getName(sciNameId, pred.scientific_name, false, country);
+
+          console.log(nameResult)
+
+          pred.vernacularName = nameResult.vernacularName
+          pred.vernacularNames = nameResult.vernacularNames
+          pred.groupName = nameResult.groupName
+          pred.groupNames = nameResult.groupNames
+          pred.scientificName = nameResult.scientificName
+          pred.redListCategories = nameResult.redListCategories
+          pred.invasiveCategories = nameResult.invasiveCategories
+          pred.infoUrl = nameResult.infoUrl
+          pred.name = pred.scientificName;
         }
 
-        pred.picture = getPicture(pred.scientific_name);
+        pred.picture = getPicture(pred.scientificName);
       } catch (error) {
         writeErrorLog(
-          `Error while processing getName(${pred.scientific_name
+          `Error while processing getName(${pred.sciNameId
+          }, ${pred.scientific_name
           }). You can force a recache on ${encodeURI(
-            "https://ai.test.artsdatabanken.no/cachetaxon/" +
+            "https://ai.test.artsdatabanken.no/cachetaxon/id/" +
+            pred.sciNameId
+          )} or ${encodeURI(
+            "https://ai.test.artsdatabanken.no/cachetaxon/name/" +
             pred.scientific_name
           )}.`,
           error
@@ -1480,7 +1665,9 @@ app.post("/identify", idLimiter, authenticateApiToken, upload.array("image"), as
           if (fs.existsSync(filename)) {
             fs.stat(filename, function (err, stats) {
               if ((new Date() - stats.mtime) / (1000 * 60 * 60 * 24) > 10) {
-                getName(taxon.scientific_name, true);
+                let splitId = taxon.scientific_name_id.split(":")
+                let sciNameId = (splitId[0] === "NBIC" ? splitId[1] : null)
+                getName(sciNameId, taxon.scientific_name, true);
               }
             });
           }
@@ -1713,16 +1900,29 @@ app.get("/taxonimages/view", apiLimiter, (req, res) => {
   }
 });
 
-app.get("/cachetaxon/*", cacheLimiter, authenticateAdminToken, async (req, res) => {
+app.get("/cachetaxon/name/*", cacheLimiter, authenticateAdminToken, async (req, res) => {
   try {
-    let taxon = decodeURI(req.originalUrl.replace("/cachetaxon/", ""));
-    let name = await getName(taxon, true);
+    let taxonName = decodeURI(req.originalUrl.replace("/cachetaxon/name/", ""));
+    let name = await getName(null, taxonName, true);
     res.status(200).json(name);
   } catch (error) {
     writeErrorLog(`Error for ${req.originalUrl}`, error);
     res.status(500).end();
   }
 });
+
+app.get("/cachetaxon/id/*", cacheLimiter, authenticateAdminToken, async (req, res) => {
+  try {
+    let taxonId = decodeURI(req.originalUrl.replace("/cachetaxon/id/", ""));
+    let name = await getName(taxonId, "", true);
+    res.status(200).json(name);
+  } catch (error) {
+    writeErrorLog(`Error for ${req.originalUrl}`, error);
+    res.status(500).end();
+  }
+});
+
+
 
 app.get("/refreshtaxonimages", cacheLimiter, authenticateAdminToken, async (req, res) => {
   try {
@@ -1809,7 +2009,9 @@ app.post("/", idLimiter, upload.array("image"), async (req, res) => {
           if (fs.existsSync(filename)) {
             fs.stat(filename, function (err, stats) {
               if ((new Date() - stats.mtime) / (1000 * 60 * 60 * 24) > 10) {
-                getName(taxon.scientific_name, true);
+                let splitId = taxon.scientific_name_id.split(":")
+                let sciNameId = (splitId[0] === "NBIC" ? splitId[1] : null)
+                getName(sciNameId, taxon.scientific_name, true);
               }
             });
           }
