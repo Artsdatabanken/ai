@@ -653,9 +653,6 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
 
   nameResult.scientificName = resourceObject.AcceptedNameUsage.ScientificName
 
-  console.log(scientificNameIdObject.dynamicProperties)
-
-
   let redListCategories = scientificNameIdObject.dynamicProperties.filter(
     (dp) =>
       !!dp.Properties.find(prop => prop.Value.startsWith("Rødliste"))
@@ -671,7 +668,6 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
       return bValue - aValue;
     });
 
-    console.log("Cats:", redListCategories)
     nameResult.redListCategories.NO = redListCategories[0].Value;
   }
 
@@ -1557,15 +1553,26 @@ let getId = async (req) => {
 
           nameResult = await getName(sciNameId, pred.scientific_name, false, country);
 
-          console.log(nameResult)
-
           pred.vernacularName = nameResult.vernacularName
           pred.vernacularNames = nameResult.vernacularNames
           pred.groupName = nameResult.groupName
           pred.groupNames = nameResult.groupNames
           pred.scientificName = nameResult.scientificName
-          pred.redListCategories = nameResult.redListCategories
-          pred.invasiveCategories = nameResult.invasiveCategories
+
+          if (Object.keys(nameResult.redListCategories).length > 0) {
+            pred.redListCategories = nameResult.redListCategories
+            if (!!nameResult.redListCategories && nameResult.redListCategories.NO) {
+              pred.redListCategory = nameResult.redListCategories.NO
+            }
+          }
+
+          if (Object.keys(nameResult.invasiveCategories).length > 0) {
+            pred.invasiveCategories = nameResult.invasiveCategories
+            if (!!nameResult.invasiveCategories && nameResult.invasiveCategories.NO) {
+              pred.invasiveCategory = nameResult.invasiveCategories.NO
+            }
+          }
+
           pred.infoUrl = nameResult.infoUrl
           pred.name = pred.scientificName;
         }
