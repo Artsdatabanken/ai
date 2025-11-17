@@ -6,7 +6,6 @@ const bodyParser = require("body-parser");
 const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const taxonMapper = require("./taxonMapping");
 const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
 const sanitize = require("sanitize-filename");
@@ -506,7 +505,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     invasiveCategories: {},
   };
 
-  let resourceObject, scientificNameIdObject;
+  let resourceObject, scientificNameIdObject, redListObject, alienSpeciesListObject;
 
   if (sciNameId) {
     try {
@@ -533,7 +532,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     }
     catch (error) {
       writeErrorLog(
-        `Error in getName(${sciNameId}). Retry: ${encodeURI(
+        `Error in getName(${sciNameId}) for scientificNameIdObject from id. Retry: ${encodeURI(
           "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
         )}.`,
         error
@@ -567,7 +566,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     }
     catch (error) {
       writeErrorLog(
-        `Error in getName(${sciNameId}). Retry: ${encodeURI(
+        `Error in getName(${sciNameId}) for resourceObject from id. Retry: ${encodeURI(
           "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
         )}.`,
         error
@@ -604,7 +603,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     }
     catch (error) {
       writeErrorLog(
-        `Error in getName(${sciName}). Retry: ${encodeURI(
+        `Error in getName(${sciName}) for resourceObject from name. Retry: ${encodeURI(
           "https://ai.test.artsdatabanken.no/cachetaxon/name/" + sciName
         )}.`,
         error
@@ -639,7 +638,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     }
     catch (error) {
       writeErrorLog(
-        `Error in getName(${sciNameId}). Retry: ${encodeURI(
+        `Error in getName(${sciNameId}) for scientificNameIdObject from name. Retry: ${encodeURI(
           "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
         )}.`,
         error
@@ -649,45 +648,84 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
   }
 
 
-  // We should now have the objects we need to get and store the json
 
+  try {
+    let url = encodeURI(
+      `https://lister.artsdatabanken.no/odata/v1/alienspeciesassessment2023?filter=scientificName/ScientificNameId eq ${resourceObject.AcceptedNameUsage.ScientificNameId}&select=category`
+    );
+    alienSpeciesListObject = await axios
+      .get(url, {
+        timeout: 3000,
+        headers: {
+          'Accept-Encoding': 'gzip',
+          'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+        }
+      })
+      .catch((error) => {
+        writeErrorLog(
+          `Failed to ${!force ? "get info for" : "*recache*"
+          } ${sciName} from ${url}.`,
+          error
+        );
+        throw "";
+      });
+    alienSpeciesListObject = alienSpeciesListObject.data
+  }
+  catch (error) {
+    writeErrorLog(
+      `Error in getName(${sciNameId}) for alienSpeciesListObject. Retry: ${encodeURI(
+        "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
+      )}.`,
+      error
+    );
+    return nameResult;
+  }
+
+
+  try {
+    let url = encodeURI(
+      `https://lister.artsdatabanken.no/odata/v1/speciesassessment2021?filter=ScientificNameId eq ${resourceObject.AcceptedNameUsage.ScientificNameId}&select=category`
+    );
+    redListObject = await axios
+      .get(url, {
+        timeout: 3000,
+        headers: {
+          'Accept-Encoding': 'gzip',
+          'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+        }
+      })
+      .catch((error) => {
+        writeErrorLog(
+          `Failed to ${!force ? "get info for" : "*recache*"
+          } ${sciName} from ${url}.`,
+          error
+        );
+        throw "";
+      });
+    redListObject = redListObject.data
+  }
+  catch (error) {
+    writeErrorLog(
+      `Error in getName(${sciNameId}) for redListObject. Retry: ${encodeURI(
+        "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
+      )}.`,
+      error
+    );
+    return nameResult;
+  }
+
+
+
+  // We should now have the objects we need to get and store the json
   nameResult.scientificName = resourceObject.AcceptedNameUsage.ScientificName
 
-  let redListCategories = scientificNameIdObject.dynamicProperties.filter(
-    (dp) =>
-      !!dp.Properties.find(prop => prop.Value.startsWith("Rødliste"))
-  );
-
-
-  if (redListCategories.length > 0) {
-    redListCategories.sort((a, b) => {
-      const aAar = a.Properties?.find(p => p.Name == "Aar");
-      const bAar = b.Properties?.find(p => p.Name == "Aar");
-      const aValue = aAar?.Value ? +aAar.Value : 0;
-      const bValue = bAar?.Value ? +bAar.Value : 0;
-      return bValue - aValue;
-    });
-
-    nameResult.redListCategories.NO = redListCategories[0].Value;
+  if (redListObject.value.length) {
+    nameResult.redListCategories.NO = redListObject.value[0].category;
   }
 
-
-  let invasiveCategories = scientificNameIdObject.dynamicProperties.filter(
-    (dp) =>
-      dp.Properties.find(prop => prop.Value.startsWith("Fremmedart"))
-  );
-
-  if (invasiveCategories.length > 0) {
-    invasiveCategories.sort((a, b) => {
-      const aAar = a.Properties?.find(p => p.Name == "Aar");
-      const bAar = b.Properties?.find(p => p.Name == "Aar");
-      const aValue = aAar?.Value ? +aAar.Value : 0;
-      const bValue = bAar?.Value ? +bAar.Value : 0;
-      return bValue - aValue;
-    });
-    nameResult.invasiveCategories.NO = invasiveCategories[0].Value;
+  if (alienSpeciesListObject.value.length) {
+    nameResult.invasiveCategories.NO = alienSpeciesListObject.value[0].category;
   }
-
 
   if (scientificNameIdObject.dynamicProperties) {
     let artsobsname = scientificNameIdObject.dynamicProperties.find(
@@ -911,105 +949,6 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     nameResult.infoUrl =
       "https://artsdatabanken.no/" + resourceObject.Id;
   }
-
-
-  // I don't think we need to get higher taxa anymore, but this needs testing
-
-  // try {
-  //   let url = encodeURI(
-  //     `https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`
-  //   );
-  //   let taxon = await axios
-  //     .get(url, {
-  //       timeout: 3000,
-  //     })
-  //     .catch((error) => {
-  //       writeErrorLog(
-  //         `Failed to ${!force ? "get info for" : "*recache*"
-  //         } ${sciName} from ${url}.`,
-  //         error
-  //       );
-  //       throw "";
-  //     });
-
-  //   let acceptedtaxon = taxon.data.find(
-  //     (t) => t.Name.includes(sciName) && t.AcceptedNameUsage
-  //   );
-
-  //   if (!!acceptedtaxon) {
-  //     retrievedTaxon.data = acceptedtaxon;
-  //   } else {
-  //     let hit = taxon.data.find((t) =>
-  //       t.ScientificNames.find((sn) =>
-  //         sn.HigherClassification.find((h) => h.ScientificName === sciName)
-  //       )
-  //     );
-  //     if (!hit) throw "No HigherClassification hit";
-  //     hit = hit.ScientificNames.find((sn) =>
-  //       sn.HigherClassification.find((h) => h.ScientificName === sciName)
-  //     );
-  //     hit = hit.HigherClassification.find((h) => h.ScientificName === sciName);
-  //     hit = hit.ScientificNameId;
-  //     url = `https://artsdatabanken.no/api/Resource/ScientificName/${hit}`;
-  //     taxon = await axios
-  //       .get(url, {
-  //         timeout: 3000,
-  //       })
-  //       .catch((error) => {
-  //         writeErrorLog(
-  //           `Failed to ${!force ? "get info for" : "*recache*"
-  //           } ${sciName} from ${url}.`,
-  //           error
-  //         );
-  //         throw "";
-  //       });
-
-  //     url = `https://artsdatabanken.no/api/Resource/Taxon/${taxon.data.Taxon.TaxonId}`;
-  //     taxon = await axios
-  //       .get(url, {
-  //         timeout: 3000,
-  //       })
-  //       .catch((error) => {
-  //         writeErrorLog(
-  //           `Failed to ${!force ? "get info for" : "*recache*"
-  //           } ${sciName} from ${url}.`,
-  //           error
-  //         );
-  //         throw "";
-  //       });
-
-  //     retrievedTaxon.data = taxon.data;
-  //   }
-
-  //   nameResult.scientificNameID =
-  //     retrievedTaxon.data.AcceptedNameUsage.ScientificNameId;
-
-
-
-  //   url = encodeURI(`https://artsdatabanken.no/Api/${retrievedTaxon.data.Id}`);
-
-  //   name = await axios
-  //     .get(url, {
-  //       timeout: 3000,
-  //     })
-  //     .catch((error) => {
-  //       writeErrorLog(
-  //         `Failed to ${!force ? "get info for" : "*recache*"
-  //         } ${sciName} from ${url}.`,
-  //         error
-  //       );
-  //       throw "";
-  //     });
-  // } catch (error) {
-  //   writeErrorLog(
-  //     `Error in getName(${sciName}). Retry: ${encodeURI(
-  //       "https://ai.test.artsdatabanken.no/cachetaxon/" + sciName
-  //     )}.`,
-  //     error
-  //   );
-  //   return nameResult;
-  // }
-
 
   if (force || !fs.existsSync(jsonfilename)) {
     let data = JSON.stringify(nameResult);
@@ -1527,14 +1466,6 @@ let getId = async (req) => {
       taxa = taxa.slice(0, 2);
     }
 
-    // Check against list of misspellings and unknown synonyms
-    // As we are now looking up using the id, commenting this for now
-    // taxa = taxa.map((pred) => {
-    //   pred.scientific_name =
-    //     taxonMapper.taxa[pred.scientific_name] || pred.scientific_name;
-    //   return pred;
-    // });
-
     // Get the data from the APIs (including accepted names of synonyms)
     for (let pred of taxa) {
 
@@ -1595,30 +1526,6 @@ let getId = async (req) => {
     }
 
     recognition.data.predictions[0].taxa.items = taxa;
-
-    // -------------- Code that checks for duplicates, that may come from synonyms as well as accepted names being used
-    // One known case: Speyeria aglaja (as Speyeria aglaia) and Argynnis aglaja
-
-    // if there are duplicates, add the probabilities and delete the duplicates
-    // for (let pred of recognition.data.predictions) {
-    //   let totalProbability = recognition.data.predictions
-    //     .filter((p) => p.name === pred.name)
-    //     .reduce((total, p) => total + p.probability, 0);
-
-    //   if (totalProbability !== pred.probability) {
-    //     pred.probability = totalProbability;
-    //     recognition.data.predictions = recognition.data.predictions.filter(
-    //       (p) => p.name !== pred.name
-    //     );
-    //     recognition.data.predictions.unshift(pred);
-    //   }
-    // }
-
-    // // sort by the new probabilities
-    // recognition.data.predictions = recognition.data.predictions.sort((a, b) => {
-    //   return b.probability - a.probability;
-    // });
-    // -------------- end of duplicate checking code
 
     recognition.data.application = req.body.application;
 
