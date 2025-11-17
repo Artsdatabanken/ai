@@ -30,7 +30,8 @@
   "nodemonConfig": {
     "ignore": [
       "log/*",
-      "taxa/*"
+      "taxa/*",
+      "cache/*"
     ]
   }
 }

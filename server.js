@@ -10,6 +10,17 @@ const cron = require("node-cron");
 const rateLimit = require("express-rate-limit");
 const sanitize = require("sanitize-filename");
 
+
+const logdir = "./log";
+const authdir = "./auth";
+const cachedir = "./cache";
+
+
+const taxadir = `${cachedir}/taxa`;
+const pictureFile = `${cachedir}/taxonPictures.json`;
+const uploadsdir = "./uploads";
+
+
 let warningsConfig = [];
 try {
   warningsConfig = JSON.parse(fs.readFileSync('./config/warnings.json', 'utf8'));
@@ -66,6 +77,76 @@ const getClientIP = (req) => {
     .trim();
 
   return cleanIP;
+};
+
+const listVersionsFile = `${cachedir}/listversions.json`;
+
+const getListVersions = async () => {
+  const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+
+  if (fs.existsSync(listVersionsFile)) {
+    const stats = fs.statSync(listVersionsFile);
+    if (stats.mtimeMs > oneWeekAgo) {
+      try {
+        return JSON.parse(fs.readFileSync(listVersionsFile, 'utf8'));
+      } catch (error) {
+        writeErrorLog('Could not parse listversions.json', error);
+      }
+    }
+  }
+
+  const currentYear = new Date().getFullYear();
+  const versions = {
+    AlienSpeciesList: null,
+    Redlist: null
+  };
+
+  for (let year = currentYear; year >= 2020; year--) {
+    if (!versions.AlienSpeciesList) {
+      try {
+        const url = `https://lister.artsdatabanken.no/odata/v1/alienspeciesassessment${year}`;
+        const response = await axios.get(url, {
+          timeout: 5000,
+          headers: {
+            'Accept-Encoding': 'gzip',
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+          }
+        });
+        if (response.status === 200) {
+          versions.AlienSpeciesList = year;
+        }
+      } catch (error) {
+      }
+    }
+
+    if (!versions.Redlist) {
+      try {
+        const url = `https://lister.artsdatabanken.no/odata/v1/speciesassessment${year}`;
+        const response = await axios.get(url, {
+          timeout: 5000,
+          headers: {
+            'Accept-Encoding': 'gzip',
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+          }
+        });
+        if (response.status === 200) {
+          versions.Redlist = year;
+        }
+      } catch (error) {
+      }
+    }
+
+    if (versions.AlienSpeciesList && versions.Redlist) {
+      break;
+    }
+  }
+
+  if (!versions.AlienSpeciesList) versions.AlienSpeciesList = 2023;
+  if (!versions.Redlist) versions.Redlist = 2021;
+
+  fs.writeFileSync(listVersionsFile, JSON.stringify(versions, null, 2));
+
+  return versions;
 };
 
 const cacheLimiter = rateLimit({
@@ -185,15 +266,6 @@ loadTokens();
 if (!ADMIN_TOKEN) {
   console.warn('WARNING: No ADMIN_TOKEN set. Admin functionality will be disabled.');
 }
-
-const logdir = "./log";
-const authdir = "./auth";
-const cachedir = "./cache";
-
-
-const taxadir = `${cachedir}/taxa`;
-const pictureFile = `${cachedir}/taxonPictures.json`;
-const uploadsdir = "./uploads";
 
 var taxonPics = {};
 if (fs.existsSync(pictureFile)) {
@@ -441,6 +513,7 @@ let writelog = (req, json, auth = null) => {
 };
 
 let getName = async (sciNameId, sciName, force = false, country = null) => {
+  const listVersions = await getListVersions();
 
   let filename = (!!sciNameId ? (sciNameId) : "") + "_" + sciName
   let unencoded_jsonfilename = `${taxadir}/${sanitize(filename)}.json`;
@@ -651,7 +724,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
 
   try {
     let url = encodeURI(
-      `https://lister.artsdatabanken.no/odata/v1/alienspeciesassessment2023?filter=scientificName/ScientificNameId eq ${resourceObject.AcceptedNameUsage.ScientificNameId}&select=category`
+      `https://lister.artsdatabanken.no/odata/v1/alienspeciesassessment${listVersions.AlienSpeciesList}?filter=scientificName/ScientificNameId eq ${resourceObject.AcceptedNameUsage.ScientificNameId}&select=category`
     );
     alienSpeciesListObject = await axios
       .get(url, {
@@ -684,7 +757,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
 
   try {
     let url = encodeURI(
-      `https://lister.artsdatabanken.no/odata/v1/speciesassessment2021?filter=ScientificNameId eq ${resourceObject.AcceptedNameUsage.ScientificNameId}&select=category`
+      `https://lister.artsdatabanken.no/odata/v1/speciesassessment${listVersions.Redlist}?filter=ScientificNameId eq ${resourceObject.AcceptedNameUsage.ScientificNameId}&select=category`
     );
     redListObject = await axios
       .get(url, {
