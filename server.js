@@ -514,56 +514,92 @@ let writelog = (req, json, auth = null) => {
 let getName = async (sciNameId, sciName, force = false, country = null) => {
   const listVersions = await getListVersions();
 
-  let filename = (!!sciNameId ? (sciNameId) : "") + "_" + sciName
-  let unencoded_jsonfilename = `${taxadir}/${sanitize(filename)}.json`;
-  let jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
+  if (sciNameId) {
+    const pattern = `${encodeURIComponent(sciNameId)}_`;
+    const files = fs.readdirSync(taxadir).filter(f => f.startsWith(pattern) && f.endsWith('.json'));
 
-  if (
-    fs.existsSync(unencoded_jsonfilename) &&
-    unencoded_jsonfilename !== jsonfilename
-  ) {
-    fs.unlink(unencoded_jsonfilename, function (error) {
-      if (error)
-        writeErrorLog(
-          `Could not delete "${unencoded_jsonfilename}" while updating old filename`,
-          error
-        );
-    });
-  }
+    if (files.length > 0) {
+      const existingFile = `${taxadir}/${files[0]}`;
 
-  // --- Return the cached json if it exists, and it parses, and no recache is forced. In all other cases, try to delete that cache.
-  if (fs.existsSync(jsonfilename)) {
-    if (!force) {
-      try {
-        const cachedData = JSON.parse(fs.readFileSync(jsonfilename));
-        if (country === 'NO') {
-          if (cachedData.redListCategories && cachedData.redListCategories.NO) {
-            cachedData.redListCategory = cachedData.redListCategories.NO;
+      if (!force) {
+        try {
+          const cachedData = JSON.parse(fs.readFileSync(existingFile));
+          if (country === 'NO') {
+            if (cachedData.redListCategories && cachedData.redListCategories.NO) {
+              cachedData.redListCategory = cachedData.redListCategories.NO;
+            }
+            if (cachedData.invasiveCategories && cachedData.invasiveCategories.NO) {
+              cachedData.invasiveCategory = cachedData.invasiveCategories.NO;
+            }
           }
-          if (cachedData.invasiveCategories && cachedData.invasiveCategories.NO) {
-            cachedData.invasiveCategory = cachedData.invasiveCategories.NO;
-          }
+          return cachedData;
+        } catch (error) {
+          writeErrorLog(`Could not parse "${existingFile}"`, error);
         }
-        return cachedData;
-      } catch (error) {
-        writeErrorLog(`Could not parse "${jsonfilename}"`, error);
+      }
 
+      files.forEach(f => {
+        const filepath = `${taxadir}/${f}`;
+        fs.unlink(filepath, function (error) {
+          if (error)
+            writeErrorLog(
+              `Could not delete "${filepath}" while ${force ? 'forcing recache' : 'after parse error'}`,
+              error
+            );
+        });
+      });
+    }
+  } else {
+    let filename = "_" + sciName;
+    let unencoded_jsonfilename = `${taxadir}/${sanitize(filename)}.json`;
+    let jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
+
+    if (
+      fs.existsSync(unencoded_jsonfilename) &&
+      unencoded_jsonfilename !== jsonfilename
+    ) {
+      fs.unlink(unencoded_jsonfilename, function (error) {
+        if (error)
+          writeErrorLog(
+            `Could not delete "${unencoded_jsonfilename}" while updating old filename`,
+            error
+          );
+      });
+    }
+
+    if (fs.existsSync(jsonfilename)) {
+      if (!force) {
+        try {
+          const cachedData = JSON.parse(fs.readFileSync(jsonfilename));
+          if (country === 'NO') {
+            if (cachedData.redListCategories && cachedData.redListCategories.NO) {
+              cachedData.redListCategory = cachedData.redListCategories.NO;
+            }
+            if (cachedData.invasiveCategories && cachedData.invasiveCategories.NO) {
+              cachedData.invasiveCategory = cachedData.invasiveCategories.NO;
+            }
+          }
+          return cachedData;
+        } catch (error) {
+          writeErrorLog(`Could not parse "${jsonfilename}"`, error);
+
+          fs.unlink(jsonfilename, function (error) {
+            if (error)
+              writeErrorLog(
+                `Could not delete "${jsonfilename}" after JSON parse failed`,
+                error
+              );
+          });
+        }
+      } else {
         fs.unlink(jsonfilename, function (error) {
           if (error)
             writeErrorLog(
-              `Could not delete "${jsonfilename}" after JSON parse failed`,
+              `Could not delete "${jsonfilename}" while forcing recache`,
               error
             );
         });
       }
-    } else {
-      fs.unlink(jsonfilename, function (error) {
-        if (error)
-          writeErrorLog(
-            `Could not delete "${jsonfilename}" while forcing recache`,
-            error
-          );
-      });
     }
   }
 
@@ -1014,6 +1050,15 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
   } else {
     nameResult.infoUrl =
       "https://artsdatabanken.no/" + resourceObject.Id;
+  }
+
+  let jsonfilename;
+  if (sciNameId) {
+    const filename = `${sciNameId}_${nameResult.scientificName}`;
+    jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
+  } else {
+    const filename = `_${sciName}`;
+    jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
   }
 
   if (force || !fs.existsSync(jsonfilename)) {
