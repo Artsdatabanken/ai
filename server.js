@@ -46,7 +46,6 @@ const groupNameTranslations = {
   'sommerfugler': { 'nb': 'Sommerfugler', 'nn': 'Sommarfuglar', 'en': 'Butterflies & moths', 'sv': 'Fjärilar', 'se': 'Beaivelottit', 'nl': 'Vlinders', 'es': 'Mariposas y polillas' },
   'sopper': { 'nb': 'Sopper', 'nn': 'Soppar', 'en': 'Fungi', 'sv': 'Svampar', 'se': 'Guobbarat', 'nl': 'Paddenstoelen en schimmels', 'es': 'Hongos' },
   'tovinger': { 'nb': 'Tovinger', 'nn': 'Tovenger', 'en': 'Flies', 'sv': 'Tvåvingar', 'se': 'Diptera', 'nl': 'Tweevleugeligen', 'es': 'Dípteros' },
-  'unknown': { 'nb': 'Unknown', 'nn': 'Ukjend', 'en': 'Unknown', 'sv': 'Okänd', 'se': 'Dovdameahttun', 'nl': 'Onbekend', 'es': 'Desconocido' },
   'veps': { 'nb': 'Veps', 'nn': 'Veps', 'en': 'Wasps', 'sv': 'Getingar', 'se': 'Hymenoptera', 'nl': 'Wespen', 'es': 'Avispas' }
 };
 
@@ -818,13 +817,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
         nameResult.groupName = capitalizedGroupName;
         nameResult.groupNames = { 'nb': capitalizedGroupName, 'nn': capitalizedGroupName, 'se': capitalizedGroupName };
       }
-    } else {
-      nameResult.groupName = 'Unknown';
-      nameResult.groupNames = groupNameTranslations['unknown'];
     }
-  } else {
-    nameResult.groupName = 'Unknown';
-    nameResult.groupNames = groupNameTranslations['unknown'];
   }
 
 
