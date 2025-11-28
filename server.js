@@ -2049,7 +2049,7 @@ app.post("/", idLimiter, upload.array("image"), async (req, res) => {
   }
 });
 
-app.post("/save", apiLimiter, authenticateAdminToken, upload.array("image"), async (req, res) => {
+app.post("/save", apiLimiter, authenticateApiToken, upload.array("image"), async (req, res) => {
   // image saving request from the orakel service
   try {
     json = await saveImagesAndGetToken(req);
