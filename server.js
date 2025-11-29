@@ -1671,7 +1671,10 @@ app.post("/identify", idLimiter, authenticateApiToken, upload.array("image"), as
   try {
     json = await getId(req);
 
-    // Write to the log with authentication info (includes IP, location, model)
+    const savedImages = await saveImagesAndGetToken(req);
+    json.uploadId = savedImages.id;
+    json.uploadSecret = savedImages.password;
+
     writelog(req, json, req.auth);
 
     if (req.body.application === undefined) {
@@ -2049,7 +2052,7 @@ app.post("/", idLimiter, upload.array("image"), async (req, res) => {
   }
 });
 
-app.post("/save", apiLimiter, authenticateApiToken, upload.array("image"), async (req, res) => {
+app.post("/save", apiLimiter, upload.array("image"), async (req, res) => {
   // image saving request from the orakel service
   try {
     json = await saveImagesAndGetToken(req);
