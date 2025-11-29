@@ -12,13 +12,26 @@ const sanitize = require("sanitize-filename");
 
 
 const logdir = "./log";
-const authdir = "./auth";
 const cachedir = "./cache";
 
 
 const taxadir = `${cachedir}/taxa`;
 const pictureFile = `${cachedir}/taxonPictures.json`;
 const uploadsdir = "./uploads";
+
+const headfile = ".git/HEAD";
+
+let branch = "";
+let server_url = "https://ai.test.artsdatabanken.no"
+if (fs.existsSync(headfile)) {
+  branch = fs.readFileSync(headfile).toString().split("/");
+  branch = branch[branch.length - 1].split("\n")[0]
+}
+
+if (branch === "master") {
+  server_url = "https://ai.artsdatabanken.no"
+}
+
 
 
 let warningsConfig = [];
@@ -641,7 +654,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     catch (error) {
       writeErrorLog(
         `Error in getName(${sciNameId}) for scientificNameIdObject from id. Retry: ${encodeURI(
-          "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
+          server_url + "/cachetaxon/id/" + sciNameId
         )}.`,
         error
       );
@@ -675,7 +688,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     catch (error) {
       writeErrorLog(
         `Error in getName(${sciNameId}) for resourceObject from id. Retry: ${encodeURI(
-          "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
+          server_url + "/cachetaxon/id/" + sciNameId
         )}.`,
         error
       );
@@ -712,7 +725,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     catch (error) {
       writeErrorLog(
         `Error in getName(${sciName}) for resourceObject from name. Retry: ${encodeURI(
-          "https://ai.test.artsdatabanken.no/cachetaxon/name/" + sciName
+          server_url + "/cachetaxon/name/" + sciName
         )}.`,
         error
       );
@@ -747,7 +760,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     catch (error) {
       writeErrorLog(
         `Error in getName(${sciNameId}) for scientificNameIdObject from name. Retry: ${encodeURI(
-          "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
+          server_url + "/cachetaxon/id/" + sciNameId
         )}.`,
         error
       );
@@ -782,7 +795,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
   catch (error) {
     writeErrorLog(
       `Error in getName(${sciNameId}) for alienSpeciesListObject. Retry: ${encodeURI(
-        "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
+        server_url + "/cachetaxon/id/" + sciNameId
       )}.`,
       error
     );
@@ -815,7 +828,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
   catch (error) {
     writeErrorLog(
       `Error in getName(${sciNameId}) for redListObject. Retry: ${encodeURI(
-        "https://ai.test.artsdatabanken.no/cachetaxon/id/" + sciNameId
+        server_url + "/cachetaxon/id/" + sciNameId
       )}.`,
       error
     );
@@ -1625,10 +1638,10 @@ let getId = async (req) => {
           `Error while processing getName(${pred.sciNameId
           }, ${pred.scientific_name
           }). You can force a recache on ${encodeURI(
-            "https://ai.test.artsdatabanken.no/cachetaxon/id/" +
+            server_url + "/cachetaxon/id/" +
             pred.sciNameId
           )} or ${encodeURI(
-            "https://ai.test.artsdatabanken.no/cachetaxon/name/" +
+            server_url + "/cachetaxon/name/" +
             pred.scientific_name
           )}.`,
           error
@@ -2064,65 +2077,62 @@ app.post("/save", apiLimiter, upload.array("image"), async (req, res) => {
 
 app.get("/", apiLimiter, (req, res) => {
   let v = "Gitless";
-  const gitfile = ".git/FETCH_HEAD";
-  if (fs.existsSync(gitfile)) {
-    v = fs.readFileSync(gitfile).toString().split("\t")[0];
+
+  if (!!branch) {
+    const gitfile = ".git/FETCH_HEAD";
+    if (fs.existsSync(gitfile)) {
+      v = (fs.readFileSync(gitfile).toString().split("\n").find(x => x.includes(branch))).split("\t")[0]
+    }
   }
 
   fs.stat("./server.js", function (err, stats) {
     res
       .status(200)
-      .send(`<h3>Aiaiai!</h3><hr/> ${v}<br/>${dateStr("s", stats.mtime)}`);
+      .send(`<h3>Aiaiai!</h3><hr/>${v} (${branch})<br/>${dateStr("s", stats.mtime)}`);
   });
 });
 
 
-app.get("/image/*", apiLimiter, authenticateAdminToken, (req, res) => {
-  // image request from the orakel service
-  // On the form /image/id&password
+app.get("/image/*", apiLimiter, authenticateAdminToken, async (req, res) => {
+  const urlParam = req.originalUrl.replace("/image/", "");
+  const password = urlParam.split("&")[1].toString();
+  const id = urlParam.split("&")[0];
 
-  // Url used to arrive here from outside
-  let url = req.originalUrl.replace("/image/", "");
-
-  // Obtain password from the end of the url
-  let password = url.split("&")[1].toString();
-
-  // Obtain the image id's from the url
-  url = url.split("&")[0];
-
-  // Loop over all files in uploads/
-  fs.readdir(`${uploadsdir}/`, (err, files) => {
+  fs.readdir(`${uploadsdir}/`, async (err, files) => {
     let image_list = [];
 
     files.forEach((file) => {
-      // The id's in upload are of the format:
-      // sessionid_number_timestamp this to ensure unique id's
-      // to get all entries from one session, we use only the first of these
       const fileid = file.split("_")[0];
 
-      if (fileid === url) {
-        // If the request has a match in the database (it should unless the user was too slow)
+      if (fileid === id) {
         const image_to_fetch = `${uploadsdir}/${file}`;
-
-        // read the file
         const file_buffer = fs.readFileSync(image_to_fetch);
-
-        // decrypt the file
         let decrypted_file = decrypt(file_buffer, password);
-
-        // add the file to the return list
         image_list.push(decrypted_file);
       }
     });
-    // generate json object to return at request
-    let json = { image: image_list };
+
+    if (image_list.length === 0 && branch === "master") {
+      try {
+        const testResponse = await axios.get(
+          `https://ai.test.artsdatabanken.no/image/${id}&${password}`,
+          {
+            headers: {
+              'Authorization': req.headers['authorization']
+            },
+            timeout: 10000
+          }
+        );
+        return res.status(200).json(testResponse.data);
+      } catch (error) {
+        writeErrorLog(`Failed to fetch image from test server`, error);
+      }
+    }
+
     try {
-      res.status(200).json(json);
+      res.status(200).json({ image: image_list });
     } catch (error) {
-      writeErrorLog(
-        `Failed to return json of saved images:\n${filelist.toString()}`,
-        error
-      );
+      writeErrorLog(`Failed to return json of saved images`, error);
       res.status(500).end();
     }
   });
