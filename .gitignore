@@ -28,3 +28,8 @@ resources/taxonPictures.json
 
 
 config/secrets.env
+auth/secrets.env
+CLAUDE.md
+cache/
+auth/
+.claude/
