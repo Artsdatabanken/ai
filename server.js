@@ -2081,7 +2081,10 @@ app.get("/", apiLimiter, (req, res) => {
   if (!!branch) {
     const gitfile = ".git/FETCH_HEAD";
     if (fs.existsSync(gitfile)) {
-      v = (fs.readFileSync(gitfile).toString().split("\n").find(x => x.includes(branch))).split("\t")[0]
+      v = (fs.readFileSync(gitfile).toString().split("\n").find(x => x.includes(branch)))
+      if (!!v) {
+        v = v.split("\t")[0]
+      }
     }
   }
 
