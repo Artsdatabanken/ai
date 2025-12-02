@@ -2096,7 +2096,7 @@ app.get("/", apiLimiter, (req, res) => {
 });
 
 
-app.get("/image/*", apiLimiter, authenticateAdminToken, async (req, res) => {
+app.get("/image/*", apiLimiter, async (req, res) => {
   const urlParam = req.originalUrl.replace("/image/", "");
   const password = urlParam.split("&")[1].toString();
   const id = urlParam.split("&")[0];
