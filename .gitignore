@@ -25,12 +25,12 @@ log/*.txt
 resources/taxoncache
 resources/taxonPictures.json
 /uploads
-/auth
-/cache
 /geoip
 
 config/secrets.env
 .aider*
 .gitignore
 CLAUDE.md
-.claude
+cache/
+auth/
+.claude/
