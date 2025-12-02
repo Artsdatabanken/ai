@@ -37,3 +37,4 @@ stages:
         scriptType: 'pscore'
         scriptLocation: 'inlineScript'
         inlineScript: 'az webapp restart --name adb-test-ai-as --resource-group adb-test-ai-rg'
+

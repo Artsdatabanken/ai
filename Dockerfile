@@ -22,7 +22,11 @@ RUN mkdir -p resources/taxoncache
 
 RUN mkdir -p uploads
 
+RUN mkdir -p auth
+RUN mkdir -p cache
 
+
+RUN mkdir -p log/taxa
 #USER dockerrunner
 
 COPY . .

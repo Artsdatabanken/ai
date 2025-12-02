@@ -1,0 +1,202 @@
+openapi: 3.0.0
+info:
+  title: AI-powered Species Identification API
+  description: This API provides endpoints for image-based species identification, taxon information retrieval, and various utility functions related to species data management.
+  version: 1.0.0
+servers:
+  - url: https://api.example.com/v1
+paths:
+  /:
+    post:
+      summary: Identify species from image
+      description: Identifies species from uploaded images using AI.
+      tags:
+        - Identification
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Image file(s) to be analyzed
+                application:
+                  type: string
+                  description: Name of the application making the request
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  predictions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        probability:
+                          type: number
+                        taxon:
+                          type: object
+                          properties:
+                            vernacularName:
+                              type: string
+                            name:
+                              type: string
+                            groupName:
+                              type: string
+                            scientificNameID:
+                              type: string
+                            infoUrl:
+                              type: string
+                            picture:
+                              type: string
+        '500':
+          description: Internal Server Error
+  /taxonimage/{taxon}:
+    get:
+      summary: Get taxon image
+      description: Retrieves the image URL for a given taxon.
+      tags:
+        - Taxon
+      parameters:
+        - in: path
+          name: taxon
+          required: true
+          schema:
+            type: string
+          description: The taxon name
+      responses:
+        '200':
+          description: Successful response
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          description: Internal Server Error
+  /taxonimages:
+    get:
+      summary: Get all taxon images
+      description: Retrieves all taxon images.
+      tags:
+        - Taxon
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '500':
+          description: Internal Server Error
+  /cachetaxon/{taxon}:
+    get:
+      summary: Cache taxon information
+      description: Caches or refreshes the information for a given taxon.
+      tags:
+        - Taxon
+      parameters:
+        - in: path
+          name: taxon
+          required: true
+          schema:
+            type: string
+          description: The taxon name
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+        '500':
+          description: Internal Server Error
+  /refreshtaxonimages:
+    get:
+      summary: Refresh taxon images
+      description: Refreshes the cache of taxon images.
+      tags:
+        - Taxon
+      responses:
+        '200':
+          description: Successful response
+          content:
+            text/plain:
+              schema:
+                type: string
+        '500':
+          description: Internal Server Error
+  /save:
+    post:
+      summary: Save images
+      description: Saves uploaded images and returns a token for later retrieval.
+      tags:
+        - Image
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Image file(s) to be saved
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  password:
+                    type: string
+        '500':
+          description: Internal Server Error
+  /image/{id}&{password}:
+    get:
+      summary: Retrieve saved images
+      description: Retrieves previously saved images using the provided ID and password.
+      tags:
+        - Image
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The image ID
+        - in: path
+          name: password
+          required: true
+          schema:
+            type: string
+          description: The password for image retrieval
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  image:
+                    type: array
+                    items:
+                      type: string
+        '500':
+          description: Internal Server Error
