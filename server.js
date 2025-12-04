@@ -698,7 +698,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
   else {
     try {
       let url = encodeURI(
-        `https://artsdatabanken.no/api/Resource/?Take=10&Type=taxon&Name=${sciName}`
+        `https://artsdatabanken.no/api/Resource/?Take=250&Type=taxon&Name=${sciName}`
       );
       let taxon = await axios
         .get(url, {
