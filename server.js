@@ -732,19 +732,56 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
       return nameResult;
     }
 
-    let sciNameIdFromName = resourceObject.AcceptedNameUsage.ScientificNameId
+    if (!!resourceObject) {
+      let sciNameIdFromName = resourceObject.AcceptedNameUsage.ScientificNameId
 
+      try {
+        let url = encodeURI(
+          `https://artsdatabanken.no/Api/Taxon/ScientificName/${sciNameIdFromName}`
+        );
+        scientificNameIdObject = await axios
+          .get(url, {
+            timeout: 3000,
+            headers: {
+              'Accept-Encoding': 'gzip',
+              'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0'
+            }
+          })
+          .catch((error) => {
+            writeErrorLog(
+              `Failed to ${!force ? "get info for" : "*recache*"
+              } ${sciName} from ${url}.`,
+              error
+            );
+            throw "";
+          });
+        scientificNameIdObject = scientificNameIdObject.data
+      }
+      catch (error) {
+        writeErrorLog(
+          `Error in getName(${sciNameId}) for scientificNameIdObject from name. Retry: ${encodeURI(
+            server_url + "/cachetaxon/id/" + sciNameId
+          )}.`,
+          error
+        );
+        return nameResult;
+      }
+    }
+  }
+
+
+  if (!!resourceObject) {
 
     try {
       let url = encodeURI(
-        `https://artsdatabanken.no/Api/Taxon/ScientificName/${sciNameIdFromName}`
+        `https://lister.artsdatabanken.no/odata/v1/alienspeciesassessment${listVersions.AlienSpeciesList}?filter=scientificName/ScientificNameId eq ${resourceObject.AcceptedNameUsage.ScientificNameId}&select=category`
       );
-      scientificNameIdObject = await axios
+      alienSpeciesListObject = await axios
         .get(url, {
           timeout: 3000,
           headers: {
             'Accept-Encoding': 'gzip',
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0'
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
           }
         })
         .catch((error) => {
@@ -755,129 +792,98 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
           );
           throw "";
         });
-      scientificNameIdObject = scientificNameIdObject.data
+      alienSpeciesListObject = alienSpeciesListObject.data
     }
     catch (error) {
       writeErrorLog(
-        `Error in getName(${sciNameId}) for scientificNameIdObject from name. Retry: ${encodeURI(
+        `Error in getName(${sciNameId}) for alienSpeciesListObject. Retry: ${encodeURI(
           server_url + "/cachetaxon/id/" + sciNameId
         )}.`,
         error
       );
       return nameResult;
     }
-  }
+
+
+    try {
+      let url = encodeURI(
+        `https://lister.artsdatabanken.no/odata/v1/speciesassessment${listVersions.Redlist}?filter=ScientificNameId eq ${resourceObject.AcceptedNameUsage.ScientificNameId}&select=category`
+      );
+      redListObject = await axios
+        .get(url, {
+          timeout: 3000,
+          headers: {
+            'Accept-Encoding': 'gzip',
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+          }
+        })
+        .catch((error) => {
+          writeErrorLog(
+            `Failed to ${!force ? "get info for" : "*recache*"
+            } ${sciName} from ${url}.`,
+            error
+          );
+          throw "";
+        });
+      redListObject = redListObject.data
+    }
+    catch (error) {
+      writeErrorLog(
+        `Error in getName(${sciNameId}) for redListObject. Retry: ${encodeURI(
+          server_url + "/cachetaxon/id/" + sciNameId
+        )}.`,
+        error
+      );
+      return nameResult;
+    }
 
 
 
-  try {
-    let url = encodeURI(
-      `https://lister.artsdatabanken.no/odata/v1/alienspeciesassessment${listVersions.AlienSpeciesList}?filter=scientificName/ScientificNameId eq ${resourceObject.AcceptedNameUsage.ScientificNameId}&select=category`
-    );
-    alienSpeciesListObject = await axios
-      .get(url, {
-        timeout: 3000,
-        headers: {
-          'Accept-Encoding': 'gzip',
-          'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+    // We should now have the objects we need to get and store the json
+    nameResult.scientificName = resourceObject.AcceptedNameUsage.ScientificName
+
+    if (redListObject.value.length) {
+      nameResult.redListCategories.NO = redListObject.value[0].category;
+    }
+
+    if (alienSpeciesListObject.value.length) {
+      nameResult.invasiveCategories.NO = alienSpeciesListObject.value[0].category;
+    }
+
+    if (scientificNameIdObject.dynamicProperties) {
+      let artsobsname = scientificNameIdObject.dynamicProperties.find(
+        (dp) =>
+          dp.Name === "GruppeNavn" &&
+          dp.Properties.find((p) => p.Value === "Artsobservasjoner")
+      );
+
+      if (artsobsname && artsobsname.Value && artsobsname.Value.trim()) {
+        const rawGroupName = artsobsname.Value.toLowerCase();
+        const capitalizedGroupName = capitalizeFirstLetter(artsobsname.Value);
+
+        if (groupNameTranslations[rawGroupName]) {
+          nameResult.groupNames = groupNameTranslations[rawGroupName];
+          nameResult.groupName = capitalizedGroupName;
+        } else {
+          nameResult.groupName = capitalizedGroupName;
+          nameResult.groupNames = { 'nb': capitalizedGroupName, 'nn': capitalizedGroupName, 'se': capitalizedGroupName };
         }
-      })
-      .catch((error) => {
-        writeErrorLog(
-          `Failed to ${!force ? "get info for" : "*recache*"
-          } ${sciName} from ${url}.`,
-          error
-        );
-        throw "";
-      });
-    alienSpeciesListObject = alienSpeciesListObject.data
-  }
-  catch (error) {
-    writeErrorLog(
-      `Error in getName(${sciNameId}) for alienSpeciesListObject. Retry: ${encodeURI(
-        server_url + "/cachetaxon/id/" + sciNameId
-      )}.`,
-      error
-    );
-    return nameResult;
-  }
-
-
-  try {
-    let url = encodeURI(
-      `https://lister.artsdatabanken.no/odata/v1/speciesassessment${listVersions.Redlist}?filter=ScientificNameId eq ${resourceObject.AcceptedNameUsage.ScientificNameId}&select=category`
-    );
-    redListObject = await axios
-      .get(url, {
-        timeout: 3000,
-        headers: {
-          'Accept-Encoding': 'gzip',
-          'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
-        }
-      })
-      .catch((error) => {
-        writeErrorLog(
-          `Failed to ${!force ? "get info for" : "*recache*"
-          } ${sciName} from ${url}.`,
-          error
-        );
-        throw "";
-      });
-    redListObject = redListObject.data
-  }
-  catch (error) {
-    writeErrorLog(
-      `Error in getName(${sciNameId}) for redListObject. Retry: ${encodeURI(
-        server_url + "/cachetaxon/id/" + sciNameId
-      )}.`,
-      error
-    );
-    return nameResult;
-  }
-
-
-
-  // We should now have the objects we need to get and store the json
-  nameResult.scientificName = resourceObject.AcceptedNameUsage.ScientificName
-
-  if (redListObject.value.length) {
-    nameResult.redListCategories.NO = redListObject.value[0].category;
-  }
-
-  if (alienSpeciesListObject.value.length) {
-    nameResult.invasiveCategories.NO = alienSpeciesListObject.value[0].category;
-  }
-
-  if (scientificNameIdObject.dynamicProperties) {
-    let artsobsname = scientificNameIdObject.dynamicProperties.find(
-      (dp) =>
-        dp.Name === "GruppeNavn" &&
-        dp.Properties.find((p) => p.Value === "Artsobservasjoner")
-    );
-
-    if (artsobsname && artsobsname.Value && artsobsname.Value.trim()) {
-      const rawGroupName = artsobsname.Value.toLowerCase();
-      const capitalizedGroupName = capitalizeFirstLetter(artsobsname.Value);
-
-      if (groupNameTranslations[rawGroupName]) {
-        nameResult.groupNames = groupNameTranslations[rawGroupName];
-        nameResult.groupName = capitalizedGroupName;
-      } else {
-        nameResult.groupName = capitalizedGroupName;
-        nameResult.groupNames = { 'nb': capitalizedGroupName, 'nn': capitalizedGroupName, 'se': capitalizedGroupName };
       }
     }
-  }
 
 
-  // Extract all RecommendedVernacularName fields for different languages from Artsdatabanken
-  for (const [key, value] of Object.entries(resourceObject)) {
-    if (key.startsWith("RecommendedVernacularName_") && value) {
-      let langCode = key.replace("RecommendedVernacularName_", "");
-      langCode = langCode.split("-")[0]
-      nameResult.vernacularNames[langCode] = value;
+    // Extract all RecommendedVernacularName fields for different languages from Artsdatabanken
+    for (const [key, value] of Object.entries(resourceObject)) {
+      if (key.startsWith("RecommendedVernacularName_") && value) {
+        let langCode = key.replace("RecommendedVernacularName_", "");
+        langCode = langCode.split("-")[0]
+        nameResult.vernacularNames[langCode] = value;
+      }
     }
+
   }
+
+
 
   // Define target languages to fetch (excluding those typically found in Artsdatabanken)
   const targetLanguages = ['sv', 'nl', 'en', 'es'];
@@ -1047,23 +1053,28 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     nameResult.scientificName ||
     sciName;
 
-  if (resourceObject.Description) {
-    const description =
-      resourceObject.Description.find(
-        (desc) =>
-          desc.Language == "nb" ||
-          desc.Language == "no" ||
-          desc.Language == "nn"
-      ) || resourceObject.Description[0];
 
-    nameResult.infoUrl = description.Id.replace(
-      "Nodes/",
-      "https://artsdatabanken.no/Pages/"
-    );
-  } else {
-    nameResult.infoUrl =
-      "https://artsdatabanken.no/" + resourceObject.Id;
+  if (!!resourceObject) {
+    if (resourceObject.Description) {
+      const description =
+        resourceObject.Description.find(
+          (desc) =>
+            desc.Language == "nb" ||
+            desc.Language == "no" ||
+            desc.Language == "nn"
+        ) || resourceObject.Description[0];
+
+      nameResult.infoUrl = description.Id.replace(
+        "Nodes/",
+        "https://artsdatabanken.no/Pages/"
+      );
+    } else {
+      nameResult.infoUrl =
+        "https://artsdatabanken.no/" + resourceObject.Id;
+    }
+
   }
+
 
   let jsonfilename;
   if (sciNameId) {
