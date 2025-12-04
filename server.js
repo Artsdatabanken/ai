@@ -372,7 +372,7 @@ const authenticateApiToken = (req, res, next) => {
     return next();
   }
 
-  if (validTokens[token] && validTokens[token].enabled === true) {
+  if (validTokens?.[token]?.enabled === true) {
     req.auth = {
       type: 'api',
       token: token,
@@ -466,6 +466,7 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 let getPicture = (sciName) => {
+  if (!sciName) return null;
   sciName = sciName.replaceAll("×", "x").replaceAll("ë", "e");
 
   let pic = taxonPics[sciName];
@@ -479,7 +480,7 @@ let getPicture = (sciName) => {
 let writelog = (req, json, auth = null) => {
   let application;
 
-  if (auth && auth.application) {
+  if (auth?.application) {
     application = sanitize(auth.application);
   } else if (req.body.application) {
     application = sanitize(req.body.application);
@@ -538,10 +539,10 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
         try {
           const cachedData = JSON.parse(fs.readFileSync(existingFile));
           if (country === 'NO') {
-            if (cachedData.redListCategories && cachedData.redListCategories.NO) {
+            if (cachedData?.redListCategories?.NO) {
               cachedData.redListCategory = cachedData.redListCategories.NO;
             }
-            if (cachedData.invasiveCategories && cachedData.invasiveCategories.NO) {
+            if (cachedData?.invasiveCategories?.NO) {
               cachedData.invasiveCategory = cachedData.invasiveCategories.NO;
             }
           }
@@ -585,10 +586,10 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
         try {
           const cachedData = JSON.parse(fs.readFileSync(jsonfilename));
           if (country === 'NO') {
-            if (cachedData.redListCategories && cachedData.redListCategories.NO) {
+            if (cachedData?.redListCategories?.NO) {
               cachedData.redListCategory = cachedData.redListCategories.NO;
             }
-            if (cachedData.invasiveCategories && cachedData.invasiveCategories.NO) {
+            if (cachedData?.invasiveCategories?.NO) {
               cachedData.invasiveCategory = cachedData.invasiveCategories.NO;
             }
           }
@@ -840,24 +841,25 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
 
 
     // We should now have the objects we need to get and store the json
-    nameResult.scientificName = resourceObject.AcceptedNameUsage.ScientificName
-
-    if (redListObject.value.length) {
+    if (resourceObject.AcceptedNameUsage?.ScientificName) {
+      nameResult.scientificName = resourceObject.AcceptedNameUsage.ScientificName
+    }
+    if (redListObject?.value?.length) {
       nameResult.redListCategories.NO = redListObject.value[0].category;
     }
 
-    if (alienSpeciesListObject.value.length) {
+    if (alienSpeciesListObject?.value?.length) {
       nameResult.invasiveCategories.NO = alienSpeciesListObject.value[0].category;
     }
 
-    if (scientificNameIdObject.dynamicProperties) {
+    if (scientificNameIdObject?.dynamicProperties) {
       let artsobsname = scientificNameIdObject.dynamicProperties.find(
         (dp) =>
           dp.Name === "GruppeNavn" &&
           dp.Properties.find((p) => p.Value === "Artsobservasjoner")
       );
 
-      if (artsobsname && artsobsname.Value && artsobsname.Value.trim()) {
+      if (artsobsname?.Value?.trim()) {
         const rawGroupName = artsobsname.Value.toLowerCase();
         const capitalizedGroupName = capitalizeFirstLetter(artsobsname.Value);
 
@@ -908,7 +910,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
             return null;
           });
 
-        if (gbifResponse && gbifResponse.data && gbifResponse.data.results && Array.isArray(gbifResponse.data.results)) {
+        if (gbifResponse?.data?.results && Array.isArray(gbifResponse.data.results)) {
           const matchingResults = gbifResponse.data.results.filter(
             item => item.canonicalName &&
               item.canonicalName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
@@ -929,7 +931,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
                   const nameEntry = result.vernacularNames.find(
                     vn => vn.language === threeLetterCode && vn.vernacularName
                   );
-                  if (nameEntry && nameEntry.vernacularName) {
+                  if (nameEntry?.vernacularName) {
                     nameResult.vernacularNames[twoLetterCode] = nameEntry.vernacularName;
                   }
                 }
@@ -959,14 +961,14 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
             return null;
           });
 
-        if (swedishResponse && swedishResponse.data && Array.isArray(swedishResponse.data)) {
+        if (swedishResponse?.data && Array.isArray(swedishResponse.data)) {
           const matchingTaxon = swedishResponse.data.find(
             item => item.scientificName &&
               item.scientificName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
               item.swedishName
           );
 
-          if (matchingTaxon && matchingTaxon.swedishName) {
+          if (matchingTaxon?.swedishName) {
             nameResult.vernacularNames.sv = matchingTaxon.swedishName;
           }
         }
@@ -993,7 +995,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
             return null;
           });
 
-        if (wikiResponse && wikiResponse.data && Array.isArray(wikiResponse.data)) {
+        if (wikiResponse?.data && Array.isArray(wikiResponse.data)) {
           for (const link of wikiResponse.data) {
             if (remainingLangs.includes(link.code) && !nameResult.vernacularNames[link.code]) {
               // Remove parentheses and their contents from the title
@@ -1028,14 +1030,14 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
               return null;
             });
 
-          if (iNatResponse && iNatResponse.data && iNatResponse.data.results && Array.isArray(iNatResponse.data.results)) {
+          if (iNatResponse?.data?.results && Array.isArray(iNatResponse.data.results)) {
             const result = iNatResponse.data.results.find(
               item => item.name &&
                 item.name.toLowerCase() === nameResult.scientificName.toLowerCase() &&
                 item.preferred_common_name
             );
 
-            if (result && result.preferred_common_name) {
+            if (result?.preferred_common_name) {
               nameResult.vernacularNames[lang] = result.preferred_common_name;
             }
           }
@@ -1627,14 +1629,14 @@ let getId = async (req) => {
 
           if (Object.keys(nameResult.redListCategories).length > 0) {
             pred.redListCategories = nameResult.redListCategories
-            if (!!nameResult.redListCategories && nameResult.redListCategories.NO) {
+            if (nameResult?.redListCategories?.NO) {
               pred.redListCategory = nameResult.redListCategories.NO
             }
           }
 
           if (Object.keys(nameResult.invasiveCategories).length > 0) {
             pred.invasiveCategories = nameResult.invasiveCategories
-            if (!!nameResult.invasiveCategories && nameResult.invasiveCategories.NO) {
+            if (nameResult?.invasiveCategories?.NO) {
               pred.invasiveCategory = nameResult.invasiveCategories.NO
             }
           }
@@ -1708,7 +1710,7 @@ app.post("/identify", idLimiter, authenticateApiToken, upload.array("image"), as
     res.status(200).json(json);
 
     // --- Now that the reply has been sent, let each returned name have a 5% chance to be recached if its file is older than 10 days
-    if (json.predictions && json.predictions[0] && json.predictions[0].taxa) {
+    if (json?.predictions?.[0]?.taxa) {
       json.predictions[0].taxa.items.forEach((taxon) => {
         if (Math.random() < 0.05) {
           let filename = `${taxadir}/${encodeURIComponent(
