@@ -897,13 +897,14 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     // Priority 1: Artdatabanken.se (Swedish)
     if (!nameResult.vernacularNames.sv) {
       try {
-        const swedishUrl = encodeURI(`https://nos-api.artdatabanken.se/api/search?searchType=exact&search=${nameResult.scientificName}`);
+        const swedishUrl = encodeURI(`https://api.artdatabanken.se/taxonservice/v1/taxa/names?searchString=${nameResult.scientificName}&searchFields=Scientific&isRecommended=Yes&culture=sv_SE&page=1`);
         const swedishResponse = await axios
           .get(swedishUrl, {
             timeout: 3000,
             headers: {
               'Accept-Encoding': 'gzip',
-              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1',
+              'Ocp-Apim-Subscription-Key': process.env.ARTDATABANKEN_TOKEN
             }
           })
           .catch((error) => {
@@ -911,19 +912,18 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
             return null;
           });
 
-        if (swedishResponse?.data && Array.isArray(swedishResponse.data)) {
-          const matchingTaxon = swedishResponse.data.find(
-            item => item.scientificName &&
-              item.scientificName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
-              item.swedishName
+        if (swedishResponse?.data?.data && Array.isArray(swedishResponse.data.data)) {
+          const matchingTaxon = swedishResponse.data.data.find(
+            item => item.name &&
+              item.name.toLowerCase() === nameResult.scientificName.toLowerCase()
           );
 
-          if (matchingTaxon?.swedishName) {
-            nameResult.vernacularNames.sv = matchingTaxon.swedishName;
+          if (matchingTaxon?.taxonInformation?.recommendedSwedishName) {
+            nameResult.vernacularNames.sv = matchingTaxon.taxonInformation.recommendedSwedishName;
           }
         }
       } catch (error) {
-        console.log("Error fetching Swedish name for %s:", nameResult.scientificName, error.message);
+        console.log(`Error fetching Swedish name for ${nameResult.scientificName}:`, error.message);
       }
     }
 
