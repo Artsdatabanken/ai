@@ -980,7 +980,6 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
     }
 
 
-
     // Priority 3: Wikipedia
     const remainingLangs = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
     if (remainingLangs.length > 0) {
