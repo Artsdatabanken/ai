@@ -893,7 +893,42 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
 
   // If all languages are already filled, skip further fetching
   if (missingLanguages.length !== 0) {
-    // Priority 1: GBIF (Catalog of Life)
+
+    // Priority 1: Artdatabanken.se (Swedish)
+    if (!nameResult.vernacularNames.sv) {
+      try {
+        const swedishUrl = encodeURI(`https://nos-api.artdatabanken.se/api/search?searchType=exact&search=${nameResult.scientificName}`);
+        const swedishResponse = await axios
+          .get(swedishUrl, {
+            timeout: 3000,
+            headers: {
+              'Accept-Encoding': 'gzip',
+              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+            }
+          })
+          .catch((error) => {
+            console.log(`Failed to get Swedish name for ${nameResult.scientificName}:`, error.message);
+            return null;
+          });
+
+        if (swedishResponse?.data && Array.isArray(swedishResponse.data)) {
+          const matchingTaxon = swedishResponse.data.find(
+            item => item.scientificName &&
+              item.scientificName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
+              item.swedishName
+          );
+
+          if (matchingTaxon?.swedishName) {
+            nameResult.vernacularNames.sv = matchingTaxon.swedishName;
+          }
+        }
+      } catch (error) {
+        console.log("Error fetching Swedish name for %s:", nameResult.scientificName, error.message);
+      }
+    }
+
+
+    // Priority 2: GBIF (Catalog of Life)
     if (missingLanguages.length > 0) {
       try {
         const gbifUrl = encodeURI(`https://api.gbif.org/v1/species/search?datasetKey=7ddf754f-d193-4cc9-b351-99906754a03b&nameType=SCIENTIFIC&q=${nameResult.scientificName}`);
@@ -944,38 +979,6 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
       }
     }
 
-    // Priority 2: Artdatabanken.se (Swedish)
-    if (!nameResult.vernacularNames.sv) {
-      try {
-        const swedishUrl = encodeURI(`https://nos-api.artdatabanken.se/api/search?searchType=exact&search=${nameResult.scientificName}`);
-        const swedishResponse = await axios
-          .get(swedishUrl, {
-            timeout: 3000,
-            headers: {
-              'Accept-Encoding': 'gzip',
-              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
-            }
-          })
-          .catch((error) => {
-            console.log(`Failed to get Swedish name for ${nameResult.scientificName}:`, error.message);
-            return null;
-          });
-
-        if (swedishResponse?.data && Array.isArray(swedishResponse.data)) {
-          const matchingTaxon = swedishResponse.data.find(
-            item => item.scientificName &&
-              item.scientificName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
-              item.swedishName
-          );
-
-          if (matchingTaxon?.swedishName) {
-            nameResult.vernacularNames.sv = matchingTaxon.swedishName;
-          }
-        }
-      } catch (error) {
-        console.log(`Error fetching Swedish name for ${nameResult.scientificName}:`, error.message);
-      }
-    }
 
     // Priority 3: Wikipedia
     const remainingLangs = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
