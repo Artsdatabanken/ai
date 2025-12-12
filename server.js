@@ -923,7 +923,7 @@ let getName = async (sciNameId, sciName, force = false, country = null) => {
           }
         }
       } catch (error) {
-        console.log(`Error fetching Swedish name for ${nameResult.scientificName}:`, error.message);
+        console.log("Error fetching Swedish name for %s:", nameResult.scientificName, error.message);
       }
     }
 
