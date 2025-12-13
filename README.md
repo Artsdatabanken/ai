@@ -66,21 +66,11 @@ node server.js
 | POST | `/identify` | Identify species from images (requires API token) |
 | POST | `/` | Legacy identification endpoint |
 | GET | `/rss` | RSS feed |
-| GET | `/taxon/images/view` | HTML view of taxon profile images |
-
-### Image Storage
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/save` | Save images, returns ID and password |
-| GET | `/image/{id}&{password}` | Retrieve saved images |
-
-### Taxon
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
 | GET | `/taxon/image/{name}` | Get profile image URL for taxon |
 | GET | `/taxon/images` | Get all taxon profile images |
+| GET | `/taxon/images/view` | HTML view of taxon profile images |
+| POST | `/save` | Save images, returns ID and password |
+| GET | `/image/{id}&{password}` | Retrieve saved images |
 
 ### Admin (requires admin token)
 

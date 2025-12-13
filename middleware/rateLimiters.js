@@ -2,21 +2,6 @@ const rateLimit = require("express-rate-limit");
 const { getClientIP } = require("../services/geolocation");
 const { writeErrorLog } = require("../services/logging");
 
-const cacheLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: getClientIP,
-  handler: (request, response, next, options) => {
-    writeErrorLog(
-      `Too many cache requests`,
-      `IP ${getClientIP(request)}`
-    );
-    return response.status(options.statusCode).send(options.message);
-  },
-});
-
 const idLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 100,
@@ -66,7 +51,6 @@ const authLimiter = rateLimit({
 });
 
 module.exports = {
-  cacheLimiter,
   idLimiter,
   apiLimiter,
   authLimiter

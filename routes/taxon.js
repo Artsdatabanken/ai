@@ -10,22 +10,22 @@ const {
 } = require("../services/taxon");
 
 module.exports = (app) => {
-  app.get("/taxon/image/*", apiLimiter, authenticateAdminToken, (req, res) => {
+  app.get("/taxon/image/*", apiLimiter, (req, res) => {
     try {
       let taxon = decodeURI(req.originalUrl.replace("/taxon/image/", ""));
       res.status(200).send(getPicture(taxon));
     } catch (error) {
       writeErrorLog(`Error for ${req.originalUrl}`, error);
-      res.status(500).end();
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
-  app.get("/taxon/images", apiLimiter, authenticateAdminToken, (req, res) => {
+  app.get("/taxon/images", apiLimiter, (req, res) => {
     try {
       res.status(200).json(getTaxonPics());
     } catch (error) {
       writeErrorLog(`Error for ${req.originalUrl}`, error);
-      res.status(500).end();
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -51,7 +51,7 @@ module.exports = (app) => {
       res.status(200).send(html);
     } catch (error) {
       writeErrorLog(`Error for ${req.originalUrl}`, error);
-      res.status(500).end();
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -62,7 +62,7 @@ module.exports = (app) => {
       res.status(200).json(name);
     } catch (error) {
       writeErrorLog(`Error for ${req.originalUrl}`, error);
-      res.status(500).end();
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -73,7 +73,7 @@ module.exports = (app) => {
       res.status(200).json(name);
     } catch (error) {
       writeErrorLog(`Error for ${req.originalUrl}`, error);
-      res.status(500).end();
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -84,7 +84,7 @@ module.exports = (app) => {
       let number = await reloadTaxonImages();
       res.status(200).send(`${number} pictures found`);
     } catch (error) {
-      res.status(500).end();
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 };

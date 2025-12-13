@@ -251,7 +251,7 @@ module.exports = (app, upload) => {
       fs.readdir(logdir, function (err, files) {
         if (err) {
           writeErrorLog(`Error reading log directory`, err);
-          return res.status(500).end();
+          return res.status(500).json({ error: "Failed to read log directory" });
         }
         files.forEach(function (file, index) {
           json.push(file);
@@ -260,7 +260,7 @@ module.exports = (app, upload) => {
       });
     } catch (error) {
       writeErrorLog(`Error in loglist endpoint`, error);
-      res.status(500).end();
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -277,11 +277,11 @@ module.exports = (app, upload) => {
       if (fs.existsSync(resolvedPath)) {
         res.download(resolvedPath);
       } else {
-        res.status(404).end();
+        res.status(404).json({ error: "File not found" });
       }
     } catch (error) {
       writeErrorLog(`Error in getlog endpoint`, error);
-      res.status(500).end();
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 };

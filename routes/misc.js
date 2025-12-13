@@ -86,7 +86,7 @@ module.exports = (app, upload) => {
         res.status(200).json({ image: image_list });
       } catch (error) {
         writeErrorLog(`Failed to return json of saved images`, error);
-        res.status(500).end();
+        res.status(500).json({ error: "Internal server error" });
       }
     });
   });

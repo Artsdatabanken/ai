@@ -43,7 +43,7 @@ module.exports = (app, upload) => {
       }
     } catch (error) {
       writeErrorLog(`Error while running getId() on /identify endpoint`, error);
-      res.status(500).end();
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -87,7 +87,7 @@ module.exports = (app, upload) => {
       }
     } catch (error) {
       writeErrorLog(`Error while running getId()`, error);
-      res.status(500).end();
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 };
