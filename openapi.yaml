@@ -59,7 +59,7 @@ paths:
                               type: string
         '500':
           description: Internal Server Error
-  /taxonimage/{taxon}:
+  /taxon/image/{taxon}:
     get:
       summary: Get taxon image
       description: Retrieves the image URL for a given taxon.
@@ -81,7 +81,7 @@ paths:
                 type: string
         '500':
           description: Internal Server Error
-  /taxonimages:
+  /taxon/images:
     get:
       summary: Get all taxon images
       description: Retrieves all taxon images.
@@ -98,12 +98,27 @@ paths:
                   type: string
         '500':
           description: Internal Server Error
-  /cachetaxon/{taxon}:
+  /taxon/images/view:
     get:
-      summary: Cache taxon information
-      description: Caches or refreshes the information for a given taxon.
+      summary: View taxon images
+      description: Displays all taxon images in an HTML view.
       tags:
         - Taxon
+      responses:
+        '200':
+          description: Successful response
+          content:
+            text/html:
+              schema:
+                type: string
+        '500':
+          description: Internal Server Error
+  /admin/taxon/reload/name/{taxon}:
+    post:
+      summary: Reload taxon by name
+      description: Reloads the cached information for a given taxon by name.
+      tags:
+        - Admin
       parameters:
         - in: path
           name: taxon
@@ -118,14 +133,44 @@ paths:
             application/json:
               schema:
                 type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
         '500':
           description: Internal Server Error
-  /refreshtaxonimages:
-    get:
-      summary: Refresh taxon images
-      description: Refreshes the cache of taxon images.
+  /admin/taxon/reload/id/{id}:
+    post:
+      summary: Reload taxon by ID
+      description: Reloads the cached information for a given taxon by ID.
       tags:
-        - Taxon
+        - Admin
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: The taxon ID
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal Server Error
+  /admin/taxon/reload/images:
+    post:
+      summary: Reload taxon images
+      description: Reloads the cache of taxon images.
+      tags:
+        - Admin
       responses:
         '200':
           description: Successful response
@@ -133,6 +178,269 @@ paths:
             text/plain:
               schema:
                 type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal Server Error
+  /admin/taxon/cache:
+    delete:
+      summary: Clear taxon cache
+      description: Clears all cached taxon data.
+      tags:
+        - Admin
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  deleted:
+                    type: integer
+                  errors:
+                    type: integer
+                  totalFiles:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal Server Error
+  /admin/tokens:
+    get:
+      summary: List API tokens
+      description: Lists all API tokens.
+      tags:
+        - Admin
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  tokens:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        token:
+                          type: string
+                        name:
+                          type: string
+                        application:
+                          type: string
+                        enabled:
+                          type: boolean
+                        created:
+                          type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal Server Error
+    post:
+      summary: Create API token
+      description: Creates a new API token.
+      tags:
+        - Admin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - application
+              properties:
+                name:
+                  type: string
+                application:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Token created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  token:
+                    type: string
+                  name:
+                    type: string
+                  application:
+                    type: string
+                  enabled:
+                    type: boolean
+                  created:
+                    type: string
+                  warning:
+                    type: string
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal Server Error
+  /admin/tokens/reload:
+    get:
+      summary: Reload tokens
+      description: Reloads tokens from the tokens file.
+      tags:
+        - Admin
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  count:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal Server Error
+  /admin/tokens/{tokenPrefix}/enable:
+    patch:
+      summary: Enable token
+      description: Enables a token by prefix.
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: tokenPrefix
+          required: true
+          schema:
+            type: string
+          description: The token prefix
+      responses:
+        '200':
+          description: Successful response
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Token not found
+        '500':
+          description: Internal Server Error
+  /admin/tokens/{tokenPrefix}/disable:
+    patch:
+      summary: Disable token
+      description: Disables a token by prefix.
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: tokenPrefix
+          required: true
+          schema:
+            type: string
+          description: The token prefix
+      responses:
+        '200':
+          description: Successful response
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Token not found
+        '500':
+          description: Internal Server Error
+  /admin/logs:
+    get:
+      summary: List log files
+      description: Lists all log files.
+      tags:
+        - Admin
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal Server Error
+  /admin/logs/{filename}:
+    get:
+      summary: Download log file
+      description: Downloads a specific log file.
+      tags:
+        - Admin
+      parameters:
+        - in: path
+          name: filename
+          required: true
+          schema:
+            type: string
+          description: The log filename
+      responses:
+        '200':
+          description: Successful response
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: File not found
+        '500':
+          description: Internal Server Error
+  /admin/rss:
+    post:
+      summary: Update RSS feed
+      description: Updates the RSS feed file.
+      tags:
+        - Admin
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                rss:
+                  type: string
+                  format: binary
+                  description: RSS file to upload
+      responses:
+        '200':
+          description: Successful response
+        '400':
+          description: No RSS file provided
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
         '500':
           description: Internal Server Error
   /save:
@@ -198,5 +506,63 @@ paths:
                     type: array
                     items:
                       type: string
+        '404':
+          description: Image not found
+        '500':
+          description: Internal Server Error
+  /rss:
+    get:
+      summary: Get RSS feed
+      description: Returns the RSS feed.
+      tags:
+        - Misc
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/rss+xml:
+              schema:
+                type: string
+  /identify:
+    post:
+      summary: Identify species from image (authenticated)
+      description: Identifies species from uploaded images using AI. Requires API token.
+      tags:
+        - Identification
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Image file(s) to be analyzed
+                application:
+                  type: string
+                  description: Name of the application making the request
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  predictions:
+                    type: array
+                    items:
+                      type: object
+                  uploadId:
+                    type: string
+                  uploadSecret:
+                    type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
         '500':
           description: Internal Server Error
