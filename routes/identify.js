@@ -62,7 +62,7 @@ module.exports = (app, upload) => {
       json.predictions[0].taxon = {
         vernacularName: "*** Utdatert versjon ***",
         name:
-          "Vennligst oppdater Artsorakelet via app store, eller Ctrl-Shift-R på pc",
+          "Vennligst oppdater Artsorakel via app store, eller Ctrl-Shift-R på pc",
       };
 
       res.status(200).json(json);

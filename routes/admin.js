@@ -10,19 +10,25 @@ const {
 } = require("../middleware/auth");
 const { writeErrorLog } = require("../services/logging");
 const { taxadir } = require("../services/taxon");
-const { logdir } = require("../config/constants");
+const { logdir, VALID_MODELS } = require("../config/constants");
 
 module.exports = (app, upload) => {
   app.get("/admin/tokens", authLimiter, authenticateAdminToken, (req, res) => {
     try {
       const validTokens = getValidTokens();
-      const tokenList = Object.keys(validTokens).map((token) => ({
-        token: token.substring(0, 8) + "...",
-        name: validTokens[token].name,
-        application: validTokens[token].application,
-        enabled: validTokens[token].enabled,
-        created: validTokens[token].created,
-      }));
+      const tokenList = Object.keys(validTokens).map((token) => {
+        const tokenInfo = {
+          token: token.substring(0, 8) + "...",
+          name: validTokens[token].name,
+          application: validTokens[token].application,
+          enabled: validTokens[token].enabled,
+          created: validTokens[token].created,
+        };
+        if (validTokens[token].model) {
+          tokenInfo.model = validTokens[token].model;
+        }
+        return tokenInfo;
+      });
       res.status(200).json({
         count: tokenList.length,
         tokens: tokenList,
@@ -49,12 +55,19 @@ module.exports = (app, upload) => {
 
   app.post("/admin/tokens", authLimiter, authenticateAdminToken, (req, res) => {
     try {
-      const { name, application, description } = req.body;
+      const { name, application, description, model } = req.body;
 
       if (!name || !application) {
         return res.status(400).json({
           error: "Bad request",
           message: "name and application are required fields",
+        });
+      }
+
+      if (model && !VALID_MODELS.includes(model)) {
+        return res.status(400).json({
+          error: "Bad request",
+          message: `Invalid model. Valid options: ${VALID_MODELS.join(', ')}`,
         });
       }
 
@@ -69,6 +82,10 @@ module.exports = (app, upload) => {
         description: description ? description.trim() : `Token for ${name}`,
       };
 
+      if (model) {
+        tokenData.model = model;
+      }
+
       validTokens[newToken] = tokenData;
 
       if (!saveTokens()) {
@@ -77,7 +94,7 @@ module.exports = (app, upload) => {
         });
       }
 
-      res.status(201).json({
+      const response = {
         message: "Token created successfully",
         token: newToken,
         name: tokenData.name,
@@ -85,7 +102,13 @@ module.exports = (app, upload) => {
         enabled: tokenData.enabled,
         created: tokenData.created,
         warning: "Store this token securely. It will not be shown again in full.",
-      });
+      };
+
+      if (model) {
+        response.model = model;
+      }
+
+      res.status(201).json(response);
 
       writeErrorLog(
         `Token created successfully`,

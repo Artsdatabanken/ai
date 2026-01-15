@@ -61,8 +61,25 @@ const getId = async (req) => {
     let username = process.env.NATURALIS_USERNAME_NORWAY
     let password = process.env.NATURALIS_PASSWORD_NORWAY
 
+    const tokenModelRestriction = req.auth?.model;
 
-    if (receivedParams.includes('model') && req.body.model && req.body.model.toLowerCase() === "global") {
+    const selectModelCredentials = (model) => {
+      if (model === 'Swedish') {
+        username = process.env.NATURALIS_USERNAME_SWEDEN;
+        password = process.env.NATURALIS_PASSWORD_SWEDEN;
+        return process.env.NATURALIS_TOKEN_SWEDEN;
+      } else if (model === 'Norwegian') {
+        return process.env.NATURALIS_TOKEN_NORWAY;
+      } else {
+        return process.env.NATURALIS_TOKEN_EUROPE;
+      }
+    };
+
+    if (tokenModelRestriction) {
+      token = selectModelCredentials(tokenModelRestriction);
+      modelUsed = tokenModelRestriction;
+      locationSource = 'token';
+    } else if (receivedParams.includes('model') && req.body.model && req.body.model.toLowerCase() === "global") {
       token = process.env.NATURALIS_TOKEN_EUROPE;
       modelUsed = 'European';
     } else if (country === 'SE') {
