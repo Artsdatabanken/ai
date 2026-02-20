@@ -2,7 +2,7 @@
 
 ## Overview
 
-This API implements a simplified token-based authentication system. The existing root endpoint (`POST /`) remains tokenless for backward compatibility, while a new secured endpoint (`POST /identify`) requires authentication.
+This API implements a simple token-based authentication system.
 
 ## Authentication System
 
@@ -12,9 +12,6 @@ This API implements a simplified token-based authentication system. The existing
 2. **API Tokens** - Stored in `auth/tokens.json`, provides access to the identification endpoint only
 
 ### Endpoints
-
-#### Legacy Endpoint (No Authentication)
-- `POST /` - Species identification (legacy, no token required)
 
 #### Secured Endpoints
 - `POST /identify` - Species identification (requires API token or admin token)
@@ -35,7 +32,8 @@ curl -X POST https://your-api-domain.com/admin/tokens \
   -d '{
     "name": "New Client Name",
     "application": "my-app",
-    "description": "Token for my application"
+    "description": "Token for my application",
+    "model": "Norwegian"
   }'
 
 # Enable a token (using token prefix)
@@ -82,7 +80,7 @@ API tokens are managed in `auth/tokens.json`. Each token must be associated with
 {
   "your-api-token-1": {
     "name": "Client Name 1",
-    "application": "artsorakelet",
+    "application": "artsorakel",
     "enabled": true,
     "created": "2024-01-01T00:00:00Z",
     "description": "Description of what this token is for"
@@ -92,7 +90,8 @@ API tokens are managed in `auth/tokens.json`. Each token must be associated with
     "application": "research-tool",
     "enabled": false,
     "created": "2024-01-01T00:00:00Z",
-    "description": "Another client token (disabled)"
+    "description": "Another client token (disabled)",
+    "model": "Swedish"
   }
 }
 ```
@@ -100,9 +99,12 @@ API tokens are managed in `auth/tokens.json`. Each token must be associated with
 **Required Fields:**
 - `name`: Human-readable name for the token
 - `application`: Application identifier used for logging and identification
+
+**Optional Fields:**
 - `enabled`: Boolean indicating if the token is active (defaults to true)
 - `created`: Timestamp when the token was created
-- `description`: Optional description of the token's purpose
+- `description`: Description of the token's purpose
+- `model`: Restrict token to a specific model (`Norwegian`, `Swedish`, or `European`). If not set, model is selected based on location/IP.
 
 ## Token Management
 
@@ -116,7 +118,7 @@ curl -X POST https://your-api-domain.com/admin/tokens \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Mobile App Client",
-    "application": "artsorakelet-mobile",
+    "application": "artsorakel-mobile",
     "description": "Token for the mobile application"
   }'
 ```
@@ -127,12 +129,32 @@ curl -X POST https://your-api-domain.com/admin/tokens \
   "message": "Token created successfully",
   "token": "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6",
   "name": "Mobile App Client",
-  "application": "artsorakelet-mobile",
+  "application": "artsorakel-mobile",
   "enabled": true,
   "created": "2024-01-15T10:30:00Z",
   "warning": "Store this token securely. It will not be shown again in full."
 }
 ```
+
+### Model-Restricted Tokens
+
+Tokens can be restricted to use a specific identification model regardless of location. This is useful for applications that should always use a particular regional model.
+
+```bash
+curl -X POST https://your-api-domain.com/admin/tokens \
+  -H "Authorization: Bearer your-admin-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Swedish Partner App",
+    "application": "swedish-partner",
+    "description": "Token restricted to Swedish model",
+    "model": "Swedish"
+  }'
+```
+
+**Valid model values:** `Norwegian`, `Swedish`, `European`
+
+When a model-restricted token is used, the response `modelInfo.locationSource` will be `"token"` instead of `"coordinates"` or `"ip"`.
 
 ### Managing Token Status
 

@@ -10,6 +10,7 @@ const pictureFile = `${cachedir}/taxonPictures.json`;
 const uploadsdir = "./uploads";
 const listVersionsFile = `${cachedir}/listversions.json`;
 const TOKENS_FILE = "./auth/tokens.json";
+const VALID_MODELS = ['Norwegian', 'Swedish', 'European'];
 
 const headfile = ".git/HEAD";
 
@@ -66,6 +67,7 @@ module.exports = {
   uploadsdir,
   listVersionsFile,
   TOKENS_FILE,
+  VALID_MODELS,
   branch,
   server_url,
   warningsConfig,

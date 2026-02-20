@@ -16,9 +16,8 @@ const setupCronJobs = () => {
           if (time_between >= survival_length) {
             fs.unlink(`${uploadsdir}/${file}`, (err) => {
               if (err) {
-                console.log("could not delete file");
+                console.log("could not delete file: " + filename);
               }
-              console.log("The file has been deleted!");
             });
           }
         });
