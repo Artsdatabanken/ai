@@ -31,10 +31,13 @@ module.exports = (app, upload) => {
             )}.json`;
             if (fs.existsSync(filename)) {
               fs.stat(filename, function (err, stats) {
+                if (err || !stats) return;
                 if ((new Date() - stats.mtime) / (1000 * 60 * 60 * 24) > 10) {
                   let splitId = taxon.scientific_name_id.split(":");
                   let sciNameId = splitId[0] === "NBIC" ? splitId[1] : null;
-                  getName(sciNameId, taxon.scientific_name, true);
+                  getName(sciNameId, taxon.scientific_name, true).catch((e) => {
+                    writeErrorLog(`Background recache failed for ${taxon.scientific_name}`, e);
+                  });
                 }
               });
             }
@@ -75,10 +78,13 @@ module.exports = (app, upload) => {
             )}.json`;
             if (fs.existsSync(filename)) {
               fs.stat(filename, function (err, stats) {
+                if (err || !stats) return;
                 if ((new Date() - stats.mtime) / (1000 * 60 * 60 * 24) > 10) {
                   let splitId = taxon.scientific_name_id.split(":");
                   let sciNameId = splitId[0] === "NBIC" ? splitId[1] : null;
-                  getName(sciNameId, taxon.scientific_name, true);
+                  getName(sciNameId, taxon.scientific_name, true).catch((e) => {
+                    writeErrorLog(`Background recache failed for ${taxon.scientific_name}`, e);
+                  });
                 }
               });
             }

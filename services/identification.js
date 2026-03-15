@@ -110,6 +110,7 @@ const getId = async (req) => {
             username: username,
             password: password,
           },
+          timeout: 60000,
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
         }

@@ -1,5 +1,6 @@
 const axios = require("axios");
 const fs = require("fs");
+const fsp = require("fs/promises");
 const sanitize = require("sanitize-filename");
 const {
   taxadir,
@@ -19,16 +20,17 @@ if (fs.existsSync(pictureFile)) {
 const getListVersions = async () => {
   const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
 
-  if (fs.existsSync(listVersionsFile)) {
-    const stats = fs.statSync(listVersionsFile);
+  try {
+    const stats = await fsp.stat(listVersionsFile);
     if (stats.mtimeMs > oneWeekAgo) {
       try {
-        return JSON.parse(fs.readFileSync(listVersionsFile, 'utf8'));
+        return JSON.parse(await fsp.readFile(listVersionsFile, 'utf8'));
       } catch (error) {
         writeErrorLog('Could not parse listversions.json', error);
       }
     }
-  }
+  } catch {}
+
 
   const currentYear = new Date().getFullYear();
   const versions = {
@@ -79,7 +81,7 @@ const getListVersions = async () => {
   if (!versions.AlienSpeciesList) versions.AlienSpeciesList = 2023;
   if (!versions.Redlist) versions.Redlist = 2021;
 
-  fs.writeFileSync(listVersionsFile, JSON.stringify(versions, null, 2));
+  fsp.writeFile(listVersionsFile, JSON.stringify(versions, null, 2)).catch(() => {});
 
   return versions;
 };
@@ -103,14 +105,17 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
 
   if (sciNameId) {
     const pattern = `${encodeURIComponent(sciNameId)}_`;
-    const files = fs.readdirSync(taxadir).filter(f => f.startsWith(pattern) && f.endsWith('.json'));
+    let files = [];
+    try {
+      files = (await fsp.readdir(taxadir)).filter(f => f.startsWith(pattern) && f.endsWith('.json'));
+    } catch {}
 
     if (files.length > 0) {
       const existingFile = `${taxadir}/${files[0]}`;
 
       if (!force) {
         try {
-          const cachedData = JSON.parse(fs.readFileSync(existingFile));
+          const cachedData = JSON.parse(await fsp.readFile(existingFile, 'utf8'));
           if (country === 'NO') {
             if (cachedData?.redListCategories?.NO) {
               cachedData.redListCategory = cachedData.redListCategories.NO;
@@ -125,39 +130,35 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         }
       }
 
-      files.forEach(f => {
+      for (const f of files) {
         const filepath = `${taxadir}/${f}`;
-        fs.unlink(filepath, function (error) {
-          if (error)
-            writeErrorLog(
-              `Could not delete "${filepath}" while ${force ? 'forcing recache' : 'after parse error'}`,
-              error
-            );
+        fsp.unlink(filepath).catch((error) => {
+          writeErrorLog(
+            `Could not delete "${filepath}" while ${force ? 'forcing recache' : 'after parse error'}`,
+            error
+          );
         });
-      });
+      }
     }
   } else {
     let filename = "_" + sciName;
     let unencoded_jsonfilename = `${taxadir}/${sanitize(filename)}.json`;
     let jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
 
-    if (
-      fs.existsSync(unencoded_jsonfilename) &&
-      unencoded_jsonfilename !== jsonfilename
-    ) {
-      fs.unlink(unencoded_jsonfilename, function (error) {
-        if (error)
-          writeErrorLog(
-            `Could not delete "${unencoded_jsonfilename}" while updating old filename`,
-            error
-          );
-      });
+    if (unencoded_jsonfilename !== jsonfilename) {
+      fsp.unlink(unencoded_jsonfilename).catch(() => {});
     }
 
-    if (fs.existsSync(jsonfilename)) {
+    let fileExists = false;
+    try {
+      await fsp.access(jsonfilename);
+      fileExists = true;
+    } catch {}
+
+    if (fileExists) {
       if (!force) {
         try {
-          const cachedData = JSON.parse(fs.readFileSync(jsonfilename));
+          const cachedData = JSON.parse(await fsp.readFile(jsonfilename, 'utf8'));
           if (country === 'NO') {
             if (cachedData?.redListCategories?.NO) {
               cachedData.redListCategory = cachedData.redListCategories.NO;
@@ -169,23 +170,10 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
           return cachedData;
         } catch (error) {
           writeErrorLog(`Could not parse "${jsonfilename}"`, error);
-
-          fs.unlink(jsonfilename, function (error) {
-            if (error)
-              writeErrorLog(
-                `Could not delete "${jsonfilename}" after JSON parse failed`,
-                error
-              );
-          });
+          fsp.unlink(jsonfilename).catch(() => {});
         }
       } else {
-        fs.unlink(jsonfilename, function (error) {
-          if (error)
-            writeErrorLog(
-              `Could not delete "${jsonfilename}" while forcing recache`,
-              error
-            );
-        });
+        fsp.unlink(jsonfilename).catch(() => {});
       }
     }
   }
@@ -652,9 +640,16 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
     jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
   }
 
-  if (force || !fs.existsSync(jsonfilename)) {
-    let data = JSON.stringify(nameResult);
-    fs.writeFileSync(jsonfilename, data);
+  let shouldWrite = force;
+  if (!shouldWrite) {
+    try {
+      await fsp.access(jsonfilename);
+    } catch {
+      shouldWrite = true;
+    }
+  }
+  if (shouldWrite) {
+    fsp.writeFile(jsonfilename, JSON.stringify(nameResult)).catch(() => {});
   }
 
   return nameResult;
@@ -695,7 +690,7 @@ const reloadTaxonImages = async () => {
   }
 
   taxonPics = taxa;
-  fs.writeFileSync(pictureFile, JSON.stringify(taxa));
+  await fsp.writeFile(pictureFile, JSON.stringify(taxa));
   return Object.keys(taxa).length;
 };
 

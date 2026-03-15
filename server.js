@@ -9,6 +9,16 @@ dotenv.config({ path: "./config/config.env" });
 dotenv.config({ path: "./auth/secrets.env" });
 
 const { taxadir, logdir, uploadsdir } = require("./config/constants");
+const { writeErrorLog } = require("./services/logging");
+
+process.on("uncaughtException", (error) => {
+  writeErrorLog("Uncaught exception", error);
+});
+
+process.on("unhandledRejection", (reason) => {
+  writeErrorLog("Unhandled rejection", reason);
+});
+
 const { initializeIpLookup } = require("./services/geolocation");
 const { setupCronJobs } = require("./jobs/cron");
 
@@ -59,8 +69,8 @@ if (trustProxyConfig === "false") {
   app.set("trust proxy", trustProxyConfig);
 }
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json({ limit: "1mb" }));
+app.use(bodyParser.urlencoded({ extended: false, limit: "1mb" }));
 
 var corsOptions = {
   origin: "*",
@@ -79,7 +89,7 @@ app.use(function (req, res, next) {
 });
 
 const storage = multer.memoryStorage();
-const upload = multer({ storage: storage });
+const upload = multer({ storage: storage, limits: { fileSize: 20 * 1024 * 1024, files: 5 } });
 
 identifyRoutes(app, upload);
 adminRoutes(app, upload);
