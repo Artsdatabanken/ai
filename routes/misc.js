@@ -44,8 +44,12 @@ module.exports = (app, upload) => {
 
   app.get("/image/*", apiLimiter, async (req, res) => {
     const urlParam = req.originalUrl.replace("/image/", "");
-    const password = urlParam.split("&")[1].toString();
-    const id = urlParam.split("&")[0];
+    const parts = urlParam.split("&");
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
+      return res.status(400).json({ error: "Missing id or password" });
+    }
+    const id = parts[0];
+    const password = parts[1];
 
     fs.readdir(`${uploadsdir}/`, async (err, files) => {
       let image_list = [];

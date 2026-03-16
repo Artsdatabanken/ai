@@ -26,21 +26,28 @@ module.exports = (app, upload) => {
       if (json?.predictions?.[0]?.taxa) {
         json.predictions[0].taxa.items.forEach((taxon) => {
           if (Math.random() < 0.05) {
-            let filename = `${taxadir}/${encodeURIComponent(
-              taxon.scientific_name
-            )}.json`;
-            if (fs.existsSync(filename)) {
-              fs.stat(filename, function (err, stats) {
-                if (err || !stats) return;
+            let splitId = taxon.scientific_name_id.split(":");
+            let sciNameId = splitId[0] === "NBIC" ? splitId[1] : null;
+
+            let pattern;
+            if (sciNameId) {
+              pattern = `${encodeURIComponent(sciNameId)}_`;
+            } else {
+              pattern = `_${taxon.scientific_name}`;
+            }
+
+            try {
+              const files = fs.readdirSync(taxadir).filter(f => f.startsWith(pattern) && f.endsWith('.json'));
+              if (files.length > 0) {
+                const filepath = `${taxadir}/${files[0]}`;
+                const stats = fs.statSync(filepath);
                 if ((new Date() - stats.mtime) / (1000 * 60 * 60 * 24) > 10) {
-                  let splitId = taxon.scientific_name_id.split(":");
-                  let sciNameId = splitId[0] === "NBIC" ? splitId[1] : null;
                   getName(sciNameId, taxon.scientific_name, true).catch((e) => {
                     writeErrorLog(`Background recache failed for ${taxon.scientific_name}`, e);
                   });
                 }
-              });
-            }
+              }
+            } catch {}
           }
         });
       }
@@ -64,33 +71,10 @@ module.exports = (app, upload) => {
       json.predictions[0].probability = 1;
       json.predictions[0].taxon = {
         vernacularName: "*** Utdatert versjon ***",
-        name:
-          "Vennligst oppdater Artsorakel via app store, eller Ctrl-Shift-R på pc",
+        name: "Vennligst oppdater Artsorakel via app store, eller Ctrl-Shift-R på pc",
       };
 
       res.status(200).json(json);
-
-      if (json.predictions[0].taxa) {
-        json.predictions[0].taxa.items.forEach((taxon) => {
-          if (Math.random() < 0.05) {
-            let filename = `${taxadir}/${encodeURIComponent(
-              taxon.scientific_name
-            )}.json`;
-            if (fs.existsSync(filename)) {
-              fs.stat(filename, function (err, stats) {
-                if (err || !stats) return;
-                if ((new Date() - stats.mtime) / (1000 * 60 * 60 * 24) > 10) {
-                  let splitId = taxon.scientific_name_id.split(":");
-                  let sciNameId = splitId[0] === "NBIC" ? splitId[1] : null;
-                  getName(sciNameId, taxon.scientific_name, true).catch((e) => {
-                    writeErrorLog(`Background recache failed for ${taxon.scientific_name}`, e);
-                  });
-                }
-              });
-            }
-          }
-        });
-      }
     } catch (error) {
       writeErrorLog(`Error while running getId()`, error);
       res.status(500).json({ error: "Internal server error" });

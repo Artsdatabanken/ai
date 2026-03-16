@@ -8,7 +8,7 @@ const {
   saveTokens,
   generateSecureToken
 } = require("../middleware/auth");
-const { writeErrorLog } = require("../services/logging");
+const { writeErrorLog, writeAdminLog } = require("../services/logging");
 const { taxadir } = require("../services/taxon");
 const { logdir, VALID_MODELS } = require("../config/constants");
 
@@ -110,8 +110,8 @@ module.exports = (app, upload) => {
 
       res.status(201).json(response);
 
-      writeErrorLog(
-        `Token created successfully`,
+      writeAdminLog(
+        `Token created`,
         `Name: ${name}, Application: ${application}, Admin IP: ${req.ip}`
       );
     } catch (error) {
@@ -156,7 +156,7 @@ module.exports = (app, upload) => {
         enabled: true,
       });
 
-      writeErrorLog(
+      writeAdminLog(
         `Token enabled`,
         `Token: ${fullToken.substring(0, 8)}..., Admin IP: ${req.ip}`
       );
@@ -202,7 +202,7 @@ module.exports = (app, upload) => {
         enabled: false,
       });
 
-      writeErrorLog(
+      writeAdminLog(
         `Token disabled`,
         `Token: ${fullToken.substring(0, 8)}..., Admin IP: ${req.ip}`
       );
@@ -238,7 +238,7 @@ module.exports = (app, upload) => {
       const message = `Cleared ${deletedCount} cached taxa files${
         errorCount > 0 ? ` (${errorCount} errors)` : ""
       }`;
-      writeErrorLog(message, `Admin IP: ${req.ip}`);
+      writeAdminLog(message, `Admin IP: ${req.ip}`);
 
       res.status(200).json({
         message: message,

@@ -100,12 +100,11 @@ setupCronJobs();
 
 initializeIpLookup()
   .then(() => {
-    app.listen(port, console.log(`Server now running on port ${port}`));
+    app.listen(port, () => console.log(`Server now running on port ${port}`));
   })
   .catch((error) => {
     console.error("Failed to initialize IP lookup database:", error);
-    app.listen(
-      port,
+    app.listen(port, () =>
       console.log(`Server running on port ${port} (IP geolocation unavailable)`)
     );
   });

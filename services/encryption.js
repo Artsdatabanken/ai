@@ -4,26 +4,21 @@ const { uploadsdir } = require("../config/constants");
 const { writeErrorLog } = require("./logging");
 
 const encryption_algorithm = "aes-256-ctr";
-const initVect = crypto.randomBytes(16);
+const IV_LENGTH = 16;
 
 function encrypt(file, password) {
-  const cipher = crypto.createCipheriv(
-    encryption_algorithm,
-    password,
-    initVect
-  );
-  const encrypted = Buffer.concat([cipher.update(file), cipher.final()]);
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(encryption_algorithm, password, iv);
+  const encrypted = Buffer.concat([iv, cipher.update(file), cipher.final()]);
   return encrypted;
 }
 
 const decrypt = (encrypted_content, password) => {
-  const decipher = crypto.createDecipheriv(
-    encryption_algorithm,
-    password,
-    initVect
-  );
+  const iv = encrypted_content.subarray(0, IV_LENGTH);
+  const content = encrypted_content.subarray(IV_LENGTH);
+  const decipher = crypto.createDecipheriv(encryption_algorithm, password, iv);
   const decrypted = Buffer.concat([
-    decipher.update(encrypted_content),
+    decipher.update(content),
     decipher.final(),
   ]);
   return decrypted.toString();
@@ -57,7 +52,6 @@ const saveImagesAndGetToken = async (req) => {
           error
         );
       }
-      console.log("The file has been saved!");
     });
   }
   return { id: id, password: password };

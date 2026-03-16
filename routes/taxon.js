@@ -5,8 +5,7 @@ const {
   getName,
   getPicture,
   getTaxonPics,
-  reloadTaxonImages,
-  reloadTaxonPics
+  reloadTaxonImages
 } = require("../services/taxon");
 
 module.exports = (app) => {
@@ -79,8 +78,6 @@ module.exports = (app) => {
 
   app.post("/admin/taxon/reload/images", authLimiter, authenticateAdminToken, async (req, res) => {
     try {
-      reloadTaxonPics();
-
       let number = await reloadTaxonImages();
       res.status(200).send(`${number} pictures found`);
     } catch (error) {

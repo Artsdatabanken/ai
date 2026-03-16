@@ -46,7 +46,7 @@ const getListVersions = async () => {
           timeout: 5000,
           headers: {
             'Accept-Encoding': 'gzip',
-            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
           }
         });
         if (response.status === 200) {
@@ -63,7 +63,7 @@ const getListVersions = async () => {
           timeout: 5000,
           headers: {
             'Accept-Encoding': 'gzip',
-            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
           }
         });
         if (response.status === 200) {
@@ -209,7 +209,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
             } ${sciName} from ${url}.`,
             error
           );
-          throw "";
+          throw error;
         });
       scientificNameIdObject = scientificNameIdObject.data
     }
@@ -243,7 +243,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
             } ${taxonId} from ${url}.`,
             error
           );
-          throw "";
+          throw error;
         });
       resourceObject = resourceObject.data
     }
@@ -276,7 +276,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
             } ${sciName} from ${url}.`,
             error
           );
-          throw "";
+          throw error;
         });
 
       resourceObject = taxon.data.find(
@@ -293,7 +293,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
       return nameResult;
     }
 
-    if (!!resourceObject) {
+    if (resourceObject) {
       let sciNameIdFromName = resourceObject.AcceptedNameUsage.ScientificNameId
 
       try {
@@ -314,7 +314,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
               } ${sciName} from ${url}.`,
               error
             );
-            throw "";
+            throw error;
           });
         scientificNameIdObject = scientificNameIdObject.data
       }
@@ -342,7 +342,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
           timeout: 3000,
           headers: {
             'Accept-Encoding': 'gzip',
-            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
           }
         })
         .catch((error) => {
@@ -351,7 +351,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
             } ${sciName} from ${url}.`,
             error
           );
-          throw "";
+          throw error;
         });
       alienSpeciesListObject = alienSpeciesListObject.data
     }
@@ -375,7 +375,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
           timeout: 3000,
           headers: {
             'Accept-Encoding': 'gzip',
-            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
           }
         })
         .catch((error) => {
@@ -384,7 +384,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
             } ${sciName} from ${url}.`,
             error
           );
-          throw "";
+          throw error;
         });
       redListObject = redListObject.data
     }
@@ -458,7 +458,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
             timeout: 3000,
             headers: {
               'Accept-Encoding': 'gzip',
-              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1',
+              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)',
               'Ocp-Apim-Subscription-Key': process.env.ARTDATABANKEN_TOKEN
             }
           })
@@ -491,7 +491,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
             timeout: 3000,
             headers: {
               'Accept-Encoding': 'gzip',
-              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
             }
           })
           .catch((error) => {
@@ -543,7 +543,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
             timeout: 3000,
             headers: {
               'Accept-Encoding': 'gzip',
-              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
             }
           })
           .catch((error) => {
@@ -576,7 +576,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
               timeout: 3000,
               headers: {
                 'Accept-Encoding': 'gzip',
-                'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+                'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
               }
             })
             .catch((error) => {
@@ -675,10 +675,10 @@ const reloadTaxonImages = async () => {
           `Error getting "${url}" while running reloadTaxonImages`,
           error
         );
-        throw "";
+        throw error;
       });
 
-    if (!!page) {
+    if (page) {
       page.data.Files.forEach((f) => {
         if (f.FileUrl) {
           let name = f.Title.split(".")[0].replaceAll("_", " ");
@@ -694,18 +694,10 @@ const reloadTaxonImages = async () => {
   return Object.keys(taxa).length;
 };
 
-const reloadTaxonPics = () => {
-  if (fs.existsSync(pictureFile)) {
-    taxonPics = JSON.parse(fs.readFileSync(pictureFile));
-  }
-};
-
 module.exports = {
-  getListVersions,
   getName,
   getPicture,
   getTaxonPics,
   reloadTaxonImages,
-  reloadTaxonPics,
   taxadir
 };

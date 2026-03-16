@@ -102,8 +102,19 @@ const writelog = (req, json, auth = null) => {
   });
 };
 
+const writeAdminLog = (message, details) => {
+  const content = details
+    ? `${dateStr("s")}: [ADMIN] ${message} - ${details}\n`
+    : `${dateStr("s")}: [ADMIN] ${message}\n`;
+
+  fs.appendFile(`${logdir}/admin_${dateStr("d")}.txt`, content, (err) => {
+    if (err) console.error("Failed to write admin log:", err.message);
+  });
+};
+
 module.exports = {
   dateStr,
   writeErrorLog,
+  writeAdminLog,
   writelog
 };
