@@ -10,12 +10,10 @@ const { getWarnings } = require("./warnings");
 const simplifyJson = (json) => {
   if (json.predictions[0].taxa) {
     json.predictions = json.predictions[0].taxa.items.map((p) => {
-      let simplified = {
+      return {
         probability: p.probability,
         taxon: p,
       };
-      delete simplified.taxon.probability;
-      return simplified;
     });
   }
 

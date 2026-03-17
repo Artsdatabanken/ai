@@ -28,9 +28,11 @@
   },
   "nodemonConfig": {
     "ignore": [
-      "log/*",
-      "taxa/*",
-      "cache/*"
+      "log/**",
+      "taxa/**",
+      "cache/**",
+      "uploads/**",
+      "auth/**"
     ]
   }
 }

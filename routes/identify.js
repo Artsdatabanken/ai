@@ -18,10 +18,10 @@ module.exports = (app, upload) => {
       writelog(req, json, req.auth);
 
       if (req.body.application === undefined) {
-        json = simplifyJson(json);
+        res.status(200).json(simplifyJson({...json}));
+      } else {
+        res.status(200).json(json);
       }
-
-      res.status(200).json(json);
 
       if (json?.predictions?.[0]?.taxa) {
         json.predictions[0].taxa.items.forEach((taxon) => {
@@ -63,18 +63,21 @@ module.exports = (app, upload) => {
 
       writelog(req, json);
 
+      let responseJson;
       if (req.body.application === undefined) {
-        json = simplifyJson(json);
-        json.predictions = [{}].concat(json.predictions);
+        responseJson = simplifyJson({...json});
+        responseJson.predictions = [{}].concat(responseJson.predictions);
+      } else {
+        responseJson = {...json};
       }
 
-      json.predictions[0].probability = 1;
-      json.predictions[0].taxon = {
+      responseJson.predictions[0].probability = 1;
+      responseJson.predictions[0].taxon = {
         vernacularName: "*** Utdatert versjon ***",
         name: "Vennligst oppdater Artsorakel via app store, eller Ctrl-Shift-R på pc",
       };
 
-      res.status(200).json(json);
+      res.status(200).json(responseJson);
     } catch (error) {
       writeErrorLog(`Error while running getId()`, error);
       res.status(500).json({ error: "Internal server error" });
