@@ -206,7 +206,8 @@ const getId = async (req) => {
     recognition.data.modelInfo = {
       model: modelUsed,
       country: country || 'Unknown',
-      locationSource: locationSource
+      locationSource: locationSource,
+      detectedIP: detectedIP
     };
 
     const metadata = {
