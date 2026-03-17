@@ -32,8 +32,9 @@ const getClientIP = (req) => {
   }
 
   let cleanIP = realIP.replace(/^::ffff:/, "").trim();
-  if (cleanIP.includes(".") && !cleanIP.includes(":")) {
-    cleanIP = cleanIP.replace(/:\d+$/, "");
+  const ipv4PortMatch = cleanIP.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
+  if (ipv4PortMatch) {
+    cleanIP = ipv4PortMatch[1];
   }
 
   return cleanIP;
