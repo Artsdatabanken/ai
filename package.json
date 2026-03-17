@@ -10,28 +10,29 @@
   "author": "Wouter Koch",
   "license": "MIT",
   "dependencies": {
-    "@rapideditor/country-coder": "^5.5.1",
-    "applicationinsights": "^2.7.0",
-    "axios": "^0.21.1",
-    "body-parser": "^1.20.2",
-    "cors": "^2.8.5",
-    "dotenv": "^8.2.0",
-    "express": "^4.17.1",
-    "express-rate-limit": "^6.9.0",
-    "form-data": "^3.0.0",
-    "multer": "^1.4.5-lts.1",
-    "node-cron": "^2.0.3",
-    "sanitize-filename": "^1.6.3",
-    "stream": "0.0.2"
+    "@opentelemetry/api": "^1.9.0",
+    "@rapideditor/country-coder": "^5.6.1",
+    "applicationinsights": "^3.14.0",
+    "axios": "^1.13.6",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.3.1",
+    "form-data": "^4.0.5",
+    "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
+    "sanitize-filename": "^1.6.3"
   },
   "devDependencies": {
-    "nodemon": "^2.0.4"
+    "nodemon": "^3.1.14"
   },
   "nodemonConfig": {
     "ignore": [
-      "log/*",
-      "taxa/*",
-      "cache/*"
+      "log/**",
+      "taxa/**",
+      "cache/**",
+      "uploads/**",
+      "auth/**"
     ]
   }
 }

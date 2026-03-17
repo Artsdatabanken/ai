@@ -10,12 +10,10 @@ const { getWarnings } = require("./warnings");
 const simplifyJson = (json) => {
   if (json.predictions[0].taxa) {
     json.predictions = json.predictions[0].taxa.items.map((p) => {
-      let simplified = {
+      return {
         probability: p.probability,
         taxon: p,
       };
-      simplified.taxon.probability = undefined;
-      return simplified;
     });
   }
 
@@ -104,12 +102,13 @@ const getId = async (req) => {
         {
           headers: {
             ...formHeaders,
-            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no) axios/0.21.1'
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
           },
           auth: {
             username: username,
             password: password,
           },
+          timeout: 60000,
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
         }
@@ -119,7 +118,7 @@ const getId = async (req) => {
           `Naturalis API v2 lookup with token ${token} failed`,
           error
         );
-        throw "";
+        throw error;
       });
 
     if (
@@ -225,7 +224,8 @@ const getId = async (req) => {
 
     return recognition.data;
   } catch (error) {
-    throw error;
+    if (error) throw error;
+    throw new Error("Identification failed");
   }
 };
 

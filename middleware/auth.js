@@ -129,7 +129,6 @@ if (!ADMIN_TOKEN) {
 loadTokens();
 
 module.exports = {
-  loadTokens,
   reloadTokens,
   saveTokens,
   generateSecureToken,

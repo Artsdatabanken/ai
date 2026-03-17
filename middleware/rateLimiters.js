@@ -1,13 +1,16 @@
 const rateLimit = require("express-rate-limit");
+const { ipKeyGenerator } = require("express-rate-limit");
 const { getClientIP } = require("../services/geolocation");
 const { writeErrorLog } = require("../services/logging");
+
+const ipKey = (req) => ipKeyGenerator(getClientIP(req));
 
 const idLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: getClientIP,
+  keyGenerator: ipKey,
   handler: (request, response, next, options) => {
     writeErrorLog(
       `Too many ID requests`,
@@ -22,7 +25,7 @@ const apiLimiter = rateLimit({
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: getClientIP,
+  keyGenerator: ipKey,
   handler: (request, response, next, options) => {
     writeErrorLog(
       `Too many misc API requests`,
@@ -37,7 +40,7 @@ const authLimiter = rateLimit({
   max: parseInt(process.env.AUTH_RATE_LIMIT_MAX || 5),
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: getClientIP,
+  keyGenerator: ipKey,
   handler: (request, response, next, options) => {
     writeErrorLog(
       `Too many authentication attempts`,

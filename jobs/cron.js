@@ -9,9 +9,9 @@ const setupCronJobs = () => {
     fs.readdir(`${uploadsdir}/`, (err, files) => {
       if (files) {
         files.forEach((file) => {
-          let filename = file.split("_")[1];
+          let fileTimestamp = file.split("_")[2];
           let timestamp = Math.round(new Date().getTime() / 1000);
-          let time_between = timestamp - filename;
+          let time_between = timestamp - fileTimestamp;
           let survival_length = 3600;
           if (time_between >= survival_length) {
             fs.unlink(`${uploadsdir}/${file}`, (err) => {

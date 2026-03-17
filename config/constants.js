@@ -1,7 +1,4 @@
 const fs = require("fs");
-const path = require("path");
-
-const rootDir = path.resolve(__dirname, "..");
 
 const logdir = "./log";
 const cachedir = "./cache";
@@ -59,7 +56,6 @@ const capitalizeFirstLetter = (str) => {
 };
 
 module.exports = {
-  rootDir,
   logdir,
   cachedir,
   taxadir,

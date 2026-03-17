@@ -14,7 +14,6 @@ const updateIpDatabase = async () => {
   await ipLookup.updateDatabase();
 };
 
-const isIpLookupReady = () => ipLookupReady;
 
 const getClientIP = (req) => {
   const realIP =
@@ -32,10 +31,10 @@ const getClientIP = (req) => {
     return "unknown";
   }
 
-  const cleanIP = realIP
-    .replace(/^::ffff:/, "")
-    .replace(/:\d+[^:]*$/, "")
-    .trim();
+  let cleanIP = realIP.replace(/^::ffff:/, "").trim();
+  if (cleanIP.includes(".") && !cleanIP.includes(":")) {
+    cleanIP = cleanIP.replace(/:\d+$/, "");
+  }
 
   return cleanIP;
 };
@@ -59,21 +58,19 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
 
     const clientIP = getClientIP(req);
     if (clientIP && clientIP !== "unknown") {
-      const cleanIP = clientIP.replace(/^::ffff:/, "");
-
-      if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|::1|localhost)/.test(cleanIP)) {
-        return { country: "Unknown", detectedIP: cleanIP };
+      if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|::1|localhost)/.test(clientIP)) {
+        return { country: "Unknown", detectedIP: clientIP };
       }
 
       if (!ipLookupReady) {
-        return { country: "Unknown", detectedIP: cleanIP };
+        return { country: "Unknown", detectedIP: clientIP };
       }
 
-      const countryCode = ipLookup.lookupCountry(cleanIP);
+      const countryCode = ipLookup.lookupCountry(clientIP);
       if (countryCode) {
-        return { country: countryCode, detectedIP: cleanIP };
+        return { country: countryCode, detectedIP: clientIP };
       } else {
-        return { country: "Unknown", detectedIP: cleanIP };
+        return { country: "Unknown", detectedIP: clientIP };
       }
     }
 
@@ -87,7 +84,6 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
 module.exports = {
   initializeIpLookup,
   updateIpDatabase,
-  isIpLookupReady,
   getClientIP,
   getCountryFromCoordinatesOrIP
 };
