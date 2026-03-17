@@ -1,12 +1,11 @@
 const fs = require("fs");
 const express = require("express");
-const bodyParser = require("body-parser");
 const multer = require("multer");
 const cors = require("cors");
 const dotenv = require("dotenv");
 
-dotenv.config({ path: "./config/config.env" });
-dotenv.config({ path: "./auth/secrets.env" });
+dotenv.config({ path: "./config/config.env", quiet: true });
+dotenv.config({ path: "./auth/secrets.env", quiet: true });
 
 const { taxadir, logdir, uploadsdir } = require("./config/constants");
 const { writeErrorLog } = require("./services/logging");
@@ -28,21 +27,30 @@ const taxonRoutes = require("./routes/taxon");
 const miscRoutes = require("./routes/misc");
 
 let appInsights = require("applicationinsights");
+const { SpanKind } = require("@opentelemetry/api");
 
-var filteringAiFunction = (envelope, context) => {
-  if (
-    envelope.data.baseData.success &&
-    envelope.data.baseData.name === "GET /"
-  ) {
-    return false;
+class FilterHealthCheckProcessor {
+  onStart() {}
+  onEnd(span) {
+    if (
+      span.kind === SpanKind.SERVER &&
+      span.name === "GET /" &&
+      span.status && span.status.code !== 2
+    ) {
+      span.attributes["_filtered"] = true;
+    }
   }
-
-  return true;
-};
+  shutdown() { return Promise.resolve(); }
+  forceFlush() { return Promise.resolve(); }
+}
 
 if (process.env.IKEY) {
   appInsights.setup(process.env.IKEY).start();
-  appInsights.defaultClient.addTelemetryProcessor(filteringAiFunction);
+  const { trace } = require("@opentelemetry/api");
+  const provider = trace.getTracerProvider();
+  if (provider && typeof provider.addSpanProcessor === "function") {
+    provider.addSpanProcessor(new FilterHealthCheckProcessor());
+  }
 }
 
 if (!fs.existsSync(taxadir)) {
@@ -69,8 +77,8 @@ if (trustProxyConfig === "false") {
   app.set("trust proxy", trustProxyConfig);
 }
 
-app.use(bodyParser.json({ limit: "1mb" }));
-app.use(bodyParser.urlencoded({ extended: false, limit: "1mb" }));
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 
 var corsOptions = {
   origin: "*",

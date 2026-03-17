@@ -9,7 +9,7 @@ const {
 } = require("../services/taxon");
 
 module.exports = (app) => {
-  app.get("/taxon/image/*", apiLimiter, (req, res) => {
+  app.get("/taxon/image/*splat", apiLimiter, (req, res) => {
     try {
       let taxon = decodeURI(req.originalUrl.replace("/taxon/image/", ""));
       res.status(200).send(getPicture(taxon));
@@ -54,7 +54,7 @@ module.exports = (app) => {
     }
   });
 
-  app.post("/admin/taxon/reload/name/*", authLimiter, authenticateAdminToken, async (req, res) => {
+  app.post("/admin/taxon/reload/name/*splat", authLimiter, authenticateAdminToken, async (req, res) => {
     try {
       let taxonName = decodeURI(req.originalUrl.replace("/admin/taxon/reload/name/", ""));
       let name = await getName(null, taxonName, true);
@@ -65,7 +65,7 @@ module.exports = (app) => {
     }
   });
 
-  app.post("/admin/taxon/reload/id/*", authLimiter, authenticateAdminToken, async (req, res) => {
+  app.post("/admin/taxon/reload/id/*splat", authLimiter, authenticateAdminToken, async (req, res) => {
     try {
       let taxonId = decodeURI(req.originalUrl.replace("/admin/taxon/reload/id/", ""));
       let name = await getName(taxonId, "", true);

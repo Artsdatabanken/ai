@@ -42,7 +42,7 @@ module.exports = (app, upload) => {
     }
   });
 
-  app.get("/image/*", apiLimiter, async (req, res) => {
+  app.get("/image/*splat", apiLimiter, async (req, res) => {
     const urlParam = req.originalUrl.replace("/image/", "");
     const parts = urlParam.split("&");
     if (parts.length < 2 || !parts[0] || !parts[1]) {

@@ -287,7 +287,7 @@ module.exports = (app, upload) => {
     }
   });
 
-  app.get("/admin/logs/*", authLimiter, authenticateAdminToken, (req, res) => {
+  app.get("/admin/logs/*splat", authLimiter, authenticateAdminToken, (req, res) => {
     try {
       let filename = decodeURI(req.originalUrl.replace("/admin/logs/", ""));
       const resolvedPath = path.resolve(logdir, filename);
