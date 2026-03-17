@@ -71,8 +71,8 @@ class IPCountryLookup {
           });
         } else {
           ranges.push({
-            start: parts[0],
-            end: parts[1],
+            start: this.normalizeIPv6(parts[0]),
+            end: this.normalizeIPv6(parts[1]),
             country: parts[2].trim()  // Trim whitespace from country code
           });
         }
