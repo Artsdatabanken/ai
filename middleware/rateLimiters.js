@@ -53,8 +53,24 @@ const authLimiter = rateLimit({
   },
 });
 
+const adminLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 250,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: ipKey,
+  handler: (request, response, next, options) => {
+    writeErrorLog(
+      `Too many admin requests`,
+      `IP ${getClientIP(request)}`
+    );
+    return response.status(options.statusCode).send(options.message);
+  },
+});
+
 module.exports = {
   idLimiter,
   apiLimiter,
-  authLimiter
+  authLimiter,
+  adminLimiter
 };
