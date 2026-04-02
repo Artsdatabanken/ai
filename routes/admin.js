@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { apiLimiter, authLimiter } = require("../middleware/rateLimiters");
+const { authLimiter, adminLimiter } = require("../middleware/rateLimiters");
 const {
   authenticateAdminToken,
   getValidTokens,
@@ -268,7 +268,7 @@ module.exports = (app, upload) => {
     }
   });
 
-  app.get("/admin/logs", authLimiter, authenticateAdminToken, (req, res) => {
+  app.get("/admin/logs", adminLimiter, authenticateAdminToken, (req, res) => {
     try {
       var json = [];
       fs.readdir(logdir, function (err, files) {
@@ -287,7 +287,7 @@ module.exports = (app, upload) => {
     }
   });
 
-  app.get("/admin/logs/*splat", authLimiter, authenticateAdminToken, (req, res) => {
+  app.get("/admin/logs/*splat", adminLimiter, authenticateAdminToken, (req, res) => {
     try {
       let filename = decodeURI(req.originalUrl.replace("/admin/logs/", ""));
       const resolvedPath = path.resolve(logdir, filename);
