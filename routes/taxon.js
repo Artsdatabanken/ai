@@ -7,6 +7,10 @@ const {
   getTaxonPics,
   reloadTaxonImages
 } = require("../services/taxon");
+const {
+  getDescriptionStub,
+  getRandomAcceptedSpeciesId
+} = require("../services/descriptionStub");
 
 module.exports = (app) => {
   app.get("/taxon/image/*splat", apiLimiter, (req, res) => {
@@ -48,6 +52,77 @@ module.exports = (app) => {
       html += "</body></html>";
 
       res.status(200).send(html);
+    } catch (error) {
+      writeErrorLog(`Error for ${req.originalUrl}`, error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/taxon/description/view", apiLimiter, (req, res) => {
+    const html = `<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<title>Artsbeskrivelse-stubb</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; }
+  input, button { font-size: 16px; padding: 8px 12px; }
+  input { width: 220px; }
+  #out { margin-top: 24px; padding: 16px; background: #f4f4f4; border-radius: 6px; min-height: 2em; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<h1>Artsbeskrivelse-stubb</h1>
+<div class="row">
+  <input id="id" type="text" placeholder="scientificNameId" />
+  <button id="go">Hent beskrivelse</button>
+  <button id="rand">Tilfeldig art</button>
+</div>
+<div id="out"></div>
+<script>
+  const idEl = document.getElementById('id');
+  const out = document.getElementById('out');
+  async function fetchDesc(id) {
+    out.textContent = 'Laster…';
+    const r = await fetch('/taxon/description/' + encodeURIComponent(id));
+    if (!r.ok) { out.textContent = 'Feil: ' + r.status; return; }
+    out.innerHTML = await r.text();
+  }
+  document.getElementById('go').onclick = () => {
+    if (idEl.value.trim()) fetchDesc(idEl.value.trim());
+  };
+  idEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('go').click(); });
+  document.getElementById('rand').onclick = async () => {
+    out.textContent = 'Henter tilfeldig id…';
+    const r = await fetch('/taxon/description/random/id');
+    if (!r.ok) { out.textContent = 'Feil: ' + r.status; return; }
+    const j = await r.json();
+    idEl.value = j.scientificNameId;
+    fetchDesc(j.scientificNameId);
+  };
+</script>
+</body>
+</html>`;
+    res.status(200).type("text/html").send(html);
+  });
+
+  app.get("/taxon/description/random/id", apiLimiter, async (req, res) => {
+    try {
+      const id = await getRandomAcceptedSpeciesId();
+      if (!id) return res.status(404).json({ error: "No species available" });
+      res.status(200).json({ scientificNameId: id });
+    } catch (error) {
+      writeErrorLog(`Error for ${req.originalUrl}`, error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/taxon/description/:sciNameId", apiLimiter, async (req, res) => {
+    try {
+      const html = await getDescriptionStub(req.params.sciNameId);
+      if (!html) return res.status(404).json({ error: "Not found" });
+      res.status(200).type("text/html").send(html);
     } catch (error) {
       writeErrorLog(`Error for ${req.originalUrl}`, error);
       res.status(500).json({ error: "Internal server error" });
