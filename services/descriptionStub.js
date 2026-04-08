@@ -1,55 +1,14 @@
 const axios = require("axios");
 const fsp = require("fs/promises");
 const { taxadir } = require("../config/constants");
+const { cladeDescriptors } = require("../config/descriptionStubDescriptors");
 
 const HEADERS = {
   "Accept-Encoding": "gzip",
   "User-Agent": "Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)"
 };
 
-const cladeDescriptors = {
-  Coleoptera:     { article: "en", noun: "bille" },
-  Lepidoptera:    { article: "en", noun: "sommerfugl" },
-  Diptera:        { article: "en", noun: "tovinge" },
-  Hymenoptera:    { article: "en", noun: "årevinge" },
-  Hemiptera:      { article: "en", noun: "nebbmunn" },
-  Odonata:        { article: "en", noun: "øyenstikker" },
-  Orthoptera:     { article: "en", noun: "rettvinge" },
-  Ephemeroptera:  { article: "en", noun: "døgnflue" },
-  Plecoptera:     { article: "en", noun: "steinflue" },
-  Trichoptera:    { article: "en", noun: "vårflue" },
-  Neuroptera:     { article: "en", noun: "nettvinge" },
-  Araneae:        { article: "en", noun: "edderkopp" },
-  Opiliones:      { article: "en", noun: "vevkjerring" },
-  Acari:          { article: "en", noun: "midd" },
-  Arachnida:      { article: "et", noun: "edderkoppdyr", containerRank: "class" },
-  Crustacea:      { article: "et", noun: "krepsdyr",     containerRank: "subphylum" },
-  Malacostraca:   { article: "et", noun: "krepsdyr",     containerRank: "class" },
-  Aves:           { article: "en", noun: "fugl" },
-  Mammalia:       { article: "et", noun: "pattedyr" },
-  Actinopterygii: { article: "en", noun: "fisk" },
-  Chondrichthyes: { article: "en", noun: "bruskfisk" },
-  Amphibia:       { article: "et", noun: "amfibium" },
-  Reptilia:       { article: "et", noun: "krypdyr" },
-  Mollusca:       { article: "et", noun: "bløtdyr",      containerRank: "phylum" },
-  Gastropoda:     { article: "en", noun: "snegl",        containerRank: "class" },
-  Bivalvia:       { article: "en", noun: "musling",      containerRank: "class" },
-  Cephalopoda:    { article: "en", noun: "blekksprut",   containerRank: "class" },
-  Echinodermata:  { article: "en", noun: "pigghud",      containerRank: "phylum" },
-  Annelida:       { article: "en", noun: "leddorm",      containerRank: "phylum" },
-  Cnidaria:       { article: "et", noun: "nesledyr",     containerRank: "phylum" },
-  Porifera:       { article: "en", noun: "svamp",        containerRank: "phylum" },
-  Magnoliophyta:  { article: "en", noun: "blomsterplante" },
-  Pinopsida:      { article: "et", noun: "bartre",       containerRank: "class" },
-  Polypodiopsida: { article: "en", noun: "bregne",       containerRank: "class" },
-  Bryophyta:      { article: "en", noun: "bladmose",     containerRank: "phylum" },
-  Marchantiophyta:{ article: "en", noun: "levermose",    containerRank: "phylum" },
-  Fungi:          { article: "en", noun: "sopp",         containerRank: "kingdom" },
-  Basidiomycota:  { article: "en", noun: "stilksporesopp", containerRank: "phylum" },
-  Ascomycota:     { article: "en", noun: "sekksporesopp",  containerRank: "phylum" }
-};
-
-const RANK_PRIORITY = ["genus", "family", "superfamily", "order", "subclass", "class", "subphylum", "phylum", "kingdom"];
+const RANK_PRIORITY = ["genus", "family", "superfamily", "infraorder", "suborder", "order", "subclass", "class", "subphylum", "phylum", "kingdom"];
 
 const capitalize = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
@@ -130,11 +89,24 @@ const getDescriptionStub = async (sciNameId) => {
     }
   }
 
+  let article = descriptor.article;
+  let noun = descriptor.noun;
+  if (descriptor.nounFromContainerSuffix && containerName) {
+    const lower = containerName.toLowerCase();
+    for (const [suffix, override] of Object.entries(descriptor.nounFromContainerSuffix)) {
+      if (lower.endsWith(suffix)) {
+        article = override.article || article;
+        noun = override.noun || noun;
+        break;
+      }
+    }
+  }
+
   const subject = vernacular
     ? `${capitalize(vernacular)} (${sciNamePresentation})`
     : sciNamePresentation;
 
-  let html = `${subject} er ${descriptor.article} ${descriptor.noun}`;
+  let html = `${subject} er ${article} ${noun}`;
   if (containerName) html += ` i ${containerName}`;
   html += ".";
 
