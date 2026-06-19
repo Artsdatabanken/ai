@@ -97,7 +97,7 @@ app.use(function (req, res, next) {
 });
 
 const storage = multer.memoryStorage();
-const upload = multer({ storage: storage, limits: { fileSize: 20 * 1024 * 1024, files: 5 } });
+const upload = multer({ storage: storage, limits: { fileSize: 20 * 1024 * 1024, files: 10 } });
 
 identifyRoutes(app, upload);
 adminRoutes(app, upload);
