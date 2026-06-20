@@ -12,6 +12,8 @@ const {
 } = require("../config/constants");
 const { writeErrorLog } = require("./logging");
 
+const apiTimeout = 20000;
+
 let taxonPics = {};
 if (fs.existsSync(pictureFile)) {
   taxonPics = JSON.parse(fs.readFileSync(pictureFile));
@@ -197,7 +199,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
       );
       scientificNameIdObject = await axios
         .get(url, {
-          timeout: 3000,
+          timeout: apiTimeout,
           headers: {
             'Accept-Encoding': 'gzip',
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0'
@@ -231,7 +233,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
       );
       resourceObject = await axios
         .get(url, {
-          timeout: 3000,
+          timeout: apiTimeout,
           headers: {
             'Accept-Encoding': 'gzip',
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0'
@@ -264,7 +266,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
       );
       let taxon = await axios
         .get(url, {
-          timeout: 3000,
+          timeout: apiTimeout,
           headers: {
             'Accept-Encoding': 'gzip',
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0'
@@ -302,7 +304,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         );
         scientificNameIdObject = await axios
           .get(url, {
-            timeout: 3000,
+            timeout: apiTimeout,
             headers: {
               'Accept-Encoding': 'gzip',
               'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0'
@@ -339,7 +341,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
       );
       alienSpeciesListObject = await axios
         .get(url, {
-          timeout: 3000,
+          timeout: apiTimeout,
           headers: {
             'Accept-Encoding': 'gzip',
             'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
@@ -372,7 +374,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
       );
       redListObject = await axios
         .get(url, {
-          timeout: 3000,
+          timeout: apiTimeout,
           headers: {
             'Accept-Encoding': 'gzip',
             'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
@@ -455,7 +457,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         const swedishUrl = encodeURI(`https://api.artdatabanken.se/taxonservice/v1/taxa/names?searchString=${nameResult.scientificName}&searchFields=Scientific&isRecommended=Yes&culture=sv_SE&page=1`);
         const swedishResponse = await axios
           .get(swedishUrl, {
-            timeout: 3000,
+            timeout: apiTimeout,
             headers: {
               'Accept-Encoding': 'gzip',
               'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)',
@@ -483,97 +485,14 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
     }
 
 
-    if (missingLanguages.length > 0) {
-      try {
-        const gbifUrl = encodeURI(`https://api.gbif.org/v1/species/search?datasetKey=7ddf754f-d193-4cc9-b351-99906754a03b&nameType=SCIENTIFIC&q=${nameResult.scientificName}`);
-        const gbifResponse = await axios
-          .get(gbifUrl, {
-            timeout: 3000,
-            headers: {
-              'Accept-Encoding': 'gzip',
-              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
-            }
-          })
-          .catch((error) => {
-            console.log(`Failed to get GBIF names for ${nameResult.scientificName}:`, error.message);
-            return null;
-          });
-
-        if (gbifResponse?.data?.results && Array.isArray(gbifResponse.data.results)) {
-          const matchingResults = gbifResponse.data.results.filter(
-            item => item.canonicalName &&
-              item.canonicalName.toLowerCase() === nameResult.scientificName.toLowerCase() &&
-              item.vernacularNames && item.vernacularNames.length > 0
-          );
-
-          const languageMap = {
-            'swe': 'sv',
-            'eng': 'en',
-            'nld': 'nl',
-            'spa': 'es'
-          };
-
-          for (const result of matchingResults) {
-            if (result.vernacularNames && Array.isArray(result.vernacularNames)) {
-              for (const [threeLetterCode, twoLetterCode] of Object.entries(languageMap)) {
-                if (!nameResult.vernacularNames[twoLetterCode]) {
-                  const nameEntry = result.vernacularNames.find(
-                    vn => vn.language === threeLetterCode && vn.vernacularName
-                  );
-                  if (nameEntry?.vernacularName) {
-                    nameResult.vernacularNames[twoLetterCode] = nameEntry.vernacularName;
-                  }
-                }
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.log(`Error fetching GBIF names for ${nameResult.scientificName}:`, error.message);
-      }
-    }
-
-
-    const remainingLangs = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
-    if (remainingLangs.length > 0) {
-      try {
-        const wikiSpeciesUrl = encodeURI(`https://api.wikimedia.org/core/v1/wikispecies/page/${nameResult.scientificName.replace(' ', '_')}/links/language`);
-        const wikiResponse = await axios
-          .get(wikiSpeciesUrl, {
-            timeout: 3000,
-            headers: {
-              'Accept-Encoding': 'gzip',
-              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
-            }
-          })
-          .catch((error) => {
-            console.log(`Failed to get Wikipedia names for ${nameResult.scientificName}:`, error.message);
-            return null;
-          });
-
-        if (wikiResponse?.data && Array.isArray(wikiResponse.data)) {
-          for (const link of wikiResponse.data) {
-            if (remainingLangs.includes(link.code) && !nameResult.vernacularNames[link.code]) {
-              let cleanTitle = link.title.replace(/\s*\([^)]*\)/g, '').trim();
-              if (cleanTitle && cleanTitle !== nameResult.scientificName) {
-                nameResult.vernacularNames[link.code] = cleanTitle;
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.log(`Error fetching Wikipedia names for ${nameResult.scientificName}:`, error.message);
-      }
-    }
-
-    const stillMissingLangs = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
-    if (stillMissingLangs.length > 0) {
-      for (const lang of stillMissingLangs) {
+    const langsForINat = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
+    if (langsForINat.length > 0) {
+      for (const lang of langsForINat) {
         try {
           const iNatUrl = encodeURI(`https://api.inaturalist.org/v1/taxa/autocomplete?q=${nameResult.scientificName.replace(' ', '+')}&per_page=1&locale=${lang}`);
           const iNatResponse = await axios
             .get(iNatUrl, {
-              timeout: 3000,
+              timeout: apiTimeout,
               headers: {
                 'Accept-Encoding': 'gzip',
                 'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
@@ -600,6 +519,43 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         }
       }
     }
+
+
+    const remainingLangs = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
+    if (remainingLangs.length > 0) {
+      try {
+        const wikiSpeciesUrl = encodeURI(`https://species.wikimedia.org/w/api.php?action=query&titles=${nameResult.scientificName}&prop=langlinks&lllimit=500&format=json`);
+        const wikiResponse = await axios
+          .get(wikiSpeciesUrl, {
+            timeout: apiTimeout,
+            headers: {
+              'Accept-Encoding': 'gzip',
+              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
+            }
+          })
+          .catch((error) => {
+            console.log(`Failed to get Wikipedia names for ${nameResult.scientificName}:`, error.message);
+            return null;
+          });
+
+        const pages = wikiResponse?.data?.query?.pages;
+        if (pages) {
+          for (const page of Object.values(pages)) {
+            for (const link of page.langlinks || []) {
+              if (remainingLangs.includes(link.lang) && !nameResult.vernacularNames[link.lang]) {
+                let cleanTitle = link['*'].replace(/\s*\([^)]*\)/g, '').trim();
+                if (cleanTitle && cleanTitle !== nameResult.scientificName) {
+                  nameResult.vernacularNames[link.lang] = cleanTitle;
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.log(`Error fetching Wikipedia names for ${nameResult.scientificName}:`, error.message);
+      }
+    }
+
   }
 
   nameResult.vernacularName =
