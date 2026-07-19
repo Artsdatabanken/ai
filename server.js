@@ -19,6 +19,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 const { initializeIpLookup } = require("./services/geolocation");
+const { reloadTaxonImages } = require("./services/taxon");
 const { setupCronJobs } = require("./jobs/cron");
 
 const identifyRoutes = require("./routes/identify");
@@ -106,6 +107,10 @@ taxonRoutes(app);
 miscRoutes(app, upload);
 
 setupCronJobs();
+
+reloadTaxonImages().catch((error) =>
+  writeErrorLog("Failed to reload taxon images on startup", error)
+);
 
 initializeIpLookup()
   .then(() => {
