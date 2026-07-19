@@ -482,6 +482,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
 
 
   const targetLanguages = ['sv', 'nl', 'en', 'es'];
+  const unresolvedDueToError = new Set();
   const missingLanguages = targetLanguages.filter(lang => !nameResult.vernacularNames[lang]);
 
   if (missingLanguages.length !== 0) {
@@ -500,6 +501,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
           })
           .catch((error) => {
             console.log(`Failed to get Swedish name for ${nameResult.scientificName}:`, error.message);
+            unresolvedDueToError.add('sv');
             return null;
           });
 
@@ -515,6 +517,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         }
       } catch (error) {
         console.log(`Error fetching Swedish name for ${nameResult.scientificName}:`, error.message);
+        unresolvedDueToError.add('sv');
       }
     }
 
@@ -534,6 +537,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
             })
             .catch((error) => {
               console.log(`Failed to get iNaturalist ${lang} name for ${nameResult.scientificName}:`, error.message);
+              unresolvedDueToError.add(lang);
               return null;
             });
 
@@ -550,6 +554,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
           }
         } catch (error) {
           console.log(`Error fetching iNaturalist ${lang} name for ${nameResult.scientificName}:`, error.message);
+          unresolvedDueToError.add(lang);
         }
       }
     }
@@ -569,6 +574,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
           })
           .catch((error) => {
             console.log(`Failed to get Wikipedia names for ${nameResult.scientificName}:`, error.message);
+            remainingLangs.forEach(lang => unresolvedDueToError.add(lang));
             return null;
           });
 
@@ -587,6 +593,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         }
       } catch (error) {
         console.log(`Error fetching Wikipedia names for ${nameResult.scientificName}:`, error.message);
+        remainingLangs.forEach(lang => unresolvedDueToError.add(lang));
       }
     }
 
@@ -621,31 +628,37 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
   }
 
 
-  let jsonfilename;
-  if (sciNameId) {
-    const filename = `${sciNameId}_${nameResult.scientificName}`;
-    jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
+  const incompleteDueToError = [...unresolvedDueToError].some(
+    lang => !nameResult.vernacularNames[lang]
+  );
 
-    const pattern = `${encodeURIComponent(sciNameId)}_`;
-    try {
-      const siblings = (await fsp.readdir(taxadir)).filter(
-        f => f.startsWith(pattern) && f.endsWith('.json')
-      );
-      for (const f of siblings) {
-        const filepath = `${taxadir}/${f}`;
-        if (filepath !== jsonfilename) {
-          fsp.unlink(filepath).catch((error) => {
-            writeErrorLog(`Could not delete "${filepath}" while writing new cache entry`, error);
-          });
+  if (!incompleteDueToError) {
+    let jsonfilename;
+    if (sciNameId) {
+      const filename = `${sciNameId}_${nameResult.scientificName}`;
+      jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
+
+      const pattern = `${encodeURIComponent(sciNameId)}_`;
+      try {
+        const siblings = (await fsp.readdir(taxadir)).filter(
+          f => f.startsWith(pattern) && f.endsWith('.json')
+        );
+        for (const f of siblings) {
+          const filepath = `${taxadir}/${f}`;
+          if (filepath !== jsonfilename) {
+            fsp.unlink(filepath).catch((error) => {
+              writeErrorLog(`Could not delete "${filepath}" while writing new cache entry`, error);
+            });
+          }
         }
-      }
-    } catch {}
-  } else {
-    const filename = `_${sciName}`;
-    jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
-  }
+      } catch {}
+    } else {
+      const filename = `_${sciName}`;
+      jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
+    }
 
-  fsp.writeFile(jsonfilename, JSON.stringify(nameResult)).catch(() => {});
+    fsp.writeFile(jsonfilename, JSON.stringify(nameResult)).catch(() => {});
+  }
 
   return nameResult;
 };
