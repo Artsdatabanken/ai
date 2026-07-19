@@ -7,6 +7,62 @@ const { getName, getPicture } = require("./taxon");
 const { getCountryFromCoordinatesOrIP } = require("./geolocation");
 const { getWarnings } = require("./warnings");
 
+const ENRICHMENT_RESPONSE_BUDGET_MS = 1000;
+
+const enrichTaxon = async (pred, req, country) => {
+  try {
+    if (
+      req.body.application &&
+      req.body.application.toLowerCase() === "artsobservasjoner"
+    ) {
+      pred.name = pred.scientific_name;
+    } else {
+      let splitId = pred.scientific_name_id.split(":")
+      let sciNameId = (splitId[0] === "NBIC" ? splitId[1] : null)
+
+      const nameResult = await getName(sciNameId, pred.scientific_name, false, country);
+
+      pred.vernacularName = nameResult.vernacularName
+      pred.vernacularNames = nameResult.vernacularNames
+      pred.groupName = nameResult.groupName
+      pred.groupNames = nameResult.groupNames
+      pred.scientificName = nameResult.scientificName
+
+      if (Object.keys(nameResult.redListCategories).length > 0) {
+        pred.redListCategories = nameResult.redListCategories
+        if (nameResult?.redListCategories?.NO) {
+          pred.redListCategory = nameResult.redListCategories.NO
+        }
+      }
+
+      if (Object.keys(nameResult.invasiveCategories).length > 0) {
+        pred.invasiveCategories = nameResult.invasiveCategories
+        if (nameResult?.invasiveCategories?.NO) {
+          pred.invasiveCategory = nameResult.invasiveCategories.NO
+        }
+      }
+
+      pred.infoUrl = nameResult.infoUrl
+      pred.name = pred.scientificName;
+    }
+
+    pred.picture = getPicture(pred.scientificName);
+  } catch (error) {
+    writeErrorLog(
+      `Error while processing getName(${pred.sciNameId
+      }, ${pred.scientific_name
+      }). You can force a recache on ${encodeURI(
+        server_url + "/admin/taxon/reload/id/" +
+        pred.sciNameId
+      )} or ${encodeURI(
+        server_url + "/admin/taxon/reload/name/" +
+        pred.scientific_name
+      )}.`,
+      error
+    );
+  }
+};
+
 const simplifyJson = (json) => {
   if (json.predictions[0].taxa) {
     json.predictions = json.predictions[0].taxa.items.map((p) => {
@@ -141,63 +197,23 @@ const getId = async (req) => {
       taxa = taxa.slice(0, 2);
     }
 
-    for (let pred of taxa) {
+    const isArtsobservasjoner =
+      req.body.application &&
+      req.body.application.toLowerCase() === "artsobservasjoner";
 
-      try {
-        let nameResult;
-
-        if (
-          req.body.application &&
-          req.body.application.toLowerCase() === "artsobservasjoner"
-        ) {
-          pred.name = pred.scientific_name;
-        } else {
-
-          let splitId = pred.scientific_name_id.split(":")
-          let sciNameId = (splitId[0] === "NBIC" ? splitId[1] : null)
-
-          nameResult = await getName(sciNameId, pred.scientific_name, false, country);
-
-          pred.vernacularName = nameResult.vernacularName
-          pred.vernacularNames = nameResult.vernacularNames
-          pred.groupName = nameResult.groupName
-          pred.groupNames = nameResult.groupNames
-          pred.scientificName = nameResult.scientificName
-
-          if (Object.keys(nameResult.redListCategories).length > 0) {
-            pred.redListCategories = nameResult.redListCategories
-            if (nameResult?.redListCategories?.NO) {
-              pred.redListCategory = nameResult.redListCategories.NO
-            }
-          }
-
-          if (Object.keys(nameResult.invasiveCategories).length > 0) {
-            pred.invasiveCategories = nameResult.invasiveCategories
-            if (nameResult?.invasiveCategories?.NO) {
-              pred.invasiveCategory = nameResult.invasiveCategories.NO
-            }
-          }
-
-          pred.infoUrl = nameResult.infoUrl
-          pred.name = pred.scientificName;
-        }
-
-        pred.picture = getPicture(pred.scientificName);
-      } catch (error) {
-        writeErrorLog(
-          `Error while processing getName(${pred.sciNameId
-          }, ${pred.scientific_name
-          }). You can force a recache on ${encodeURI(
-            server_url + "/admin/taxon/reload/id/" +
-            pred.sciNameId
-          )} or ${encodeURI(
-            server_url + "/admin/taxon/reload/name/" +
-            pred.scientific_name
-          )}.`,
-          error
-        );
+    if (!isArtsobservasjoner) {
+      for (let pred of taxa) {
+        pred.scientificName = pred.scientific_name;
+        pred.name = pred.scientific_name;
+        pred.picture = getPicture(pred.scientific_name);
       }
     }
+
+    const enrichmentPromises = taxa.map((pred) => enrichTaxon(pred, req, country));
+    await Promise.race([
+      Promise.allSettled(enrichmentPromises),
+      new Promise((resolve) => setTimeout(resolve, ENRICHMENT_RESPONSE_BUDGET_MS)),
+    ]);
 
     recognition.data.predictions[0].taxa.items = taxa;
 
