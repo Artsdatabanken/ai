@@ -1,7 +1,27 @@
 const fs = require("fs");
 
 const logdir = "./log";
-const cachedir = "./cache";
+
+const probeCacheDir = (dir) => {
+  try {
+    fs.mkdirSync(`${dir}/taxa`, { recursive: true });
+    const probeFile = `${dir}/.writeprobe`;
+    fs.writeFileSync(probeFile, "");
+    fs.unlinkSync(probeFile);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const preferredCacheDir = process.env.CACHE_DIR || "/home/cache";
+let cachedir = preferredCacheDir;
+if (!probeCacheDir(cachedir)) {
+  console.warn(`Cache dir "${cachedir}" is not writable, falling back to "./cache"`);
+  cachedir = "./cache";
+  probeCacheDir(cachedir);
+}
+
 const taxadir = `${cachedir}/taxa`;
 const pictureFile = `${cachedir}/taxonPictures.json`;
 const uploadsdir = "./uploads";
