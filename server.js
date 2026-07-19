@@ -7,7 +7,7 @@ const dotenv = require("dotenv");
 dotenv.config({ path: "./config/config.env", quiet: true });
 dotenv.config({ path: "./auth/secrets.env", quiet: true });
 
-const { taxadir, logdir, uploadsdir } = require("./config/constants");
+const { logdir, uploadsdir } = require("./config/constants");
 const { writeErrorLog } = require("./services/logging");
 
 process.on("uncaughtException", (error) => {
@@ -53,17 +53,18 @@ if (process.env.IKEY) {
   }
 }
 
-if (!fs.existsSync(taxadir)) {
-  fs.mkdirSync(taxadir, { recursive: true });
-}
+const ensureDir = (dir) => {
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  } catch (error) {
+    console.warn(`Could not create directory "${dir}": ${error.message}`);
+  }
+};
 
-if (!fs.existsSync(logdir)) {
-  fs.mkdirSync(logdir);
-}
-
-if (!fs.existsSync(uploadsdir)) {
-  fs.mkdirSync(uploadsdir);
-}
+ensureDir(logdir);
+ensureDir(uploadsdir);
 
 const app = express();
 const port = process.env.PORT;
