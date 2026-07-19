@@ -13,6 +13,30 @@ const {
 const { writeErrorLog } = require("./logging");
 
 const apiTimeout = 20000;
+const NEGATIVE_CACHE_TTL_MS = 60 * 60 * 1000;
+
+const bareNameResult = (sciName) => ({
+  vernacularName: sciName,
+  vernacularNames: {},
+  groupName: "",
+  groupNames: {},
+  scientificName: sciName,
+  redListCategories: {},
+  invasiveCategories: {},
+});
+
+const writeNegativeCache = (sciNameId, sciName, nameResult) => {
+  const filename = sciNameId
+    ? `${sciNameId}_${nameResult.scientificName}`
+    : `_${sciName}`;
+  const jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
+  fsp
+    .writeFile(
+      jsonfilename,
+      JSON.stringify({ ...nameResult, notFound: true, cachedAt: Date.now() })
+    )
+    .catch(() => {});
+};
 
 let taxonPics = {};
 if (fs.existsSync(pictureFile)) {
@@ -118,15 +142,21 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
       if (!force) {
         try {
           const cachedData = JSON.parse(await fsp.readFile(existingFile, 'utf8'));
-          if (country === 'NO') {
-            if (cachedData?.redListCategories?.NO) {
-              cachedData.redListCategory = cachedData.redListCategories.NO;
+          if (cachedData.notFound === true) {
+            if (Date.now() - cachedData.cachedAt < NEGATIVE_CACHE_TTL_MS) {
+              return bareNameResult(sciName);
             }
-            if (cachedData?.invasiveCategories?.NO) {
-              cachedData.invasiveCategory = cachedData.invasiveCategories.NO;
+          } else {
+            if (country === 'NO') {
+              if (cachedData?.redListCategories?.NO) {
+                cachedData.redListCategory = cachedData.redListCategories.NO;
+              }
+              if (cachedData?.invasiveCategories?.NO) {
+                cachedData.invasiveCategory = cachedData.invasiveCategories.NO;
+              }
             }
+            return cachedData;
           }
-          return cachedData;
         } catch (error) {
           writeErrorLog(`Could not parse "${existingFile}"`, error);
         }
@@ -161,15 +191,21 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
       if (!force) {
         try {
           const cachedData = JSON.parse(await fsp.readFile(jsonfilename, 'utf8'));
-          if (country === 'NO') {
-            if (cachedData?.redListCategories?.NO) {
-              cachedData.redListCategory = cachedData.redListCategories.NO;
+          if (cachedData.notFound === true) {
+            if (Date.now() - cachedData.cachedAt < NEGATIVE_CACHE_TTL_MS) {
+              return bareNameResult(sciName);
             }
-            if (cachedData?.invasiveCategories?.NO) {
-              cachedData.invasiveCategory = cachedData.invasiveCategories.NO;
+          } else {
+            if (country === 'NO') {
+              if (cachedData?.redListCategories?.NO) {
+                cachedData.redListCategory = cachedData.redListCategories.NO;
+              }
+              if (cachedData?.invasiveCategories?.NO) {
+                cachedData.invasiveCategory = cachedData.invasiveCategories.NO;
+              }
             }
+            return cachedData;
           }
-          return cachedData;
         } catch (error) {
           writeErrorLog(`Could not parse "${jsonfilename}"`, error);
           fsp.unlink(jsonfilename).catch(() => {});
@@ -180,15 +216,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
     }
   }
 
-  let nameResult = {
-    vernacularName: sciName,
-    vernacularNames: {},
-    groupName: "",
-    groupNames: {},
-    scientificName: sciName,
-    redListCategories: {},
-    invasiveCategories: {},
-  };
+  let nameResult = bareNameResult(sciName);
 
   let resourceObject, scientificNameIdObject, redListObject, alienSpeciesListObject;
 
@@ -222,6 +250,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         )}.`,
         error
       );
+      writeNegativeCache(sciNameId, sciName, nameResult);
       return nameResult;
     }
 
@@ -256,6 +285,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         )}.`,
         error
       );
+      writeNegativeCache(sciNameId, sciName, nameResult);
       return nameResult;
     }
   }
@@ -292,6 +322,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         )}.`,
         error
       );
+      writeNegativeCache(sciNameId, sciName, nameResult);
       return nameResult;
     }
 
@@ -327,6 +358,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
           )}.`,
           error
         );
+        writeNegativeCache(sciNameId, sciName, nameResult);
         return nameResult;
       }
     }
@@ -364,6 +396,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         )}.`,
         error
       );
+      writeNegativeCache(sciNameId, sciName, nameResult);
       return nameResult;
     }
 
@@ -397,6 +430,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         )}.`,
         error
       );
+      writeNegativeCache(sciNameId, sciName, nameResult);
       return nameResult;
     }
 
@@ -591,22 +625,27 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
   if (sciNameId) {
     const filename = `${sciNameId}_${nameResult.scientificName}`;
     jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
+
+    const pattern = `${encodeURIComponent(sciNameId)}_`;
+    try {
+      const siblings = (await fsp.readdir(taxadir)).filter(
+        f => f.startsWith(pattern) && f.endsWith('.json')
+      );
+      for (const f of siblings) {
+        const filepath = `${taxadir}/${f}`;
+        if (filepath !== jsonfilename) {
+          fsp.unlink(filepath).catch((error) => {
+            writeErrorLog(`Could not delete "${filepath}" while writing new cache entry`, error);
+          });
+        }
+      }
+    } catch {}
   } else {
     const filename = `_${sciName}`;
     jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
   }
 
-  let shouldWrite = force;
-  if (!shouldWrite) {
-    try {
-      await fsp.access(jsonfilename);
-    } catch {
-      shouldWrite = true;
-    }
-  }
-  if (shouldWrite) {
-    fsp.writeFile(jsonfilename, JSON.stringify(nameResult)).catch(() => {});
-  }
+  fsp.writeFile(jsonfilename, JSON.stringify(nameResult)).catch(() => {});
 
   return nameResult;
 };
