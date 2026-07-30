@@ -47,7 +47,9 @@ const writelog = (req, json, auth = null) => {
   if (auth?.application) {
     application = sanitize(auth.application);
   } else if (req.body.application) {
-    application = sanitize(req.body.application);
+    application = `unauth-${sanitize(req.body.application)}`;
+  } else {
+    application = "unauth-undefined";
   }
 
   let logPrefix = application;
