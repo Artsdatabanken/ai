@@ -144,6 +144,7 @@ const writeAdminLog = (message, details) => {
 
 module.exports = {
   dateStr,
+  requestOrigin,
   writeErrorLog,
   writeAdminLog,
   writelog

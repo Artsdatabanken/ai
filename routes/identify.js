@@ -1,5 +1,5 @@
 const { idLimiter } = require("../middleware/rateLimiters");
-const { authenticateApiToken } = require("../middleware/auth");
+const { authenticateApiToken, verifyAllowedOrigin } = require("../middleware/auth");
 const { verifyRequestSignature } = require("../middleware/signature");
 const { getId, simplifyJson } = require("../services/identification");
 const { saveImagesAndGetToken } = require("../services/encryption");
@@ -7,7 +7,7 @@ const { writelog, writeErrorLog } = require("../services/logging");
 const { maybeRecache } = require("../services/taxon");
 
 module.exports = (app, upload) => {
-  app.post("/identify", idLimiter, authenticateApiToken, upload.array("image"), verifyRequestSignature, async (req, res) => {
+  app.post("/identify", idLimiter, authenticateApiToken, verifyAllowedOrigin, upload.array("image"), verifyRequestSignature, async (req, res) => {
     try {
       let json = await getId(req);
 

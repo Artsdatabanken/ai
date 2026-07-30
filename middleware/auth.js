@@ -1,7 +1,7 @@
 const fs = require("fs");
 const crypto = require("crypto");
 const { TOKENS_FILE } = require("../config/constants");
-const { writeErrorLog } = require("../services/logging");
+const { writeErrorLog, requestOrigin } = require("../services/logging");
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 
@@ -112,7 +112,8 @@ const authenticateApiToken = (req, res, next) => {
       application: validTokens[token].application,
       model: validTokens[token].model,
       secret: validTokens[token].secret,
-      previousSecret: validTokens[token].previousSecret
+      previousSecret: validTokens[token].previousSecret,
+      allowedOrigins: validTokens[token].allowedOrigins
     };
     return next();
   }
@@ -130,11 +131,35 @@ if (!ADMIN_TOKEN) {
 
 loadTokens();
 
+const verifyAllowedOrigin = (req, res, next) => {
+  const allowed = req.auth?.allowedOrigins;
+  if (!Array.isArray(allowed) || allowed.length === 0) return next();
+
+  const origin = requestOrigin(req);
+
+  if (origin && allowed.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    return next();
+  }
+
+  writeErrorLog(
+    "Request rejected: origin not allowed for this token",
+    `IP ${req.ip}, token ${String(req.auth?.token).substring(0, 10)}..., origin ${origin || "(none sent)"}`
+  );
+
+  return res.status(403).json({
+    error: "Origin not allowed.",
+    message: "This token may only be used from its registered origins."
+  });
+};
+
 module.exports = {
   reloadTokens,
   saveTokens,
   generateSecureToken,
   getValidTokens,
   authenticateAdminToken,
-  authenticateApiToken
+  authenticateApiToken,
+  verifyAllowedOrigin
 };

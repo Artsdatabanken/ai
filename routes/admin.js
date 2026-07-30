@@ -31,6 +31,7 @@ module.exports = (app, upload) => {
           created: validTokens[token].created,
           signingRequired: !!validTokens[token].secret,
           previousSecretAccepted: !!validTokens[token].previousSecret,
+          allowedOrigins: validTokens[token].allowedOrigins || [],
         };
         if (validTokens[token].model) {
           tokenInfo.model = validTokens[token].model;
@@ -133,6 +134,118 @@ module.exports = (app, upload) => {
         error: "Internal server error",
         message: "Unable to create token",
       });
+    }
+  });
+
+  app.post("/admin/tokens/:tokenPrefix/origins", authLimiter, authenticateAdminToken, (req, res) => {
+    try {
+      const validTokens = getValidTokens();
+      const found = findTokens(validTokens, req.params.tokenPrefix);
+
+      if (found.length === 0) {
+        return res.status(404).json({ error: "Token not found" });
+      }
+      if (found.length > 1) {
+        return res.status(400).json({
+          error: "Ambiguous token prefix",
+          message: `${found.length} tokens start with that prefix`,
+        });
+      }
+
+      let origin;
+      try {
+        origin = new URL(String(req.body.origin)).origin;
+      } catch {
+        return res.status(400).json({
+          error: "Bad request",
+          message: "origin must be a full URL, for example https://orakel.efugl.no",
+        });
+      }
+
+      const tokenData = validTokens[found[0]];
+      tokenData.allowedOrigins = tokenData.allowedOrigins || [];
+
+      if (!tokenData.allowedOrigins.includes(origin)) {
+        tokenData.allowedOrigins.push(origin);
+      }
+
+      if (!saveTokens()) {
+        return res.status(500).json({ error: "Unable to save token to file" });
+      }
+
+      res.status(200).json({
+        message: `Requests with this token are now accepted only from its ${tokenData.allowedOrigins.length} registered origin(s)`,
+        token: found[0].substring(0, 8) + "...",
+        name: tokenData.name,
+        allowedOrigins: tokenData.allowedOrigins,
+      });
+
+      writeAdminLog(
+        "Token origin added",
+        `Name: ${tokenData.name}, Origin: ${origin}, Admin IP: ${req.ip}`
+      );
+    } catch (error) {
+      writeErrorLog("Error adding token origin", error);
+      res.status(500).json({ error: "Unable to add token origin" });
+    }
+  });
+
+  app.delete("/admin/tokens/:tokenPrefix/origins", authLimiter, authenticateAdminToken, (req, res) => {
+    try {
+      const validTokens = getValidTokens();
+      const found = findTokens(validTokens, req.params.tokenPrefix);
+
+      if (found.length === 0) {
+        return res.status(404).json({ error: "Token not found" });
+      }
+      if (found.length > 1) {
+        return res.status(400).json({
+          error: "Ambiguous token prefix",
+          message: `${found.length} tokens start with that prefix`,
+        });
+      }
+
+      let origin;
+      try {
+        origin = new URL(String(req.body.origin)).origin;
+      } catch {
+        return res.status(400).json({
+          error: "Bad request",
+          message: "origin must be a full URL, for example https://orakel.efugl.no",
+        });
+      }
+
+      const tokenData = validTokens[found[0]];
+      const before = (tokenData.allowedOrigins || []).length;
+      tokenData.allowedOrigins = (tokenData.allowedOrigins || []).filter((o) => o !== origin);
+
+      if (tokenData.allowedOrigins.length === 0) {
+        delete tokenData.allowedOrigins;
+      }
+
+      if (!saveTokens()) {
+        return res.status(500).json({ error: "Unable to save token to file" });
+      }
+
+      const remaining = tokenData.allowedOrigins || [];
+      res.status(200).json({
+        message: remaining.length
+          ? `Removed. ${remaining.length} origin(s) still registered.`
+          : before === 0
+            ? "That token had no registered origins"
+            : "Last origin removed. This token is now accepted from anywhere again.",
+        token: found[0].substring(0, 8) + "...",
+        name: tokenData.name,
+        allowedOrigins: remaining,
+      });
+
+      writeAdminLog(
+        "Token origin removed",
+        `Name: ${tokenData.name}, Origin: ${origin}, Admin IP: ${req.ip}`
+      );
+    } catch (error) {
+      writeErrorLog("Error removing token origin", error);
+      res.status(500).json({ error: "Unable to remove token origin" });
     }
   });
 
