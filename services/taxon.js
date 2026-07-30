@@ -14,6 +14,7 @@ const { writeErrorLog } = require("./logging");
 
 const apiTimeout = 20000;
 const NEGATIVE_CACHE_TTL_MS = 60 * 60 * 1000;
+const PENDING_ALERT_TRIES = 5;
 
 const ENRICHMENT_BUDGET_MS = 5000;
 
@@ -150,7 +151,7 @@ const getTaxonPics = () => taxonPics;
 
 const TARGET_LANGUAGES = ['sv', 'nl', 'en', 'es'];
 
-const stripInternal = ({ _pending, _assessmentId, ...clean }) => clean;
+const stripInternal = ({ _pending, _assessmentId, _pendingTries, ...clean }) => clean;
 
 let taxaIndex = null;
 
@@ -221,6 +222,7 @@ const getName = async (
   let nameResult = null;
   let assessmentId = null;
   let itemsToResolve = null;
+  let pendingTries = 0;
 
   if (sciNameId) {
     const index = await getTaxaIndex();
@@ -245,6 +247,7 @@ const getName = async (
             nameResult = cachedData;
             assessmentId = cachedData._assessmentId || null;
             itemsToResolve = cachedData._pending;
+            pendingTries = cachedData._pendingTries || 0;
           } else {
             return applyCountryCategories(stripInternal(cachedData), country);
           }
@@ -285,6 +288,7 @@ const getName = async (
             nameResult = cachedData;
             assessmentId = cachedData._assessmentId || null;
             itemsToResolve = cachedData._pending;
+            pendingTries = cachedData._pendingTries || 0;
           } else {
             return applyCountryCategories(stripInternal(cachedData), country);
           }
@@ -684,9 +688,18 @@ const getName = async (
     sciName;
 
   const cleanResult = stripInternal(nameResult);
+  const attempts = pendingTries + 1;
   const toWrite = pending.length
-    ? { ...cleanResult, _pending: pending, _assessmentId: assessmentId }
+    ? { ...cleanResult, _pending: pending, _assessmentId: assessmentId, _pendingTries: attempts }
     : cleanResult;
+
+  if (pending.length && attempts === PENDING_ALERT_TRIES) {
+    writeErrorLog(
+      `${cleanResult.scientificName || sciName}` +
+      `${sciNameId ? ` (${sciNameId})` : ""}: ` +
+      `${pending.join(", ")} still unresolved after ${attempts} attempts.`
+    );
+  }
 
   let jsonfilename;
   if (sciNameId) {
