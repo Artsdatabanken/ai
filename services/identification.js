@@ -4,7 +4,7 @@ const stream = require("stream");
 const { server_url } = require("../config/constants");
 const { writeErrorLog } = require("./logging");
 const { getName, getPicture } = require("./taxon");
-const { getCountryFromCoordinatesOrIP } = require("./geolocation");
+const { getCountryFromCoordinatesOrIP, parseCoordinate } = require("./geolocation");
 const { getWarnings } = require("./warnings");
 
 const ENRICHMENT_RESPONSE_BUDGET_MS = 1000;
@@ -94,16 +94,21 @@ const getId = async (req) => {
       });
     }
 
-    const geoResult = getCountryFromCoordinatesOrIP(
-      req.body.latitude,
-      req.body.longitude,
-      req
-    );
+    const latitude = parseCoordinate(req.body.latitude);
+    const longitude = parseCoordinate(req.body.longitude);
+
+    // Hand the parsed values back to the request so the log records the
+    // coordinates as used, in dot notation. A value that did not parse is
+    // left as the client sent it, so bad input stays visible in the log.
+    if (latitude !== null) req.body.latitude = latitude;
+    if (longitude !== null) req.body.longitude = longitude;
+
+    const geoResult = getCountryFromCoordinatesOrIP(latitude, longitude, req);
     const country = geoResult.country;
     const detectedIP = geoResult.detectedIP;
 
     let locationSource = 'unknown';
-    if (req.body.latitude && req.body.longitude) {
+    if (latitude !== null && longitude !== null) {
       locationSource = 'coordinates';
     } else if (country !== 'Unknown') {
       locationSource = 'ip';
@@ -228,8 +233,8 @@ const getId = async (req) => {
 
     const metadata = {
       country: country,
-      lat: req.body.latitude ? parseFloat(req.body.latitude) : undefined,
-      lon: req.body.longitude ? parseFloat(req.body.longitude) : undefined,
+      lat: latitude === null ? undefined : latitude,
+      lon: longitude === null ? undefined : longitude,
       date: req.body.date || new Date().toISOString()
     };
 

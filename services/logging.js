@@ -54,6 +54,7 @@ const writelog = (req, json, auth = null) => {
   const logFile = `${logdir}/${logPrefix}_${dateStr("d")}.csv`;
 
   const writeRow = () => {
+    // Already normalized to dot notation by the identification service
     const latitude = req.body.latitude || "";
     const longitude = req.body.longitude || "";
     const country = json.modelInfo ? json.modelInfo.country : "";
