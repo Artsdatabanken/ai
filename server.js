@@ -15,7 +15,7 @@ const {
   cacheIsPersistent,
   preferredCacheDir
 } = require("./config/constants");
-const { writeErrorLog } = require("./services/logging");
+const { writeErrorLog, reconcileLogHeaders } = require("./services/logging");
 
 process.on("uncaughtException", (error) => {
   writeErrorLog("Uncaught exception", error);
@@ -26,7 +26,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 const { initializeIpLookup } = require("./services/geolocation");
-const { reloadTaxonImages } = require("./services/taxon");
+const { reloadTaxonImages, refreshListVersions } = require("./services/taxon");
 const { setupCronJobs } = require("./jobs/cron");
 
 const identifyRoutes = require("./routes/identify");
@@ -74,6 +74,14 @@ const ensureDir = (dir) => {
 ensureDir(logdir);
 ensureDir(uploadsdir);
 
+const rewrittenHeaders = reconcileLogHeaders();
+if (rewrittenHeaders) {
+  writeErrorLog(
+    `The log format changed: moved ${rewrittenHeaders} of today's log file(s) aside as ` +
+    `"... (previous format).csv". Today's rows continue in a new file with the current header.`
+  );
+}
+
 const app = express();
 const port = process.env.PORT;
 
@@ -112,6 +120,24 @@ identifyRoutes(app, upload);
 adminRoutes(app, upload);
 taxonRoutes(app);
 miscRoutes(app, upload);
+
+app.use((error, req, res, next) => {
+  writeErrorLog(`Unhandled request error on ${req.method} ${req.path}`, error);
+
+  if (res.headersSent) {
+    return next(error);
+  }
+
+  const status = error?.status || (error?.code?.startsWith?.("LIMIT_") ? 400 : 500);
+  res.status(status).json({
+    error: status === 400 ? "Bad request" : "Internal server error",
+    message: error?.code === "LIMIT_FILE_SIZE"
+      ? "An image exceeds the 20 MB limit"
+      : error?.code === "LIMIT_FILE_COUNT"
+        ? "Too many images"
+        : undefined
+  });
+});
 
 setupCronJobs();
 
@@ -166,6 +192,10 @@ fs.writeFileSync(persistenceStamp, String(Date.now()));
 
 reloadTaxonImages().catch((error) =>
   writeErrorLog("Failed to reload taxon images on startup", error)
+);
+
+refreshListVersions().catch((error) =>
+  writeErrorLog("Failed to determine the published list versions on startup", error)
 );
 
 initializeIpLookup()

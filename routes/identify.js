@@ -25,7 +25,7 @@ module.exports = (app, upload) => {
 
       if (json?.predictions?.[0]?.taxa) {
         json.predictions[0].taxa.items.forEach((taxon) => {
-          const splitId = taxon.scientific_name_id.split(":");
+          const splitId = String(taxon.scientific_name_id || "").split(":");
           const sciNameId = splitId[0] === "NBIC" ? splitId[1] : null;
 
           maybeRecache(sciNameId, taxon.scientific_name).catch((e) => {
@@ -35,7 +35,9 @@ module.exports = (app, upload) => {
       }
     } catch (error) {
       writeErrorLog(`Error while running getId() on /identify endpoint`, error);
-      res.status(500).json({ error: "Internal server error" });
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Internal server error" });
+      }
     }
   });
 

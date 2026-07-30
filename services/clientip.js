@@ -1,13 +1,5 @@
 const getClientIP = (req) => {
-  const realIP =
-    req.headers["x-real-ip"] ||
-    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
-    req.headers["cf-connecting-ip"] ||
-    req.headers["x-client-ip"] ||
-    req.headers["true-client-ip"] ||
-    req.headers["x-cluster-client-ip"] ||
-    req.ip ||
-    req.socket?.remoteAddress;
+  const realIP = req.ip || req.socket?.remoteAddress;
 
   if (!realIP) {
     console.warn("Warning: Could not determine client IP");

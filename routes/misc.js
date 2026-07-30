@@ -39,6 +39,7 @@ module.exports = (app, upload) => {
       res.status(200).json(json);
     } catch (error) {
       writeErrorLog(`Failed to save image(s)`, error);
+      res.status(500).json({ error: "Unable to save images" });
     }
   });
 
@@ -52,18 +53,27 @@ module.exports = (app, upload) => {
     const password = parts[1];
 
     fs.readdir(`${uploadsdir}/`, async (err, files) => {
+     try {
       let image_list = [];
 
-      files.forEach((file) => {
+      if (err) {
+        writeErrorLog("Could not read the uploads directory", err);
+        return res.status(500).json({ error: "Unable to read stored images" });
+      }
+
+      for (const file of files) {
         const fileid = file.split("_")[0];
 
         if (fileid === id) {
-          const image_to_fetch = `${uploadsdir}/${file}`;
-          const file_buffer = fs.readFileSync(image_to_fetch);
-          let decrypted_file = decrypt(file_buffer, password);
-          image_list.push(decrypted_file);
+          try {
+            const image_to_fetch = `${uploadsdir}/${file}`;
+            const file_buffer = fs.readFileSync(image_to_fetch);
+            image_list.push(decrypt(file_buffer, password));
+          } catch (error) {
+            return res.status(400).json({ error: "Could not decrypt the stored image" });
+          }
         }
-      });
+      }
 
       if (image_list.length === 0 && branch === "master") {
         try {
@@ -86,12 +96,13 @@ module.exports = (app, upload) => {
         return res.status(404).json({ error: "Image not found" });
       }
 
-      try {
-        res.status(200).json({ image: image_list });
-      } catch (error) {
-        writeErrorLog(`Failed to return json of saved images`, error);
+      res.status(200).json({ image: image_list });
+     } catch (error) {
+      writeErrorLog(`Failed to return saved images`, error);
+      if (!res.headersSent) {
         res.status(500).json({ error: "Internal server error" });
       }
+     }
     });
   });
 

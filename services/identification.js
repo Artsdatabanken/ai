@@ -176,7 +176,7 @@ const getId = async (req) => {
       )
       .catch((error) => {
         writeErrorLog(
-          `Naturalis API v2 lookup with token ${token} failed`,
+          `Naturalis API v2 lookup for the ${modelUsed} model failed`,
           error
         );
         throw error;

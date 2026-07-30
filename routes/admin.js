@@ -10,7 +10,7 @@ const {
 } = require("../middleware/auth");
 const { writeErrorLog, writeAdminLog } = require("../services/logging");
 const { watchBucket, unwatchBucket, listWatched } = require("../services/ipbucket");
-const { taxadir } = require("../services/taxon");
+const { taxadir, resetTaxaIndex } = require("../services/taxon");
 const { logdir, VALID_MODELS } = require("../config/constants");
 
 const findTokens = (validTokens, prefix) =>
@@ -169,20 +169,29 @@ module.exports = (app, upload) => {
         tokenData.allowedOrigins.push(origin);
       }
 
+      const hadSecret = !!tokenData.secret;
+      delete tokenData.secret;
+      delete tokenData.previousSecret;
+      delete tokenData.secretUpdated;
+
       if (!saveTokens()) {
         return res.status(500).json({ error: "Unable to save token to file" });
       }
 
       res.status(200).json({
-        message: `Requests with this token are now accepted only from its ${tokenData.allowedOrigins.length} registered origin(s)`,
+        message:
+          `Requests with this token are now accepted only from its ` +
+          `${tokenData.allowedOrigins.length} registered origin(s)` +
+          (hadSecret ? ", and its secret has been retired since the two are alternatives" : ""),
         token: found[0].substring(0, 8) + "...",
         name: tokenData.name,
         allowedOrigins: tokenData.allowedOrigins,
+        signingRequired: false,
       });
 
       writeAdminLog(
         "Token origin added",
-        `Name: ${tokenData.name}, Origin: ${origin}, Admin IP: ${req.ip}`
+        `Name: ${tokenData.name}, Origin: ${origin}, Secret retired: ${hadSecret}, Admin IP: ${req.ip}`
       );
     } catch (error) {
       writeErrorLog("Error adding token origin", error);
@@ -497,6 +506,8 @@ module.exports = (app, upload) => {
           }
         }
       }
+
+      resetTaxaIndex();
 
       const message = `Cleared ${deletedCount} cached taxa files${
         errorCount > 0 ? ` (${errorCount} errors)` : ""

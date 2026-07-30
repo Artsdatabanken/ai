@@ -67,72 +67,72 @@ if (fs.existsSync(pictureFile)) {
   taxonPics = JSON.parse(fs.readFileSync(pictureFile));
 }
 
-const getListVersions = async () => {
-  const oneWeekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
+const LIST_URLS = {
+  Redlist: (year) => `https://lister.artsdatabanken.no/odata/v1/speciesassessment${year}`,
+  AlienSpeciesList: (year) => `https://lister.artsdatabanken.no/odata/v1/alienspeciesassessment${year}`
+};
+const EARLIEST_LIST_YEAR = 2020;
 
+let listVersions = { Redlist: null, AlienSpeciesList: null };
+
+const getListVersions = () => listVersions;
+
+const listYearExists = async (list, year) => {
   try {
-    const stats = await fsp.stat(listVersionsFile);
-    if (stats.mtimeMs > oneWeekAgo) {
-      try {
-        return JSON.parse(await fsp.readFile(listVersionsFile, 'utf8'));
-      } catch (error) {
-        writeErrorLog('Could not parse listversions.json', error);
+    const response = await axios.get(LIST_URLS[list](year), {
+      timeout: 5000,
+      headers: {
+        'Accept-Encoding': 'gzip',
+        'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
       }
-    }
-  } catch {}
+    });
+    return response.status === 200;
+  } catch {
+    return false;
+  }
+};
 
+const latestYearFor = async (list, knownYear) => {
   const currentYear = new Date().getFullYear();
-  const versions = {
-    AlienSpeciesList: null,
-    Redlist: null
-  };
 
-  for (let year = currentYear; year >= 2020; year--) {
-    if (!versions.AlienSpeciesList) {
-      try {
-        const url = `https://lister.artsdatabanken.no/odata/v1/alienspeciesassessment${year}`;
-        const response = await axios.get(url, {
-          timeout: 5000,
-          headers: {
-            'Accept-Encoding': 'gzip',
-            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
-          }
-        });
-        if (response.status === 200) {
-          versions.AlienSpeciesList = year;
-        }
-      } catch (error) {
-      }
+  if (knownYear) {
+    let latest = knownYear;
+    for (let year = knownYear + 1; year <= currentYear; year++) {
+      if (await listYearExists(list, year)) latest = year;
     }
-
-    if (!versions.Redlist) {
-      try {
-        const url = `https://lister.artsdatabanken.no/odata/v1/speciesassessment${year}`;
-        const response = await axios.get(url, {
-          timeout: 5000,
-          headers: {
-            'Accept-Encoding': 'gzip',
-            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
-          }
-        });
-        if (response.status === 200) {
-          versions.Redlist = year;
-        }
-      } catch (error) {
-      }
-    }
-
-    if (versions.AlienSpeciesList && versions.Redlist) {
-      break;
-    }
+    return latest;
   }
 
-  if (!versions.AlienSpeciesList) versions.AlienSpeciesList = 2023;
-  if (!versions.Redlist) versions.Redlist = 2021;
+  for (let year = currentYear; year >= EARLIEST_LIST_YEAR; year--) {
+    if (await listYearExists(list, year)) return year;
+  }
+  return null;
+};
 
-  fsp.writeFile(listVersionsFile, JSON.stringify(versions, null, 2)).catch(() => {});
+const refreshListVersions = async () => {
+  let stored = {};
+  try {
+    stored = JSON.parse(await fsp.readFile(listVersionsFile, 'utf8'));
+  } catch {}
 
-  return versions;
+  const resolved = await Promise.all(
+    Object.keys(LIST_URLS).map(async (list) => {
+      const known = listVersions[list] || stored[list] || null;
+      const year = await latestYearFor(list, known);
+      if (!year) {
+        writeErrorLog(
+          `Could not determine which year of the ${list} is published. ` +
+          `Red list and alien species categories stay pending until this resolves.`
+        );
+      }
+      return [list, year || known || null];
+    })
+  );
+
+  listVersions = Object.fromEntries(resolved);
+  fsp.writeFile(listVersionsFile, JSON.stringify(listVersions, null, 2)).catch(() => {});
+  console.log(`List versions: ${JSON.stringify(listVersions)}`);
+  return listVersions;
 };
 
 const getPicture = (sciName) => {
@@ -179,8 +179,8 @@ const rememberCacheFile = (sciNameId, filename) => {
   if (taxaIndex && sciNameId) taxaIndex.set(indexKey(sciNameId), filename);
 };
 
-const forgetCacheFile = (sciNameId) => {
-  if (taxaIndex && sciNameId) taxaIndex.delete(indexKey(sciNameId));
+const resetTaxaIndex = () => {
+  taxaIndex = null;
 };
 
 const applyCountryCategories = (nameResult, country) => {
@@ -217,8 +217,6 @@ const getName = async (
   deadline = newDeadline(force ? RECACHE_BUDGET_MS : ENRICHMENT_BUDGET_MS),
   completePending = false
 ) => {
-  const listVersions = await getListVersions();
-
   let nameResult = null;
   let assessmentId = null;
   let itemsToResolve = null;
@@ -607,7 +605,9 @@ const getName = async (
     })());
   }
 
-  if (itemsToResolve.includes('redlist') && assessmentId) {
+  if (itemsToResolve.includes('redlist') && assessmentId && !listVersions.Redlist) {
+    erroredItems.add('redlist');
+  } else if (itemsToResolve.includes('redlist') && assessmentId) {
     lookups.push((async () => {
       const url = encodeURI(
         `https://lister.artsdatabanken.no/odata/v1/speciesassessment${listVersions.Redlist}?filter=ScientificNameId eq ${assessmentId}&select=category`
@@ -636,7 +636,9 @@ const getName = async (
     })());
   }
 
-  if (itemsToResolve.includes('alien') && assessmentId) {
+  if (itemsToResolve.includes('alien') && assessmentId && !listVersions.AlienSpeciesList) {
+    erroredItems.add('alien');
+  } else if (itemsToResolve.includes('alien') && assessmentId) {
     lookups.push((async () => {
       const url = encodeURI(
         `https://lister.artsdatabanken.no/odata/v1/alienspeciesassessment${listVersions.AlienSpeciesList}?filter=scientificName/ScientificNameId eq ${assessmentId}&select=category`
@@ -833,6 +835,9 @@ module.exports = {
   getTaxonPics,
   maybeRecache,
   pruneTaxonCache,
+  refreshListVersions,
+  getListVersions,
+  resetTaxaIndex,
   reloadTaxonImages,
   newDeadline,
   ENRICHMENT_BUDGET_MS,
