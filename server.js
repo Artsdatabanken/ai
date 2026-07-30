@@ -11,6 +11,7 @@ const {
   logdir,
   uploadsdir,
   cachedir,
+  taxadir,
   cacheIsPersistent,
   preferredCacheDir
 } = require("./config/constants");
@@ -124,18 +125,43 @@ if (!cacheIsPersistent) {
 }
 
 const persistenceStamp = `${cachedir}/.persistence`;
+
+let stampAge = null;
 try {
   const writtenAt = Number(fs.readFileSync(persistenceStamp, "utf8").trim());
-  const ageHours = ((Date.now() - writtenAt) / (1000 * 60 * 60)).toFixed(1);
-  console.log(`Taxon cache survived the restart (stamp written ${ageHours}h ago)`);
-} catch {
-  writeErrorLog(
-    `No cache persistence stamp in "${cachedir}". Either this is the first ` +
-    `start after deploying this version, or the restart wiped the cache. If ` +
-    `this line appears on every restart the cache is not persistent, and ` +
-    `users get scientific names until it refills each time.`
-  );
-}
+  stampAge = ((Date.now() - writtenAt) / (1000 * 60 * 60)).toFixed(1);
+} catch {}
+
+let entries = 0;
+let newestEntryAgeDays = null;
+try {
+  const files = fs.readdirSync(taxadir).filter((f) => f.endsWith(".json"));
+  entries = files.length;
+  let newest = 0;
+  for (const file of files) {
+    try {
+      const mtime = fs.statSync(`${taxadir}/${file}`).mtimeMs;
+      if (mtime > newest) newest = mtime;
+    } catch {}
+  }
+  if (newest) {
+    newestEntryAgeDays = ((Date.now() - newest) / (1000 * 60 * 60 * 24)).toFixed(1);
+  }
+} catch {}
+
+writeErrorLog(
+  `Startup: taxon cache "${taxadir}" holds ${entries} entries` +
+  (newestEntryAgeDays === null ? "" : `, newest written ${newestEntryAgeDays} days ago`) +
+  `, persistence stamp ${stampAge === null ? "missing" : `written ${stampAge}h ago`}. ` +
+  (entries === 0 && stampAge === null
+    ? "Nothing survived, so this is either the first start on this version or the cache is not persistent."
+    : entries > 0 && stampAge === null
+      ? "Entries survived without a stamp, so the cache is persistent and the stamp is simply new."
+      : entries === 0
+        ? "The stamp survived but the entries did not, which should not happen."
+        : "Cache and stamp both survived, so storage is persistent.")
+);
+
 fs.writeFileSync(persistenceStamp, String(Date.now()));
 
 reloadTaxonImages().catch((error) =>
