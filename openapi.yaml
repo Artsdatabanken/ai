@@ -4,9 +4,36 @@ info:
   description: This API provides endpoints for image-based species identification, taxon information retrieval, and various utility functions related to species data management.
   version: 1.0.0
 servers:
-  - url: https://api.example.com/v1
+  - url: https://ai.artsdatabanken.no
+    description: Production
+  - url: https://ai.test.artsdatabanken.no
+    description: Test
+components:
+  securitySchemes:
+    apiToken:
+      type: http
+      scheme: bearer
+      description: >
+        API token issued with POST /admin/tokens. Tokens that carry a secret must
+        additionally sign each request, see the X-Artsorakel-Signature parameter on
+        /identify. Tokens restricted to a set of origins are accepted only when the
+        browser sends a matching Origin header.
+    adminToken:
+      type: http
+      scheme: bearer
+      description: The ADMIN_TOKEN configured on the server. Required by every /admin route.
 paths:
   /:
+    get:
+      summary: Service status
+      description: >
+        Returns an HTML page with the deployed commit, the branch and the time
+        server.js was last modified. Used as the health check.
+      tags:
+        - Utility
+      responses:
+        '200':
+          description: HTML page
     post:
       summary: Identify species from image
       description: Identifies species from uploaded images using AI.
@@ -119,6 +146,8 @@ paths:
       description: Reloads the cached information for a given taxon by name.
       tags:
         - Admin
+      security:
+        - adminToken: []
       parameters:
         - in: path
           name: taxon
@@ -145,6 +174,8 @@ paths:
       description: Reloads the cached information for a given taxon by ID.
       tags:
         - Admin
+      security:
+        - adminToken: []
       parameters:
         - in: path
           name: id
@@ -171,6 +202,8 @@ paths:
       description: Reloads the cache of taxon images.
       tags:
         - Admin
+      security:
+        - adminToken: []
       responses:
         '200':
           description: Successful response
@@ -190,6 +223,8 @@ paths:
       description: Clears all cached taxon data.
       tags:
         - Admin
+      security:
+        - adminToken: []
       responses:
         '200':
           description: Successful response
@@ -218,6 +253,8 @@ paths:
       description: Lists all API tokens.
       tags:
         - Admin
+      security:
+        - adminToken: []
       responses:
         '200':
           description: Successful response
@@ -254,6 +291,8 @@ paths:
       description: Creates a new API token.
       tags:
         - Admin
+      security:
+        - adminToken: []
       requestBody:
         content:
           application/json:
@@ -305,6 +344,8 @@ paths:
       description: Reloads tokens from the tokens file.
       tags:
         - Admin
+      security:
+        - adminToken: []
       responses:
         '200':
           description: Successful response
@@ -329,6 +370,8 @@ paths:
       description: Enables a token by prefix.
       tags:
         - Admin
+      security:
+        - adminToken: []
       parameters:
         - in: path
           name: tokenPrefix
@@ -353,6 +396,8 @@ paths:
       description: Disables a token by prefix.
       tags:
         - Admin
+      security:
+        - adminToken: []
       parameters:
         - in: path
           name: tokenPrefix
@@ -377,6 +422,8 @@ paths:
       description: Lists all log files.
       tags:
         - Admin
+      security:
+        - adminToken: []
       responses:
         '200':
           description: Successful response
@@ -398,6 +445,8 @@ paths:
       description: Downloads a specific log file.
       tags:
         - Admin
+      security:
+        - adminToken: []
       parameters:
         - in: path
           name: filename
@@ -422,6 +471,8 @@ paths:
       description: Updates the RSS feed file.
       tags:
         - Admin
+      security:
+        - adminToken: []
       requestBody:
         content:
           multipart/form-data:
@@ -526,9 +577,35 @@ paths:
   /identify:
     post:
       summary: Identify species from image (authenticated)
-      description: Identifies species from uploaded images using AI. Requires API token.
+      description: >
+        Identifies species from uploaded images. Requires an API token. If the token
+        was issued with a secret, the request must also be signed: build the canonical
+        string as the lines "v1", the HTTP method, the path, the token, the timestamp
+        and the SHA-256 of (each image's SHA-256 hex, joined by newlines, then a
+        newline, then the body fields as key=value sorted by key and joined by
+        newlines), joined by newlines; the signature is the HMAC-SHA256 of that string
+        with the secret, hex encoded. Timestamps more than 300 seconds from the server
+        clock are rejected. If the token has registered origins, requests are accepted
+        only from those.
       tags:
         - Identification
+      security:
+        - apiToken: []
+      parameters:
+        - in: header
+          name: X-Artsorakel-Timestamp
+          schema:
+            type: string
+          required: false
+          description: Unix time in seconds. Required for tokens that have a secret.
+        - in: header
+          name: X-Artsorakel-Signature
+          schema:
+            type: string
+          required: false
+          description: >
+            v1=<hex HMAC-SHA256 of the canonical string>. Required for tokens that
+            have a secret.
       requestBody:
         content:
           multipart/form-data:
@@ -566,3 +643,347 @@ paths:
           description: Forbidden
         '500':
           description: Internal Server Error
+  /admin/tokens/{tokenPrefix}/secret:
+    post:
+      summary: Create or rotate a token's signing secret
+      description: >
+        Generates a new secret for the token and returns it once. Any existing secret
+        is kept as the previous secret and stays valid until retired, so a consumer can
+        switch over at its own pace. A token that gains a secret must sign every
+        request from that moment on.
+      tags:
+        - Admin
+      security:
+        - adminToken: []
+      parameters:
+        - in: path
+          name: tokenPrefix
+          required: true
+          schema:
+            type: string
+          description: The first characters of the token, enough to identify it uniquely
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  token:
+                    type: string
+                  name:
+                    type: string
+                  application:
+                    type: string
+                  secret:
+                    type: string
+                  previousSecretAccepted:
+                    type: boolean
+                  warning:
+                    type: string
+        '400':
+          description: Ambiguous token prefix
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Token not found
+        '500':
+          description: Internal Server Error
+  /admin/tokens/{tokenPrefix}/secret/previous:
+    delete:
+      summary: Retire the previous signing secret
+      description: >
+        Stops accepting the secret that was replaced by the last rotation. Idempotent
+        when there is none.
+      tags:
+        - Admin
+      security:
+        - adminToken: []
+      parameters:
+        - in: path
+          name: tokenPrefix
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  token:
+                    type: string
+                  name:
+                    type: string
+        '400':
+          description: Ambiguous token prefix
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Token not found
+        '500':
+          description: Internal Server Error
+  /admin/tokens/{tokenPrefix}/origins:
+    post:
+      summary: Restrict a token to an origin
+      description: >
+        Adds a browser origin the token may be used from. While a token has at least
+        one origin, requests are accepted only from those origins and the response
+        echoes the matching origin instead of a wildcard. Adding an origin retires the
+        token's signing secret, since a browser cannot keep one.
+      tags:
+        - Admin
+      security:
+        - adminToken: []
+      parameters:
+        - in: path
+          name: tokenPrefix
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                origin:
+                  type: string
+                  description: Full URL, for example https://orakel.efugl.no
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  token:
+                    type: string
+                  name:
+                    type: string
+                  allowedOrigins:
+                    type: array
+                    items:
+                      type: string
+                  signingRequired:
+                    type: boolean
+        '400':
+          description: Malformed origin or ambiguous token prefix
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Token not found
+        '500':
+          description: Internal Server Error
+    delete:
+      summary: Remove an origin restriction
+      description: >
+        Removes one origin. When the last one is removed the token is accepted from
+        anywhere again. The retired signing secret is not restored.
+      tags:
+        - Admin
+      security:
+        - adminToken: []
+      parameters:
+        - in: path
+          name: tokenPrefix
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                origin:
+                  type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  token:
+                    type: string
+                  name:
+                    type: string
+                  allowedOrigins:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: Malformed origin or ambiguous token prefix
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Token not found
+        '500':
+          description: Internal Server Error
+  /admin/ipwatch:
+    get:
+      summary: List watched IP buckets
+      description: >
+        Request logs record the caller's address as four hexadecimal characters of a
+        keyed hash rather than the address itself. A bucket can be watched temporarily
+        to see the addresses behind it.
+      tags:
+        - Admin
+      security:
+        - adminToken: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  buckets:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /admin/ipwatch/{bucket}:
+    post:
+      summary: Start watching an IP bucket
+      description: >
+        While a bucket is watched, every matching request is also written to
+        ipwatch-<bucket>_<date>.csv with the full address, origin, log file and user
+        agent.
+      tags:
+        - Admin
+      security:
+        - adminToken: []
+      parameters:
+        - in: path
+          name: bucket
+          required: true
+          schema:
+            type: string
+          description: Four hexadecimal characters, as found in the IP_bucket log column
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  buckets:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: Not a four character hexadecimal bucket
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    delete:
+      summary: Stop watching an IP bucket
+      tags:
+        - Admin
+      security:
+        - adminToken: []
+      parameters:
+        - in: path
+          name: bucket
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  buckets:
+                    type: array
+                    items:
+                      type: string
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+  /taxon/description/{sciNameId}:
+    get:
+      summary: Get a taxon description
+      description: Returns the cached name record for a scientific name id.
+      tags:
+        - Taxon
+      parameters:
+        - in: path
+          name: sciNameId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+        '404':
+          description: Not found
+        '500':
+          description: Internal Server Error
+  /taxon/description/random/id:
+    get:
+      summary: Get a random taxon description
+      description: Returns the name record of a randomly chosen cached taxon.
+      tags:
+        - Taxon
+      responses:
+        '200':
+          description: Successful response
+        '500':
+          description: Internal Server Error
+  /taxon/description/view:
+    get:
+      summary: Taxon description browser
+      description: Human readable page for inspecting cached taxon descriptions.
+      tags:
+        - Taxon
+      responses:
+        '200':
+          description: HTML page
+  /robots933456.txt:
+    get:
+      summary: Azure health probe
+      description: Returns a fixed string. Reserved by Azure App Service, not a real robots file.
+      tags:
+        - Utility
+      responses:
+        '200':
+          description: Plain text response
