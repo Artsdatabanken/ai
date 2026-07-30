@@ -194,12 +194,27 @@ const applyCountryCategories = (nameResult, country) => {
   return nameResult;
 };
 
+const pendingInFlight = new Set();
+
+const resolvePendingInBackground = (sciNameId, sciName) => {
+  const key = sciNameId ? `id:${sciNameId}` : `name:${sciName}`;
+  if (pendingInFlight.has(key)) return;
+  pendingInFlight.add(key);
+
+  getName(sciNameId, sciName, false, null, newDeadline(RECACHE_BUDGET_MS), true)
+    .catch((error) =>
+      writeErrorLog(`Could not complete pending lookups for ${sciName || sciNameId}`, error)
+    )
+    .finally(() => pendingInFlight.delete(key));
+};
+
 const getName = async (
   sciNameId,
   sciName,
   force = false,
   country = null,
-  deadline = newDeadline(force ? RECACHE_BUDGET_MS : ENRICHMENT_BUDGET_MS)
+  deadline = newDeadline(force ? RECACHE_BUDGET_MS : ENRICHMENT_BUDGET_MS),
+  completePending = false
 ) => {
   const listVersions = await getListVersions();
 
@@ -223,6 +238,10 @@ const getName = async (
               return bareNameResult(sciName);
             }
           } else if (cachedData._pending && cachedData._pending.length) {
+            if (!completePending) {
+              resolvePendingInBackground(sciNameId, sciName);
+              return applyCountryCategories(stripInternal(cachedData), country);
+            }
             nameResult = cachedData;
             assessmentId = cachedData._assessmentId || null;
             itemsToResolve = cachedData._pending;
@@ -231,19 +250,6 @@ const getName = async (
           }
         } catch (error) {
           writeErrorLog(`Could not parse "${existingFile}"`, error);
-        }
-      }
-
-      if (!itemsToResolve) {
-        forgetCacheFile(sciNameId);
-        for (const f of files) {
-          const filepath = `${taxadir}/${f}`;
-          fsp.unlink(filepath).catch((error) => {
-            writeErrorLog(
-              `Could not delete "${filepath}" while ${force ? 'forcing recache' : 'after parse error'}`,
-              error
-            );
-          });
         }
       }
     }
@@ -272,6 +278,10 @@ const getName = async (
             }
             fsp.unlink(jsonfilename).catch(() => {});
           } else if (cachedData._pending && cachedData._pending.length) {
+            if (!completePending) {
+              resolvePendingInBackground(sciNameId, sciName);
+              return applyCountryCategories(stripInternal(cachedData), country);
+            }
             nameResult = cachedData;
             assessmentId = cachedData._assessmentId || null;
             itemsToResolve = cachedData._pending;
@@ -280,10 +290,7 @@ const getName = async (
           }
         } catch (error) {
           writeErrorLog(`Could not parse "${jsonfilename}"`, error);
-          fsp.unlink(jsonfilename).catch(() => {});
         }
-      } else {
-        fsp.unlink(jsonfilename).catch(() => {});
       }
     }
   }
