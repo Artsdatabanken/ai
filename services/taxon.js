@@ -63,8 +63,17 @@ const writeNegativeCache = (sciNameId, sciName, nameResult) => {
 };
 
 let taxonPics = {};
-if (fs.existsSync(pictureFile)) {
-  taxonPics = JSON.parse(fs.readFileSync(pictureFile));
+try {
+  if (fs.existsSync(pictureFile)) {
+    taxonPics = JSON.parse(fs.readFileSync(pictureFile));
+  }
+} catch (error) {
+  writeErrorLog(
+    `Could not read "${pictureFile}", starting without taxon pictures. ` +
+    `reloadTaxonImages() rebuilds it on startup.`,
+    error
+  );
+  taxonPics = {};
 }
 
 const LIST_URLS = {
@@ -154,12 +163,12 @@ const TARGET_LANGUAGES = ['sv', 'nl', 'en', 'es'];
 const stripInternal = ({ _pending, _assessmentId, _pendingTries, ...clean }) => clean;
 
 let taxaIndex = null;
+let taxaIndexBuild = null;
+let indexUpdatesDuringBuild = new Map();
 
 const indexKey = (sciNameId) => encodeURIComponent(sciNameId);
 
-const getTaxaIndex = async () => {
-  if (taxaIndex) return taxaIndex;
-
+const buildTaxaIndex = async () => {
   const index = new Map();
   try {
     for (const file of await fsp.readdir(taxadir)) {
@@ -171,16 +180,35 @@ const getTaxaIndex = async () => {
     }
   } catch {}
 
+  for (const [key, filename] of indexUpdatesDuringBuild) {
+    index.set(key, filename);
+  }
+  indexUpdatesDuringBuild = new Map();
+
   taxaIndex = index;
-  return taxaIndex;
+  taxaIndexBuild = null;
+  return index;
+};
+
+const getTaxaIndex = () => {
+  if (taxaIndex) return taxaIndex;
+  if (!taxaIndexBuild) taxaIndexBuild = buildTaxaIndex();
+  return taxaIndexBuild;
 };
 
 const rememberCacheFile = (sciNameId, filename) => {
-  if (taxaIndex && sciNameId) taxaIndex.set(indexKey(sciNameId), filename);
+  if (!sciNameId) return;
+  if (taxaIndex) {
+    taxaIndex.set(indexKey(sciNameId), filename);
+  } else {
+    indexUpdatesDuringBuild.set(indexKey(sciNameId), filename);
+  }
 };
 
 const resetTaxaIndex = () => {
   taxaIndex = null;
+  taxaIndexBuild = null;
+  indexUpdatesDuringBuild = new Map();
 };
 
 const applyCountryCategories = (nameResult, country) => {
@@ -825,7 +853,9 @@ const reloadTaxonImages = async () => {
   }
 
   taxonPics = taxa;
-  await fsp.writeFile(pictureFile, JSON.stringify(taxa));
+  const tmpFile = `${pictureFile}.tmp`;
+  await fsp.writeFile(tmpFile, JSON.stringify(taxa));
+  await fsp.rename(tmpFile, pictureFile);
   return Object.keys(taxa).length;
 };
 
