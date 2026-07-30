@@ -1,59 +1,62 @@
 const CountryCoder = require("@rapideditor/country-coder");
 const IPCountryLookup = require("../ipCountryLookup");
+const { writeErrorLog } = require("./logging");
+const { getClientIP } = require("./clientip");
 
 const ipLookup = new IPCountryLookup();
 let ipLookupReady = false;
 
 const initializeIpLookup = async () => {
-  await ipLookup.initialize();
+  try {
+    await ipLookup.initialize();
+  } catch (error) {
+    writeErrorLog(
+      "Failed to load the GeoIP database on startup. Every request without " +
+      "coordinates will be logged as country 'Unknown' until this is fixed.",
+      error
+    );
+    throw error;
+  }
   ipLookupReady = true;
   console.log("IP geolocation database loaded successfully");
 };
 
 const updateIpDatabase = async () => {
   await ipLookup.updateDatabase();
+  ipLookupReady = true;
 };
 
-
-const getClientIP = (req) => {
-  const realIP =
-    req.headers["x-real-ip"] ||
-    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
-    req.headers["cf-connecting-ip"] ||
-    req.headers["x-client-ip"] ||
-    req.headers["true-client-ip"] ||
-    req.headers["x-cluster-client-ip"] ||
-    req.ip ||
-    req.socket?.remoteAddress;
-
-  if (!realIP) {
-    console.warn("Warning: Could not determine client IP");
-    return "unknown";
+// Accepts "59.9" and "59,9" alike - Android sends comma decimals on
+// Norwegian-locale devices. Anything that is not a plain number is rejected
+// outright, so a malformed value falls through to the IP lookup instead of
+// being half-parsed ("59,9" used to become 59).
+const parseCoordinate = (value) => {
+  if (value === undefined || value === null) {
+    return null;
   }
 
-  let cleanIP = realIP.replace(/^::ffff:/, "").trim();
-  const ipv4PortMatch = cleanIP.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
-  if (ipv4PortMatch) {
-    cleanIP = ipv4PortMatch[1];
+  const normalized = String(value).trim().replace(",", ".");
+  if (!/^[+-]?\d+(\.\d+)?$/.test(normalized)) {
+    return null;
   }
 
-  return cleanIP;
+  const parsed = parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 };
+
 
 const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
   try {
-    if (latitude && longitude) {
-      const lat = parseFloat(latitude);
-      const lon = parseFloat(longitude);
+    const lat = parseCoordinate(latitude);
+    const lon = parseCoordinate(longitude);
 
-      if (!isNaN(lat) && !isNaN(lon)) {
-        const location = CountryCoder.iso1A2Code([lon, lat]);
+    if (lat !== null && lon !== null) {
+      const location = CountryCoder.iso1A2Code([lon, lat]);
 
-        if (location) {
-          return { country: location, detectedIP: null };
-        } else {
-          return { country: "Unknown", detectedIP: null };
-        }
+      if (location) {
+        return { country: location, detectedIP: null };
+      } else {
+        return { country: "Unknown", detectedIP: null };
       }
     }
 
@@ -83,6 +86,7 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
 };
 
 module.exports = {
+  parseCoordinate,
   initializeIpLookup,
   updateIpDatabase,
   getClientIP,

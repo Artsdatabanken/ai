@@ -3,13 +3,13 @@ const FormData = require("form-data");
 const stream = require("stream");
 const { server_url } = require("../config/constants");
 const { writeErrorLog } = require("./logging");
-const { getName, getPicture } = require("./taxon");
-const { getCountryFromCoordinatesOrIP } = require("./geolocation");
+const { getName, getPicture, newDeadline } = require("./taxon");
+const { getCountryFromCoordinatesOrIP, parseCoordinate } = require("./geolocation");
 const { getWarnings } = require("./warnings");
 
-const ENRICHMENT_RESPONSE_BUDGET_MS = 1000;
+const ENRICHMENT_GRACE_MS = 250;
 
-const enrichTaxon = async (pred, req, country) => {
+const enrichTaxon = async (pred, req, country, deadline) => {
   try {
     if (
       req.body.application &&
@@ -20,7 +20,7 @@ const enrichTaxon = async (pred, req, country) => {
       let splitId = pred.scientific_name_id.split(":")
       let sciNameId = (splitId[0] === "NBIC" ? splitId[1] : null)
 
-      const nameResult = await getName(sciNameId, pred.scientific_name, false, country);
+      const nameResult = await getName(sciNameId, pred.scientific_name, false, country, deadline);
 
       pred.vernacularName = nameResult.vernacularName
       pred.vernacularNames = nameResult.vernacularNames
@@ -94,16 +94,21 @@ const getId = async (req) => {
       });
     }
 
-    const geoResult = getCountryFromCoordinatesOrIP(
-      req.body.latitude,
-      req.body.longitude,
-      req
-    );
+    const latitude = parseCoordinate(req.body.latitude);
+    const longitude = parseCoordinate(req.body.longitude);
+
+    // Hand the parsed values back to the request so the log records the
+    // coordinates as used, in dot notation. A value that did not parse is
+    // left as the client sent it, so bad input stays visible in the log.
+    if (latitude !== null) req.body.latitude = latitude;
+    if (longitude !== null) req.body.longitude = longitude;
+
+    const geoResult = getCountryFromCoordinatesOrIP(latitude, longitude, req);
     const country = geoResult.country;
     const detectedIP = geoResult.detectedIP;
 
     let locationSource = 'unknown';
-    if (req.body.latitude && req.body.longitude) {
+    if (latitude !== null && longitude !== null) {
       locationSource = 'coordinates';
     } else if (country !== 'Unknown') {
       locationSource = 'ip';
@@ -171,7 +176,7 @@ const getId = async (req) => {
       )
       .catch((error) => {
         writeErrorLog(
-          `Naturalis API v2 lookup with token ${token} failed`,
+          `Naturalis API v2 lookup for the ${modelUsed} model failed`,
           error
         );
         throw error;
@@ -209,10 +214,13 @@ const getId = async (req) => {
       }
     }
 
-    const enrichmentPromises = taxa.map((pred) => enrichTaxon(pred, req, country));
+    const enrichmentDeadline = newDeadline();
+    const enrichmentPromises = taxa.map((pred) => enrichTaxon(pred, req, country, enrichmentDeadline));
     await Promise.race([
       Promise.allSettled(enrichmentPromises),
-      new Promise((resolve) => setTimeout(resolve, ENRICHMENT_RESPONSE_BUDGET_MS)),
+      new Promise((resolve) =>
+        setTimeout(resolve, Math.max(0, enrichmentDeadline - Date.now()) + ENRICHMENT_GRACE_MS)
+      ),
     ]);
 
     recognition.data.predictions[0].taxa.items = taxa;
@@ -228,8 +236,8 @@ const getId = async (req) => {
 
     const metadata = {
       country: country,
-      lat: req.body.latitude ? parseFloat(req.body.latitude) : undefined,
-      lon: req.body.longitude ? parseFloat(req.body.longitude) : undefined,
+      lat: latitude === null ? undefined : latitude,
+      lon: longitude === null ? undefined : longitude,
       date: req.body.date || new Date().toISOString()
     };
 

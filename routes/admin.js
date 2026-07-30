@@ -9,8 +9,14 @@ const {
   generateSecureToken
 } = require("../middleware/auth");
 const { writeErrorLog, writeAdminLog } = require("../services/logging");
-const { taxadir } = require("../services/taxon");
+const { watchBucket, unwatchBucket, listWatched } = require("../services/ipbucket");
+const { taxadir, resetTaxaIndex } = require("../services/taxon");
 const { logdir, VALID_MODELS } = require("../config/constants");
+
+const findTokens = (validTokens, prefix) =>
+  Object.keys(validTokens).filter(
+    (token) => token.startsWith(prefix) || token.substring(0, 8) === prefix
+  );
 
 module.exports = (app, upload) => {
   app.get("/admin/tokens", authLimiter, authenticateAdminToken, (req, res) => {
@@ -23,6 +29,9 @@ module.exports = (app, upload) => {
           application: validTokens[token].application,
           enabled: validTokens[token].enabled,
           created: validTokens[token].created,
+          signingRequired: !!validTokens[token].secret,
+          previousSecretAccepted: !!validTokens[token].previousSecret,
+          allowedOrigins: validTokens[token].allowedOrigins || [],
         };
         if (validTokens[token].model) {
           tokenInfo.model = validTokens[token].model;
@@ -80,6 +89,8 @@ module.exports = (app, upload) => {
         enabled: true,
         created: new Date().toISOString(),
         description: description ? description.trim() : `Token for ${name}`,
+        secret: generateSecureToken(),
+        secretUpdated: new Date().toISOString(),
       };
 
       if (model) {
@@ -97,11 +108,14 @@ module.exports = (app, upload) => {
       const response = {
         message: "Token created successfully",
         token: newToken,
+        secret: tokenData.secret,
         name: tokenData.name,
         application: tokenData.application,
         enabled: tokenData.enabled,
         created: tokenData.created,
-        warning: "Store this token securely. It will not be shown again in full.",
+        warning:
+          "Store the token and secret securely. Neither will be shown again. " +
+          "Requests with this token must be signed.",
       };
 
       if (model) {
@@ -120,6 +134,264 @@ module.exports = (app, upload) => {
         error: "Internal server error",
         message: "Unable to create token",
       });
+    }
+  });
+
+  app.post("/admin/tokens/:tokenPrefix/origins", authLimiter, authenticateAdminToken, (req, res) => {
+    try {
+      const validTokens = getValidTokens();
+      const found = findTokens(validTokens, req.params.tokenPrefix);
+
+      if (found.length === 0) {
+        return res.status(404).json({ error: "Token not found" });
+      }
+      if (found.length > 1) {
+        return res.status(400).json({
+          error: "Ambiguous token prefix",
+          message: `${found.length} tokens start with that prefix`,
+        });
+      }
+
+      let origin;
+      try {
+        origin = new URL(String(req.body.origin)).origin;
+      } catch {
+        return res.status(400).json({
+          error: "Bad request",
+          message: "origin must be a full URL, for example https://orakel.efugl.no",
+        });
+      }
+
+      const tokenData = validTokens[found[0]];
+      tokenData.allowedOrigins = tokenData.allowedOrigins || [];
+
+      if (!tokenData.allowedOrigins.includes(origin)) {
+        tokenData.allowedOrigins.push(origin);
+      }
+
+      const hadSecret = !!tokenData.secret;
+      delete tokenData.secret;
+      delete tokenData.previousSecret;
+      delete tokenData.secretUpdated;
+
+      if (!saveTokens()) {
+        return res.status(500).json({ error: "Unable to save token to file" });
+      }
+
+      res.status(200).json({
+        message:
+          `Requests with this token are now accepted only from its ` +
+          `${tokenData.allowedOrigins.length} registered origin(s)` +
+          (hadSecret ? ", and its secret has been retired since the two are alternatives" : ""),
+        token: found[0].substring(0, 8) + "...",
+        name: tokenData.name,
+        allowedOrigins: tokenData.allowedOrigins,
+        signingRequired: false,
+      });
+
+      writeAdminLog(
+        "Token origin added",
+        `Name: ${tokenData.name}, Origin: ${origin}, Secret retired: ${hadSecret}, Admin IP: ${req.ip}`
+      );
+    } catch (error) {
+      writeErrorLog("Error adding token origin", error);
+      res.status(500).json({ error: "Unable to add token origin" });
+    }
+  });
+
+  app.delete("/admin/tokens/:tokenPrefix/origins", authLimiter, authenticateAdminToken, (req, res) => {
+    try {
+      const validTokens = getValidTokens();
+      const found = findTokens(validTokens, req.params.tokenPrefix);
+
+      if (found.length === 0) {
+        return res.status(404).json({ error: "Token not found" });
+      }
+      if (found.length > 1) {
+        return res.status(400).json({
+          error: "Ambiguous token prefix",
+          message: `${found.length} tokens start with that prefix`,
+        });
+      }
+
+      let origin;
+      try {
+        origin = new URL(String(req.body.origin)).origin;
+      } catch {
+        return res.status(400).json({
+          error: "Bad request",
+          message: "origin must be a full URL, for example https://orakel.efugl.no",
+        });
+      }
+
+      const tokenData = validTokens[found[0]];
+      const before = (tokenData.allowedOrigins || []).length;
+      tokenData.allowedOrigins = (tokenData.allowedOrigins || []).filter((o) => o !== origin);
+
+      if (tokenData.allowedOrigins.length === 0) {
+        delete tokenData.allowedOrigins;
+      }
+
+      if (!saveTokens()) {
+        return res.status(500).json({ error: "Unable to save token to file" });
+      }
+
+      const remaining = tokenData.allowedOrigins || [];
+      res.status(200).json({
+        message: remaining.length
+          ? `Removed. ${remaining.length} origin(s) still registered.`
+          : before === 0
+            ? "That token had no registered origins"
+            : "Last origin removed. This token is now accepted from anywhere again.",
+        token: found[0].substring(0, 8) + "...",
+        name: tokenData.name,
+        allowedOrigins: remaining,
+      });
+
+      writeAdminLog(
+        "Token origin removed",
+        `Name: ${tokenData.name}, Origin: ${origin}, Admin IP: ${req.ip}`
+      );
+    } catch (error) {
+      writeErrorLog("Error removing token origin", error);
+      res.status(500).json({ error: "Unable to remove token origin" });
+    }
+  });
+
+  app.get("/admin/ipwatch", authLimiter, authenticateAdminToken, (req, res) => {
+    res.status(200).json({ buckets: listWatched() });
+  });
+
+  app.post("/admin/ipwatch/:bucket", authLimiter, authenticateAdminToken, (req, res) => {
+    const bucket = String(req.params.bucket).toLowerCase();
+
+    if (!/^[0-9a-f]{4}$/.test(bucket)) {
+      return res.status(400).json({
+        error: "Bad request",
+        message: "A bucket is four hexadecimal characters",
+      });
+    }
+
+    watchBucket(bucket);
+    res.status(200).json({
+      message: `Watching bucket ${bucket}. Full addresses go to ipwatch-${bucket}_<date>.csv until you stop.`,
+      buckets: listWatched(),
+    });
+
+    writeAdminLog("IP bucket watch started", `Bucket: ${bucket}, Admin IP: ${req.ip}`);
+  });
+
+  app.delete("/admin/ipwatch/:bucket", authLimiter, authenticateAdminToken, (req, res) => {
+    const bucket = String(req.params.bucket).toLowerCase();
+    const removed = unwatchBucket(bucket);
+
+    res.status(200).json({
+      message: removed ? `Stopped watching bucket ${bucket}` : `Bucket ${bucket} was not being watched`,
+      buckets: listWatched(),
+    });
+
+    if (removed) {
+      writeAdminLog("IP bucket watch stopped", `Bucket: ${bucket}, Admin IP: ${req.ip}`);
+    }
+  });
+
+  app.post("/admin/tokens/:tokenPrefix/secret", authLimiter, authenticateAdminToken, (req, res) => {
+    try {
+      const validTokens = getValidTokens();
+      const found = findTokens(validTokens, req.params.tokenPrefix);
+
+      if (found.length === 0) {
+        return res.status(404).json({ error: "Token not found" });
+      }
+      if (found.length > 1) {
+        return res.status(400).json({
+          error: "Ambiguous token prefix",
+          message: `${found.length} tokens start with that prefix`,
+        });
+      }
+
+      const fullToken = found[0];
+      const tokenData = validTokens[fullToken];
+      const replaced = tokenData.secret;
+
+      tokenData.secret = generateSecureToken();
+      tokenData.secretUpdated = new Date().toISOString();
+      if (replaced) {
+        tokenData.previousSecret = replaced;
+      }
+
+      if (!saveTokens()) {
+        return res.status(500).json({ error: "Unable to save token to file" });
+      }
+
+      res.status(200).json({
+        message: replaced
+          ? "Secret rotated. The previous secret stays valid until retired."
+          : "Secret created. Requests with this token must be signed from now on.",
+        token: fullToken.substring(0, 8) + "...",
+        name: tokenData.name,
+        application: tokenData.application,
+        secret: tokenData.secret,
+        previousSecretAccepted: !!replaced,
+        warning: "Store this secret securely. It will not be shown again.",
+      });
+
+      writeAdminLog(
+        replaced ? "Token secret rotated" : "Token secret created",
+        `Name: ${tokenData.name}, Application: ${tokenData.application}, Admin IP: ${req.ip}`
+      );
+    } catch (error) {
+      writeErrorLog("Error rotating token secret", error);
+      res.status(500).json({ error: "Unable to rotate token secret" });
+    }
+  });
+
+  app.delete("/admin/tokens/:tokenPrefix/secret/previous", authLimiter, authenticateAdminToken, (req, res) => {
+    try {
+      const validTokens = getValidTokens();
+      const found = findTokens(validTokens, req.params.tokenPrefix);
+
+      if (found.length === 0) {
+        return res.status(404).json({ error: "Token not found" });
+      }
+      if (found.length > 1) {
+        return res.status(400).json({
+          error: "Ambiguous token prefix",
+          message: `${found.length} tokens start with that prefix`,
+        });
+      }
+
+      const fullToken = found[0];
+      const tokenData = validTokens[fullToken];
+
+      if (!tokenData.previousSecret) {
+        return res.status(200).json({
+          message: "No previous secret to retire",
+          token: fullToken.substring(0, 8) + "...",
+          name: tokenData.name,
+        });
+      }
+
+      delete tokenData.previousSecret;
+
+      if (!saveTokens()) {
+        return res.status(500).json({ error: "Unable to save token to file" });
+      }
+
+      res.status(200).json({
+        message: "Previous secret retired. Only the current secret is accepted now.",
+        token: fullToken.substring(0, 8) + "...",
+        name: tokenData.name,
+        application: tokenData.application,
+      });
+
+      writeAdminLog(
+        "Token previous secret retired",
+        `Name: ${tokenData.name}, Application: ${tokenData.application}, Admin IP: ${req.ip}`
+      );
+    } catch (error) {
+      writeErrorLog("Error retiring previous token secret", error);
+      res.status(500).json({ error: "Unable to retire previous token secret" });
     }
   });
 
@@ -234,6 +506,8 @@ module.exports = (app, upload) => {
           }
         }
       }
+
+      resetTaxaIndex();
 
       const message = `Cleared ${deletedCount} cached taxa files${
         errorCount > 0 ? ` (${errorCount} errors)` : ""

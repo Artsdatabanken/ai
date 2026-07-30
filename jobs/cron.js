@@ -3,6 +3,7 @@ const fs = require("fs");
 const { uploadsdir } = require("../config/constants");
 const { writeErrorLog } = require("../services/logging");
 const { updateIpDatabase } = require("../services/geolocation");
+const { pruneTaxonCache, refreshListVersions } = require("../services/taxon");
 
 const setupCronJobs = () => {
   cron.schedule("30 * * * *", () => {
@@ -16,7 +17,7 @@ const setupCronJobs = () => {
           if (time_between >= survival_length) {
             fs.unlink(`${uploadsdir}/${file}`, (err) => {
               if (err) {
-                console.log("could not delete file: " + filename);
+                console.log("could not delete file: " + file);
               }
             });
           }
@@ -32,6 +33,22 @@ const setupCronJobs = () => {
       console.log("GeoIP database update completed");
     } catch (error) {
       writeErrorLog("Failed to update GeoIP database", error);
+    }
+  });
+
+  cron.schedule("0 5 * * 1", async () => {
+    try {
+      await refreshListVersions();
+    } catch (error) {
+      writeErrorLog("Failed to refresh the published list versions", error);
+    }
+  });
+
+  cron.schedule("0 4 * * *", async () => {
+    try {
+      await pruneTaxonCache();
+    } catch (error) {
+      writeErrorLog("Failed to prune the taxon cache", error);
     }
   });
 };
