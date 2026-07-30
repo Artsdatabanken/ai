@@ -110,7 +110,9 @@ const authenticateApiToken = (req, res, next) => {
       token: token,
       name: validTokens[token].name,
       application: validTokens[token].application,
-      model: validTokens[token].model
+      model: validTokens[token].model,
+      secret: validTokens[token].secret,
+      previousSecret: validTokens[token].previousSecret
     };
     return next();
   }

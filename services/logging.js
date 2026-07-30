@@ -1,6 +1,8 @@
 const fs = require("fs");
 const sanitize = require("sanitize-filename");
 const { logdir } = require("../config/constants");
+const { getClientIP } = require("./clientip");
+const { bucketFor, isWatched } = require("./ipbucket");
 
 const dateStr = (resolution = "d", date = false) => {
   if (!date) {
@@ -41,6 +43,20 @@ const writeErrorLog = (message, error) => {
   });
 };
 
+const requestOrigin = (req) => {
+  const origin = req.headers?.origin;
+  if (origin) return origin.replace(/"/g, "");
+
+  const referer = req.headers?.referer;
+  if (!referer) return "";
+
+  try {
+    return new URL(referer).origin;
+  } catch {
+    return "";
+  }
+};
+
 const writelog = (req, json, auth = null) => {
   let application;
 
@@ -61,9 +77,19 @@ const writelog = (req, json, auth = null) => {
     const longitude = req.body.longitude || "";
     const country = json.modelInfo ? json.modelInfo.country : "";
     const model = json.modelInfo ? json.modelInfo.model : "";
-    const clientIP = json.modelInfo && json.modelInfo.detectedIP ? json.modelInfo.detectedIP : "";
+    const clientIP = getClientIP(req);
+    const bucket = bucketFor(clientIP);
+    const origin = requestOrigin(req);
 
-    let row = `${dateStr("s")},"${clientIP}","${latitude}","${longitude}","${country}","${model}",${
+    if (isWatched(bucket)) {
+      const watchRow =
+        `${dateStr("s")},"${clientIP}","${origin}","${logPrefix}","${req.headers?.["user-agent"] || ""}"\n`;
+      fs.appendFile(`${logdir}/ipwatch-${bucket}_${dateStr("d")}.csv`, watchRow, (err) => {
+        if (err) console.error("Failed to write IP watch log:", err.message);
+      });
+    }
+
+    let row = `${dateStr("s")},"${bucket}","${origin}","${latitude}","${longitude}","${country}","${model}",${
       Array.isArray(req.files) ? req.files.length : 0
     }`;
 
@@ -83,7 +109,8 @@ const writelog = (req, json, auth = null) => {
     if (err) {
       const header =
         "Datetime," +
-        "IP," +
+        "IP_bucket," +
+        "Origin," +
         "Latitude," +
         "Longitude," +
         "Country," +

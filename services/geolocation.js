@@ -1,6 +1,7 @@
 const CountryCoder = require("@rapideditor/country-coder");
 const IPCountryLookup = require("../ipCountryLookup");
 const { writeErrorLog } = require("./logging");
+const { getClientIP } = require("./clientip");
 
 const ipLookup = new IPCountryLookup();
 let ipLookupReady = false;
@@ -43,40 +44,6 @@ const parseCoordinate = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-
-const getClientIP = (req) => {
-  const realIP =
-    req.headers["x-real-ip"] ||
-    req.headers["x-forwarded-for"]?.split(",")[0].trim() ||
-    req.headers["cf-connecting-ip"] ||
-    req.headers["x-client-ip"] ||
-    req.headers["true-client-ip"] ||
-    req.headers["x-cluster-client-ip"] ||
-    req.ip ||
-    req.socket?.remoteAddress;
-
-  if (!realIP) {
-    console.warn("Warning: Could not determine client IP");
-    return "unknown";
-  }
-
-  let cleanIP = realIP.replace(/^::ffff:/, "").trim();
-  const ipv4PortMatch = cleanIP.match(/^(\d+\.\d+\.\d+\.\d+):\d+$/);
-  if (ipv4PortMatch) {
-    cleanIP = ipv4PortMatch[1];
-  }
-
-  // "[2001:db8::1]:443" - proxies bracket IPv6 when they append a port
-  const ipv6BracketMatch = cleanIP.match(/^\[(.+)\](:\d+)?$/);
-  if (ipv6BracketMatch) {
-    cleanIP = ipv6BracketMatch[1];
-  }
-
-  // Zone index, e.g. "fe80::1%eth0"
-  cleanIP = cleanIP.replace(/%.*$/, "");
-
-  return cleanIP;
-};
 
 const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
   try {
