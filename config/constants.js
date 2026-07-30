@@ -14,12 +14,16 @@ const probeCacheDir = (dir) => {
   }
 };
 
-const preferredCacheDir = process.env.CACHE_DIR || "/home/cache";
+const preferredCacheDir = process.env.CACHE_DIR || "./cache";
 let cachedir = preferredCacheDir;
+let cacheIsPersistent = true;
 if (!probeCacheDir(cachedir)) {
-  console.warn(`Cache dir "${cachedir}" is not writable, falling back to "./cache"`);
-  cachedir = "./cache";
-  probeCacheDir(cachedir);
+  console.warn(`Cache dir "${cachedir}" is not writable`);
+  cacheIsPersistent = false;
+  if (cachedir !== "./cache") {
+    cachedir = "./cache";
+    probeCacheDir(cachedir);
+  }
 }
 
 const taxadir = `${cachedir}/taxa`;
@@ -78,6 +82,8 @@ const capitalizeFirstLetter = (str) => {
 module.exports = {
   logdir,
   cachedir,
+  cacheIsPersistent,
+  preferredCacheDir,
   taxadir,
   pictureFile,
   uploadsdir,

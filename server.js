@@ -7,7 +7,13 @@ const dotenv = require("dotenv");
 dotenv.config({ path: "./config/config.env", quiet: true });
 dotenv.config({ path: "./auth/secrets.env", quiet: true });
 
-const { logdir, uploadsdir } = require("./config/constants");
+const {
+  logdir,
+  uploadsdir,
+  cachedir,
+  cacheIsPersistent,
+  preferredCacheDir
+} = require("./config/constants");
 const { writeErrorLog } = require("./services/logging");
 
 process.on("uncaughtException", (error) => {
@@ -107,6 +113,30 @@ taxonRoutes(app);
 miscRoutes(app, upload);
 
 setupCronJobs();
+
+if (!cacheIsPersistent) {
+  writeErrorLog(
+    `Cache dir "${preferredCacheDir}" is not writable` +
+    (cachedir === preferredCacheDir ? "" : `, using "${cachedir}" instead`) +
+    `. Nothing can be cached, so every request refetches and slow ones fall ` +
+    `back to scientific names.`
+  );
+}
+
+const persistenceStamp = `${cachedir}/.persistence`;
+try {
+  const writtenAt = Number(fs.readFileSync(persistenceStamp, "utf8").trim());
+  const ageHours = ((Date.now() - writtenAt) / (1000 * 60 * 60)).toFixed(1);
+  console.log(`Taxon cache survived the restart (stamp written ${ageHours}h ago)`);
+} catch {
+  writeErrorLog(
+    `No cache persistence stamp in "${cachedir}". Either this is the first ` +
+    `start after deploying this version, or the restart wiped the cache. If ` +
+    `this line appears on every restart the cache is not persistent, and ` +
+    `users get scientific names until it refills each time.`
+  );
+}
+fs.writeFileSync(persistenceStamp, String(Date.now()));
 
 reloadTaxonImages().catch((error) =>
   writeErrorLog("Failed to reload taxon images on startup", error)

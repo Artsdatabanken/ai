@@ -3,6 +3,7 @@ const fs = require("fs");
 const { uploadsdir } = require("../config/constants");
 const { writeErrorLog } = require("../services/logging");
 const { updateIpDatabase } = require("../services/geolocation");
+const { pruneTaxonCache } = require("../services/taxon");
 
 const setupCronJobs = () => {
   cron.schedule("30 * * * *", () => {
@@ -32,6 +33,14 @@ const setupCronJobs = () => {
       console.log("GeoIP database update completed");
     } catch (error) {
       writeErrorLog("Failed to update GeoIP database", error);
+    }
+  });
+
+  cron.schedule("0 4 * * *", async () => {
+    try {
+      await pruneTaxonCache();
+    } catch (error) {
+      writeErrorLog("Failed to prune the taxon cache", error);
     }
   });
 };

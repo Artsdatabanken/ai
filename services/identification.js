@@ -3,13 +3,13 @@ const FormData = require("form-data");
 const stream = require("stream");
 const { server_url } = require("../config/constants");
 const { writeErrorLog } = require("./logging");
-const { getName, getPicture } = require("./taxon");
+const { getName, getPicture, newDeadline } = require("./taxon");
 const { getCountryFromCoordinatesOrIP, parseCoordinate } = require("./geolocation");
 const { getWarnings } = require("./warnings");
 
-const ENRICHMENT_RESPONSE_BUDGET_MS = 1000;
+const ENRICHMENT_GRACE_MS = 250;
 
-const enrichTaxon = async (pred, req, country) => {
+const enrichTaxon = async (pred, req, country, deadline) => {
   try {
     if (
       req.body.application &&
@@ -20,7 +20,7 @@ const enrichTaxon = async (pred, req, country) => {
       let splitId = pred.scientific_name_id.split(":")
       let sciNameId = (splitId[0] === "NBIC" ? splitId[1] : null)
 
-      const nameResult = await getName(sciNameId, pred.scientific_name, false, country);
+      const nameResult = await getName(sciNameId, pred.scientific_name, false, country, deadline);
 
       pred.vernacularName = nameResult.vernacularName
       pred.vernacularNames = nameResult.vernacularNames
@@ -214,10 +214,13 @@ const getId = async (req) => {
       }
     }
 
-    const enrichmentPromises = taxa.map((pred) => enrichTaxon(pred, req, country));
+    const enrichmentDeadline = newDeadline();
+    const enrichmentPromises = taxa.map((pred) => enrichTaxon(pred, req, country, enrichmentDeadline));
     await Promise.race([
       Promise.allSettled(enrichmentPromises),
-      new Promise((resolve) => setTimeout(resolve, ENRICHMENT_RESPONSE_BUDGET_MS)),
+      new Promise((resolve) =>
+        setTimeout(resolve, Math.max(0, enrichmentDeadline - Date.now()) + ENRICHMENT_GRACE_MS)
+      ),
     ]);
 
     recognition.data.predictions[0].taxa.items = taxa;

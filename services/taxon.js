@@ -15,6 +15,28 @@ const { writeErrorLog } = require("./logging");
 const apiTimeout = 20000;
 const NEGATIVE_CACHE_TTL_MS = 60 * 60 * 1000;
 
+const ENRICHMENT_BUDGET_MS = 5000;
+
+const RECACHE_BUDGET_MS = 60000;
+
+const newDeadline = (budgetMs = ENRICHMENT_BUDGET_MS) => Date.now() + budgetMs;
+
+const timeLeft = (deadline) => Math.max(1, Math.min(apiTimeout, deadline - Date.now()));
+
+const CACHE_WRITE_ERROR_INTERVAL_MS = 60 * 60 * 1000;
+let lastCacheWriteErrorAt = 0;
+
+const reportCacheWriteFailure = (filepath, error) => {
+  if (Date.now() - lastCacheWriteErrorAt < CACHE_WRITE_ERROR_INTERVAL_MS) return;
+  lastCacheWriteErrorAt = Date.now();
+  writeErrorLog(
+    `Could not write taxon cache entry "${filepath}". Nothing is being cached, ` +
+    `so every request refetches and slow ones fall back to scientific names. ` +
+    `Further write failures are suppressed for an hour.`,
+    error
+  );
+};
+
 const bareNameResult = (sciName) => ({
   vernacularName: sciName,
   vernacularNames: {},
@@ -29,13 +51,14 @@ const writeNegativeCache = (sciNameId, sciName, nameResult) => {
   const filename = sciNameId
     ? `${sciNameId}_${nameResult.scientificName}`
     : `_${sciName}`;
-  const jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
+  const basename = `${encodeURIComponent(filename)}.json`;
   fsp
     .writeFile(
-      jsonfilename,
+      `${taxadir}/${basename}`,
       JSON.stringify({ ...nameResult, notFound: true, cachedAt: Date.now() })
     )
-    .catch(() => {});
+    .catch((error) => reportCacheWriteFailure(`${taxadir}/${basename}`, error));
+  rememberCacheFile(sciNameId, basename);
 };
 
 let taxonPics = {};
@@ -56,7 +79,6 @@ const getListVersions = async () => {
       }
     }
   } catch {}
-
 
   const currentYear = new Date().getFullYear();
   const versions = {
@@ -130,6 +152,36 @@ const TARGET_LANGUAGES = ['sv', 'nl', 'en', 'es'];
 
 const stripInternal = ({ _pending, _assessmentId, ...clean }) => clean;
 
+let taxaIndex = null;
+
+const indexKey = (sciNameId) => encodeURIComponent(sciNameId);
+
+const getTaxaIndex = async () => {
+  if (taxaIndex) return taxaIndex;
+
+  const index = new Map();
+  try {
+    for (const file of await fsp.readdir(taxadir)) {
+      if (!file.endsWith('.json') || file.startsWith('_')) continue;
+      const separator = file.indexOf('_');
+      if (separator > 0) {
+        index.set(file.slice(0, separator), file);
+      }
+    }
+  } catch {}
+
+  taxaIndex = index;
+  return taxaIndex;
+};
+
+const rememberCacheFile = (sciNameId, filename) => {
+  if (taxaIndex && sciNameId) taxaIndex.set(indexKey(sciNameId), filename);
+};
+
+const forgetCacheFile = (sciNameId) => {
+  if (taxaIndex && sciNameId) taxaIndex.delete(indexKey(sciNameId));
+};
+
 const applyCountryCategories = (nameResult, country) => {
   if (country === 'NO') {
     if (nameResult?.redListCategories?.NO) {
@@ -142,7 +194,13 @@ const applyCountryCategories = (nameResult, country) => {
   return nameResult;
 };
 
-const getName = async (sciNameId, sciName, force = false, country = null) => {
+const getName = async (
+  sciNameId,
+  sciName,
+  force = false,
+  country = null,
+  deadline = newDeadline(force ? RECACHE_BUDGET_MS : ENRICHMENT_BUDGET_MS)
+) => {
   const listVersions = await getListVersions();
 
   let nameResult = null;
@@ -150,11 +208,9 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
   let itemsToResolve = null;
 
   if (sciNameId) {
-    const pattern = `${encodeURIComponent(sciNameId)}_`;
-    let files = [];
-    try {
-      files = (await fsp.readdir(taxadir)).filter(f => f.startsWith(pattern) && f.endsWith('.json'));
-    } catch {}
+    const index = await getTaxaIndex();
+    const indexedFile = index.get(indexKey(sciNameId));
+    const files = indexedFile ? [indexedFile] : [];
 
     if (files.length > 0) {
       const existingFile = `${taxadir}/${files[0]}`;
@@ -179,6 +235,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
       }
 
       if (!itemsToResolve) {
+        forgetCacheFile(sciNameId);
         for (const f of files) {
           const filepath = `${taxadir}/${f}`;
           fsp.unlink(filepath).catch((error) => {
@@ -242,7 +299,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         );
         scientificNameIdObject = await axios
           .get(url, {
-            timeout: apiTimeout,
+            timeout: timeLeft(deadline),
             headers: {
               'Accept-Encoding': 'gzip',
               'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0'
@@ -277,7 +334,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         );
         resourceObject = await axios
           .get(url, {
-            timeout: apiTimeout,
+            timeout: timeLeft(deadline),
             headers: {
               'Accept-Encoding': 'gzip',
               'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0'
@@ -311,7 +368,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
         );
         let taxon = await axios
           .get(url, {
-            timeout: apiTimeout,
+            timeout: timeLeft(deadline),
             headers: {
               'Accept-Encoding': 'gzip',
               'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0'
@@ -350,7 +407,7 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
           );
           scientificNameIdObject = await axios
             .get(url, {
-              timeout: apiTimeout,
+              timeout: timeLeft(deadline),
               headers: {
                 'Accept-Encoding': 'gzip',
                 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0'
@@ -442,190 +499,168 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
 
   const erroredItems = new Set();
 
-  const langsWanted = itemsToResolve.filter(item => TARGET_LANGUAGES.includes(item));
-  if (langsWanted.length) {
+  const candidates = {};
+  const addCandidate = (lang, source, value) => {
+    if (!value) return;
+    candidates[lang] = candidates[lang] || {};
+    candidates[lang][source] = value;
+  };
 
-    if (langsWanted.includes('sv') && !nameResult.vernacularNames.sv) {
+  const langsWanted = itemsToResolve.filter(item => TARGET_LANGUAGES.includes(item));
+  const langsMissing = langsWanted.filter(lang => !nameResult.vernacularNames[lang]);
+  const lookups = [];
+
+  if (langsMissing.includes('sv')) {
+    lookups.push((async () => {
       try {
         const swedishUrl = encodeURI(`https://api.artdatabanken.se/taxonservice/v1/taxa/names?searchString=${nameResult.scientificName}&searchFields=Scientific&isRecommended=Yes&culture=sv_SE&page=1`);
-        const swedishResponse = await axios
-          .get(swedishUrl, {
-            timeout: apiTimeout,
-            headers: {
-              'Accept-Encoding': 'gzip',
-              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)',
-              'Ocp-Apim-Subscription-Key': process.env.ARTDATABANKEN_TOKEN
-            }
-          })
-          .catch((error) => {
-            console.log(`Failed to get Swedish name for ${nameResult.scientificName}:`, error.message);
-            erroredItems.add('sv');
-            return null;
-          });
+        const swedishResponse = await axios.get(swedishUrl, {
+          timeout: timeLeft(deadline),
+          headers: {
+            'Accept-Encoding': 'gzip',
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)',
+            'Ocp-Apim-Subscription-Key': process.env.ARTDATABANKEN_TOKEN
+          }
+        });
 
-        if (swedishResponse?.data?.data && Array.isArray(swedishResponse.data.data)) {
+        if (Array.isArray(swedishResponse?.data?.data)) {
           const matchingTaxon = swedishResponse.data.data.find(
             item => item.name &&
               item.name.toLowerCase() === nameResult.scientificName.toLowerCase()
           );
-
-          if (matchingTaxon?.taxonInformation?.recommendedSwedishName) {
-            nameResult.vernacularNames.sv = matchingTaxon.taxonInformation.recommendedSwedishName;
-          }
+          addCandidate('sv', 'swedish', matchingTaxon?.taxonInformation?.recommendedSwedishName);
         }
       } catch (error) {
-        console.log(`Error fetching Swedish name for ${nameResult.scientificName}:`, error.message);
+        console.log(`Failed to get Swedish name for ${nameResult.scientificName}:`, error.message);
         erroredItems.add('sv');
       }
-    }
+    })());
+  }
 
-
-    const langsForINat = langsWanted.filter(lang => !nameResult.vernacularNames[lang]);
-    for (const lang of langsForINat) {
+  for (const lang of langsMissing) {
+    lookups.push((async () => {
       try {
         const iNatUrl = encodeURI(`https://api.inaturalist.org/v1/taxa/autocomplete?q=${nameResult.scientificName.replace(' ', '+')}&per_page=1&locale=${lang}`);
-        const iNatResponse = await axios
-          .get(iNatUrl, {
-            timeout: apiTimeout,
-            headers: {
-              'Accept-Encoding': 'gzip',
-              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
-            }
-          })
-          .catch((error) => {
-            console.log(`Failed to get iNaturalist ${lang} name for ${nameResult.scientificName}:`, error.message);
-            erroredItems.add(lang);
-            return null;
-          });
+        const iNatResponse = await axios.get(iNatUrl, {
+          timeout: timeLeft(deadline),
+          headers: {
+            'Accept-Encoding': 'gzip',
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
+          }
+        });
 
-        if (iNatResponse?.data?.results && Array.isArray(iNatResponse.data.results)) {
+        if (Array.isArray(iNatResponse?.data?.results)) {
           const result = iNatResponse.data.results.find(
             item => item.name &&
               item.name.toLowerCase() === nameResult.scientificName.toLowerCase() &&
               item.preferred_common_name
           );
-
-          if (result?.preferred_common_name) {
-            nameResult.vernacularNames[lang] = result.preferred_common_name;
-          }
+          addCandidate(lang, 'inat', result?.preferred_common_name);
         }
       } catch (error) {
-        console.log(`Error fetching iNaturalist ${lang} name for ${nameResult.scientificName}:`, error.message);
+        console.log(`Failed to get iNaturalist ${lang} name for ${nameResult.scientificName}:`, error.message);
         erroredItems.add(lang);
       }
-    }
+    })());
+  }
 
-
-    const remainingLangs = langsWanted.filter(lang => !nameResult.vernacularNames[lang]);
-    if (remainingLangs.length > 0) {
+  if (langsMissing.length) {
+    lookups.push((async () => {
       try {
         const wikiSpeciesUrl = encodeURI(`https://species.wikimedia.org/w/api.php?action=query&titles=${nameResult.scientificName}&prop=langlinks&lllimit=500&format=json`);
-        const wikiResponse = await axios
-          .get(wikiSpeciesUrl, {
-            timeout: apiTimeout,
-            headers: {
-              'Accept-Encoding': 'gzip',
-              'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
-            }
-          })
-          .catch((error) => {
-            console.log(`Failed to get Wikipedia names for ${nameResult.scientificName}:`, error.message);
-            remainingLangs.forEach(lang => erroredItems.add(lang));
-            return null;
-          });
+        const wikiResponse = await axios.get(wikiSpeciesUrl, {
+          timeout: timeLeft(deadline),
+          headers: {
+            'Accept-Encoding': 'gzip',
+            'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
+          }
+        });
 
         const pages = wikiResponse?.data?.query?.pages;
         if (pages) {
           for (const page of Object.values(pages)) {
             for (const link of page.langlinks || []) {
-              if (remainingLangs.includes(link.lang) && !nameResult.vernacularNames[link.lang]) {
-                let cleanTitle = link['*'].replace(/\s*\([^)]*\)/g, '').trim();
+              if (langsMissing.includes(link.lang)) {
+                const cleanTitle = link['*'].replace(/\s*\([^)]*\)/g, '').trim();
                 if (cleanTitle && cleanTitle !== nameResult.scientificName) {
-                  nameResult.vernacularNames[link.lang] = cleanTitle;
+                  addCandidate(link.lang, 'wiki', cleanTitle);
                 }
               }
             }
           }
         }
       } catch (error) {
-        console.log(`Error fetching Wikipedia names for ${nameResult.scientificName}:`, error.message);
-        remainingLangs.forEach(lang => erroredItems.add(lang));
+        console.log(`Failed to get Wikipedia names for ${nameResult.scientificName}:`, error.message);
+        langsMissing.forEach(lang => erroredItems.add(lang));
       }
-    }
-
+    })());
   }
 
   if (itemsToResolve.includes('redlist') && assessmentId) {
-    try {
-      let url = encodeURI(
+    lookups.push((async () => {
+      const url = encodeURI(
         `https://lister.artsdatabanken.no/odata/v1/speciesassessment${listVersions.Redlist}?filter=ScientificNameId eq ${assessmentId}&select=category`
       );
-      const redListObject = await axios
-        .get(url, {
-          timeout: apiTimeout,
+      try {
+        const redListObject = await axios.get(url, {
+          timeout: timeLeft(deadline),
           headers: {
             'Accept-Encoding': 'gzip',
             'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
           }
-        })
-        .catch((error) => {
-          writeErrorLog(
-            `Failed to ${!force ? "get info for" : "*recache*"
-            } ${sciName} from ${url}.`,
-            error
-          );
-          throw error;
         });
 
-      if (redListObject.data?.value?.length) {
-        nameResult.redListCategories.NO = redListObject.data.value[0].category;
+        if (redListObject.data?.value?.length) {
+          nameResult.redListCategories.NO = redListObject.data.value[0].category;
+        }
+      } catch (error) {
+        writeErrorLog(
+          `Error in getName(${sciNameId}) for redListObject from ${url}. Retry: ${encodeURI(
+            server_url + "/admin/taxon/reload/id/" + sciNameId
+          )}.`,
+          error
+        );
+        erroredItems.add('redlist');
       }
-    }
-    catch (error) {
-      writeErrorLog(
-        `Error in getName(${sciNameId}) for redListObject. Retry: ${encodeURI(
-          server_url + "/admin/taxon/reload/id/" + sciNameId
-        )}.`,
-        error
-      );
-      erroredItems.add('redlist');
-    }
+    })());
   }
 
   if (itemsToResolve.includes('alien') && assessmentId) {
-    try {
-      let url = encodeURI(
+    lookups.push((async () => {
+      const url = encodeURI(
         `https://lister.artsdatabanken.no/odata/v1/alienspeciesassessment${listVersions.AlienSpeciesList}?filter=scientificName/ScientificNameId eq ${assessmentId}&select=category`
       );
-      const alienSpeciesListObject = await axios
-        .get(url, {
-          timeout: apiTimeout,
+      try {
+        const alienSpeciesListObject = await axios.get(url, {
+          timeout: timeLeft(deadline),
           headers: {
             'Accept-Encoding': 'gzip',
             'User-Agent': 'Artsorakel backend bot/4.0 (https://www.artsdatabanken.no)'
           }
-        })
-        .catch((error) => {
-          writeErrorLog(
-            `Failed to ${!force ? "get info for" : "*recache*"
-            } ${sciName} from ${url}.`,
-            error
-          );
-          throw error;
         });
 
-      if (alienSpeciesListObject.data?.value?.length) {
-        nameResult.invasiveCategories.NO = alienSpeciesListObject.data.value[0].category;
+        if (alienSpeciesListObject.data?.value?.length) {
+          nameResult.invasiveCategories.NO = alienSpeciesListObject.data.value[0].category;
+        }
+      } catch (error) {
+        writeErrorLog(
+          `Error in getName(${sciNameId}) for alienSpeciesListObject from ${url}. Retry: ${encodeURI(
+            server_url + "/admin/taxon/reload/id/" + sciNameId
+          )}.`,
+          error
+        );
+        erroredItems.add('alien');
       }
-    }
-    catch (error) {
-      writeErrorLog(
-        `Error in getName(${sciNameId}) for alienSpeciesListObject. Retry: ${encodeURI(
-          server_url + "/admin/taxon/reload/id/" + sciNameId
-        )}.`,
-        error
-      );
-      erroredItems.add('alien');
+    })());
+  }
+
+  await Promise.allSettled(lookups);
+
+  for (const lang of langsMissing) {
+    if (nameResult.vernacularNames[lang]) continue;
+    const found = candidates[lang];
+    if (found) {
+      nameResult.vernacularNames[lang] = found.swedish || found.inat || found.wiki;
     }
   }
 
@@ -648,31 +683,89 @@ const getName = async (sciNameId, sciName, force = false, country = null) => {
 
   let jsonfilename;
   if (sciNameId) {
-    const filename = `${sciNameId}_${cleanResult.scientificName}`;
-    jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
+    const basename = `${encodeURIComponent(`${sciNameId}_${cleanResult.scientificName}`)}.json`;
+    jsonfilename = `${taxadir}/${basename}`;
 
-    const pattern = `${encodeURIComponent(sciNameId)}_`;
-    try {
-      const siblings = (await fsp.readdir(taxadir)).filter(
-        f => f.startsWith(pattern) && f.endsWith('.json')
-      );
-      for (const f of siblings) {
-        const filepath = `${taxadir}/${f}`;
-        if (filepath !== jsonfilename) {
-          fsp.unlink(filepath).catch((error) => {
-            writeErrorLog(`Could not delete "${filepath}" while writing new cache entry`, error);
-          });
-        }
-      }
-    } catch {}
+    const index = await getTaxaIndex();
+    const previous = index.get(indexKey(sciNameId));
+    if (previous && previous !== basename) {
+      const filepath = `${taxadir}/${previous}`;
+      fsp.unlink(filepath).catch((error) => {
+        writeErrorLog(`Could not delete "${filepath}" while writing new cache entry`, error);
+      });
+    }
+    rememberCacheFile(sciNameId, basename);
   } else {
     const filename = `_${sciName}`;
     jsonfilename = `${taxadir}/${encodeURIComponent(filename)}.json`;
   }
 
-  fsp.writeFile(jsonfilename, JSON.stringify(toWrite)).catch(() => {});
+  fsp.writeFile(jsonfilename, JSON.stringify(toWrite)).catch((error) => reportCacheWriteFailure(jsonfilename, error));
 
   return applyCountryCategories(cleanResult, country);
+};
+
+const RECACHE_SAMPLE_RATE = 0.25;
+const RECACHE_AFTER_DAYS = 10;
+const FORCE_RECACHE_AFTER_DAYS = 15;
+const CACHE_MAX_AGE_DAYS = 60;
+
+const pruneTaxonCache = async (maxAgeDays = CACHE_MAX_AGE_DAYS) => {
+  const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1000;
+
+  let files = [];
+  try {
+    files = await fsp.readdir(taxadir);
+  } catch {
+    return 0;
+  }
+
+  let removed = 0;
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue;
+    const filepath = `${taxadir}/${file}`;
+    try {
+      const stats = await fsp.stat(filepath);
+      if (stats.mtimeMs >= cutoff) continue;
+      await fsp.unlink(filepath);
+      removed++;
+      if (taxaIndex && !file.startsWith('_')) {
+        const separator = file.indexOf('_');
+        if (separator > 0) taxaIndex.delete(file.slice(0, separator));
+      }
+    } catch (error) {
+      writeErrorLog(`Could not prune "${filepath}"`, error);
+    }
+  }
+
+  if (removed) {
+    console.log(`Pruned ${removed} taxon cache entries older than ${maxAgeDays} days`);
+  }
+  return removed;
+};
+
+const maybeRecache = async (sciNameId, sciName) => {
+  let basename;
+  if (sciNameId) {
+    basename = (await getTaxaIndex()).get(indexKey(sciNameId));
+  } else if (sciName) {
+    basename = `${encodeURIComponent(`_${sciName}`)}.json`;
+  }
+  if (!basename) return false;
+
+  let ageDays;
+  try {
+    const stats = await fsp.stat(`${taxadir}/${basename}`);
+    ageDays = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60 * 24);
+  } catch {
+    return false;
+  }
+
+  if (ageDays <= RECACHE_AFTER_DAYS) return false;
+  if (ageDays <= FORCE_RECACHE_AFTER_DAYS && Math.random() >= RECACHE_SAMPLE_RATE) return false;
+
+  await getName(sciNameId, sciName, true);
+  return true;
 };
 
 const reloadTaxonImages = async () => {
@@ -718,6 +811,10 @@ module.exports = {
   getName,
   getPicture,
   getTaxonPics,
+  maybeRecache,
+  pruneTaxonCache,
   reloadTaxonImages,
+  newDeadline,
+  ENRICHMENT_BUDGET_MS,
   taxadir
 };
