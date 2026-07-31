@@ -46,6 +46,37 @@ if (branch === "master") {
   server_url = "https://ai.artsdatabanken.no";
 }
 
+// Resolved from the refs rather than FETCH_HEAD, which is absent or nameless
+// depending on how the build system checked the repository out
+const resolveCommit = () => {
+  let head;
+  try {
+    head = fs.readFileSync(headfile, "utf8").trim();
+  } catch {
+    return "gitless";
+  }
+
+  if (!head.startsWith("ref:")) {
+    return head.substring(0, 7);
+  }
+
+  const ref = head.substring(4).trim();
+
+  try {
+    return fs.readFileSync(`.git/${ref}`, "utf8").trim().substring(0, 7);
+  } catch {}
+
+  try {
+    const packed = fs.readFileSync(".git/packed-refs", "utf8").split("\n");
+    const line = packed.find((l) => l.endsWith(` ${ref}`));
+    if (line) return line.split(" ")[0].substring(0, 7);
+  } catch {}
+
+  return "unknown";
+};
+
+const commit = resolveCommit();
+
 let warningsConfig = [];
 try {
   warningsConfig = JSON.parse(fs.readFileSync("./config/warnings.json", "utf8"));
@@ -91,6 +122,7 @@ module.exports = {
   TOKENS_FILE,
   VALID_MODELS,
   branch,
+  commit,
   server_url,
   warningsConfig,
   groupNameTranslations,
