@@ -4,31 +4,16 @@ const express = require("express");
 const { apiLimiter } = require("../middleware/rateLimiters");
 const { writeErrorLog, dateStr } = require("../services/logging");
 const { saveImagesAndGetToken, decrypt } = require("../services/encryption");
-const { branch, uploadsdir } = require("../config/constants");
+const { branch, commit, uploadsdir } = require("../config/constants");
 
 module.exports = (app, upload) => {
   app.get("/", apiLimiter, (req, res) => {
-    let v = "Gitless";
-
-    if (branch) {
-      const gitfile = ".git/FETCH_HEAD";
-      if (fs.existsSync(gitfile)) {
-        v = fs
-          .readFileSync(gitfile)
-          .toString()
-          .split("\n")
-          .find((x) => x.includes(branch));
-        if (v) {
-          v = v.split("\t")[0];
-        }
-      }
-    }
-
     fs.stat("./server.js", function (err, stats) {
+      const built = err ? "unknown" : dateStr("s", stats.mtime);
       res
         .status(200)
         .send(
-          `<h3>Aiaiai!</h3><hr/>${v} (${branch})<br/>${dateStr("s", stats.mtime)}`
+          `<h3>Aiaiai!</h3><hr/>${commit} (${branch || "unknown"})<br/>${built}`
         );
     });
   });
