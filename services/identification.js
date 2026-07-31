@@ -9,6 +9,8 @@ const { getWarnings } = require("./warnings");
 
 const ENRICHMENT_GRACE_MS = 250;
 
+const COUNTRY_FOR_MODEL = { Norwegian: "NO", Swedish: "SE" };
+
 const enrichTaxon = async (pred, req, country, deadline) => {
   try {
     if (
@@ -104,7 +106,7 @@ const getId = async (req) => {
     if (longitude !== null) req.body.longitude = longitude;
 
     const geoResult = getCountryFromCoordinatesOrIP(latitude, longitude, req);
-    const country = geoResult.country;
+    let country = geoResult.country;
     const detectedIP = geoResult.detectedIP;
 
     let locationSource = 'unknown';
@@ -137,7 +139,15 @@ const getId = async (req) => {
     if (tokenModelRestriction) {
       token = selectModelCredentials(tokenModelRestriction);
       modelUsed = tokenModelRestriction;
-      locationSource = 'token';
+
+      // A token pinned to a national model has already stated where its
+      // callers are, so the address it happens to connect from says nothing.
+      // Coordinates still win - they describe the observation, not the caller.
+      const pinnedCountry = COUNTRY_FOR_MODEL[tokenModelRestriction];
+      if (pinnedCountry && locationSource !== 'coordinates') {
+        country = pinnedCountry;
+        locationSource = 'token';
+      }
     } else if (receivedParams.includes('model') && req.body.model && req.body.model.toLowerCase() === "global") {
       token = process.env.NATURALIS_TOKEN_EUROPE;
       modelUsed = 'European';

@@ -15,7 +15,7 @@ const {
   cacheIsPersistent,
   preferredCacheDir
 } = require("./config/constants");
-const { writeErrorLog, reconcileLogHeaders } = require("./services/logging");
+const { writeErrorLog } = require("./services/logging");
 
 process.on("uncaughtException", (error) => {
   writeErrorLog("Uncaught exception", error);
@@ -73,14 +73,6 @@ const ensureDir = (dir) => {
 
 ensureDir(logdir);
 ensureDir(uploadsdir);
-
-const rewrittenHeaders = reconcileLogHeaders();
-if (rewrittenHeaders) {
-  writeErrorLog(
-    `The log format changed: moved ${rewrittenHeaders} of today's log file(s) aside as ` +
-    `"... (previous format).csv". Today's rows continue in a new file with the current header.`
-  );
-}
 
 const app = express();
 const port = process.env.PORT;

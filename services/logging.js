@@ -58,6 +58,8 @@ const CSV_HEADER =
   "Result_4_name,Result_4_group,Result_4_probability," +
   "Result_5_name,Result_5_group,Result_5_probability\n";
 
+const IPWATCH_HEADER = "Datetime,IP,Origin,Application,User_agent\n";
+
 const csvField = (value) =>
   String(value === undefined || value === null ? "" : value)
     .replace(/"/g, '""')
@@ -79,39 +81,55 @@ const firstLine = (filepath) => {
   }
 };
 
-const reconcileLogHeaders = () => {
-  const today = dateStr("d");
-  let files = [];
+const setAside = (filepath) => {
+  let target = filepath.replace(/\.csv$/, " (previous format).csv");
+  let attempt = 2;
+  while (fs.existsSync(target)) {
+    target = filepath.replace(/\.csv$/, ` (previous format ${attempt}).csv`);
+    attempt++;
+  }
+
   try {
-    files = fs.readdirSync(logdir);
-  } catch {
-    return 0;
+    fs.renameSync(filepath, target);
+    writeErrorLog(
+      `The log format changed: moved "${filepath}" aside as "${target}". ` +
+      `Rows continue in a new file with the current header.`
+    );
+    return true;
+  } catch (error) {
+    console.error(`Could not set aside ${filepath}:`, error.message);
+    return false;
+  }
+};
+
+// Checked when a file is first written to in this process rather than at
+// startup only. A deploy overlaps two containers, so the outgoing one can
+// create a log file after the incoming one has already looked at the
+// directory - which used to leave the rest of the day's rows appended under a
+// header from the previous format. The calls are synchronous so that the check
+// and the header write cannot interleave with a concurrent request.
+const headerVerified = new Set();
+
+const ensureHeader = (filepath, header) => {
+  if (headerVerified.has(filepath)) return;
+
+  const existing = firstLine(filepath);
+
+  if (existing === header) {
+    headerVerified.add(filepath);
+    return;
   }
 
-  let updated = 0;
-  for (const file of files) {
-    if (!file.endsWith(`_${today}.csv`)) continue;
-
-    const filepath = `${logdir}/${file}`;
-    const existing = firstLine(filepath);
-    if (existing === null || existing === "" || existing === CSV_HEADER) continue;
-
-    let target = filepath.replace(/\.csv$/, " (previous format).csv");
-    let attempt = 2;
-    while (fs.existsSync(target)) {
-      target = filepath.replace(/\.csv$/, ` (previous format ${attempt}).csv`);
-      attempt++;
-    }
-
-    try {
-      fs.renameSync(filepath, target);
-      updated++;
-    } catch (error) {
-      console.error(`Could not set aside ${file} after the log format changed:`, error.message);
-    }
+  if (existing !== null && existing !== "" && !setAside(filepath)) {
+    return;
   }
 
-  return updated;
+  try {
+    fs.appendFileSync(filepath, header);
+    headerVerified.add(filepath);
+  } catch (error) {
+    console.error(`Failed to write log header to ${filepath}:`, error.message);
+  }
 };
 
 const requestOrigin = (req) => {
@@ -153,10 +171,12 @@ const writelog = (req, json, auth = null) => {
     const origin = requestOrigin(req);
 
     if (isWatched(bucket)) {
+      const watchFile = `${logdir}/ipwatch-${bucket}_${dateStr("d")}.csv`;
       const watchRow =
         `${dateStr("s")},"${csvField(clientIP)}","${csvField(origin)}","${csvField(logPrefix)}",` +
         `"${csvField(req.headers?.["user-agent"])}"\n`;
-      fs.appendFile(`${logdir}/ipwatch-${bucket}_${dateStr("d")}.csv`, watchRow, (err) => {
+      ensureHeader(watchFile, IPWATCH_HEADER);
+      fs.appendFile(watchFile, watchRow, (err) => {
         if (err) console.error("Failed to write IP watch log:", err.message);
       });
     }
@@ -178,16 +198,8 @@ const writelog = (req, json, auth = null) => {
     });
   };
 
-  fs.access(logFile, fs.constants.F_OK, (err) => {
-    if (err) {
-      fs.appendFile(logFile, CSV_HEADER, (headerErr) => {
-        if (headerErr) console.error("Failed to write log header:", headerErr.message);
-        writeRow();
-      });
-    } else {
-      writeRow();
-    }
-  });
+  ensureHeader(logFile, CSV_HEADER);
+  writeRow();
 };
 
 const writeAdminLog = (message, details) => {
@@ -203,7 +215,6 @@ const writeAdminLog = (message, details) => {
 module.exports = {
   dateStr,
   requestOrigin,
-  reconcileLogHeaders,
   writeErrorLog,
   writeAdminLog,
   writelog
