@@ -1,7 +1,7 @@
 const CountryCoder = require("@rapideditor/country-coder");
 const IPCountryLookup = require("../ipCountryLookup");
 const { writeErrorLog } = require("./logging");
-const { getClientIP } = require("./clientip");
+const { getClientIP, isPrivateIP } = require("./clientip");
 
 const ipLookup = new IPCountryLookup();
 let ipLookupReady = false;
@@ -44,6 +44,36 @@ const parseCoordinate = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+// Only a private address to go on means the proxy in front of us is not
+// forwarding the caller. Report the forwarding headers once an hour so the
+// chain can be read off the log instead of guessed at.
+const PRIVATE_ONLY_REPORT_INTERVAL_MS = 60 * 60 * 1000;
+let lastPrivateOnlyReport = 0;
+
+const reportPrivateOnly = (req, clientIP) => {
+  const now = Date.now();
+  if (now - lastPrivateOnlyReport < PRIVATE_ONLY_REPORT_INTERVAL_MS) {
+    return;
+  }
+  lastPrivateOnlyReport = now;
+
+  const forwarding = [
+    "x-forwarded-for",
+    "x-real-ip",
+    "x-client-ip",
+    "true-client-ip",
+    "cf-connecting-ip",
+    "x-cluster-client-ip",
+  ]
+    .map((header) => `${header}=${req.headers?.[header] ?? "-"}`)
+    .join(" ");
+
+  writeErrorLog(
+    `No public client IP available, only "${clientIP}". Country falls back to ` +
+    `Unknown for requests without coordinates. Headers: ${forwarding} ` +
+    `req.ip=${req.ip} socket=${req.socket?.remoteAddress}`
+  );
+};
 
 const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
   try {
@@ -62,7 +92,8 @@ const getCountryFromCoordinatesOrIP = (latitude, longitude, req) => {
 
     const clientIP = getClientIP(req);
     if (clientIP && clientIP !== "unknown") {
-      if (/^(10\.|172\.(1[6-9]|2[0-9]|3[01])\.|192\.168\.|127\.|::1|localhost)/.test(clientIP)) {
+      if (isPrivateIP(clientIP)) {
+        reportPrivateOnly(req, clientIP);
         return { country: "Unknown", detectedIP: clientIP };
       }
 
