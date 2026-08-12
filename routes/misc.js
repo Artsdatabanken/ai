@@ -13,7 +13,7 @@ module.exports = (app, upload) => {
       res
         .status(200)
         .send(
-          `<h3>Aiaiai!</h3><hr/>${commit} (${branch || "unknown"})<br/>${built}`
+          `<a href="/logo.png"><img src="/logo.png" height="48"/></a><h3>Aiaiai!</h3><hr/>${commit} (${branch || "unknown"})<br/>${built}`
         );
     });
   });
@@ -101,4 +101,5 @@ module.exports = (app, upload) => {
   });
 
   app.use("/favicon.ico", apiLimiter, express.static("favicon.ico"));
+  app.use("/logo.png", apiLimiter, express.static("logo.png"));
 };
