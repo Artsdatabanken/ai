@@ -13,7 +13,7 @@ module.exports = (app, upload) => {
       res
         .status(200)
         .send(
-          `<a href="/logo.png"><img src="/logo.png" height="48"/></a><h3>Aiaiai!</h3><hr/>${commit} (${branch || "unknown"})<br/>${built}`
+          `<img src="/logo.png" height="48"/><h3>Aiaiai!</h3><hr/>${commit} (${branch || "unknown"})<br/>${built}`
         );
     });
   });
