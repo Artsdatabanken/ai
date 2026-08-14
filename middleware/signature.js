@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { writeErrorLog } = require("../services/logging");
+const { writeErrorLog, writeRejectionLog } = require("../services/logging");
 
 const SIGNATURE_VERSION = "v1";
 const MAX_SKEW_SECONDS = 300;
@@ -43,6 +43,7 @@ const reject = (req, res, reason) => {
     "Request signature rejected",
     `IP ${req.ip}, token ${String(req.auth?.token).substring(0, 10)}..., ${reason}`
   );
+  writeRejectionLog(req, req.auth, `signature: ${reason}`);
   return res.status(401).json({
     error: "Invalid request signature.",
     message: "This token requires a signed request."

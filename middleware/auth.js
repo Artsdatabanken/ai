@@ -1,7 +1,7 @@
 const fs = require("fs");
 const crypto = require("crypto");
 const { TOKENS_FILE } = require("../config/constants");
-const { writeErrorLog, requestOrigin } = require("../services/logging");
+const { writeErrorLog, writeRejectionLog, requestOrigin } = require("../services/logging");
 
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 
@@ -93,6 +93,7 @@ const authenticateApiToken = (req, res, next) => {
 
   if (!token) {
     writeErrorLog("Authentication failed: No token provided", `IP ${req.ip}`);
+    writeRejectionLog(req, null, "no token");
     return res.status(401).json({
       error: "Access denied. No token provided.",
       message: "Please include a valid Bearer token in the Authorization header."
@@ -119,6 +120,7 @@ const authenticateApiToken = (req, res, next) => {
   }
 
   writeErrorLog("Authentication failed: Invalid token", `IP ${req.ip}, Token: ${token.substring(0, 10)}...`);
+  writeRejectionLog(req, { token }, "invalid token");
   return res.status(403).json({
     error: "Invalid token.",
     message: "The provided token is invalid."
@@ -147,6 +149,7 @@ const verifyAllowedOrigin = (req, res, next) => {
     "Request rejected: origin not allowed for this token",
     `IP ${req.ip}, token ${String(req.auth?.token).substring(0, 10)}..., origin ${origin || "(none sent)"}`
   );
+  writeRejectionLog(req, req.auth, "origin not allowed");
 
   return res.status(403).json({
     error: "Origin not allowed.",

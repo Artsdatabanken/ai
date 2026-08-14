@@ -61,6 +61,8 @@ const CSV_HEADER =
 
 const IPWATCH_HEADER = "Datetime,IP,Origin,Application,User_agent\n";
 
+const REJECTED_HEADER = "Datetime,IP_bucket,Token,Origin,Application,Reason\n";
+
 const csvField = (value) =>
   String(value === undefined || value === null ? "" : value)
     .replace(/"/g, '""')
@@ -147,6 +149,19 @@ const requestOrigin = (req) => {
   }
 };
 
+const writeRejectionLog = (req, auth, reason) => {
+  const file = `${logdir}/rejected_${dateStr("d")}.csv`;
+  const tokenPrefix = auth?.token ? `${String(auth.token).substring(0, 8)}...` : "";
+  const row =
+    `${dateStr("s")},"${csvField(bucketFor(getClientIP(req)))}","${csvField(tokenPrefix)}",` +
+    `"${csvField(requestOrigin(req))}","${csvField(auth?.application || "")}","${csvField(reason)}"\n`;
+
+  ensureHeader(file, REJECTED_HEADER);
+  fs.appendFile(file, row, (err) => {
+    if (err) console.error("Failed to write rejection log:", err.message);
+  });
+};
+
 const writelog = (req, json, auth = null) => {
   let application;
 
@@ -219,5 +234,6 @@ module.exports = {
   requestOrigin,
   writeErrorLog,
   writeAdminLog,
+  writeRejectionLog,
   writelog
 };
