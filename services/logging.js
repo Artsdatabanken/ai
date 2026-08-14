@@ -46,6 +46,7 @@ const writeErrorLog = (message, error) => {
 const CSV_HEADER =
   "Datetime," +
   "IP_bucket," +
+  "Token," +
   "Origin," +
   "Latitude," +
   "Longitude," +
@@ -169,6 +170,7 @@ const writelog = (req, json, auth = null) => {
     const clientIP = getClientIP(req);
     const bucket = bucketFor(clientIP);
     const origin = requestOrigin(req);
+    const tokenPrefix = auth?.token ? `${auth.token.substring(0, 8)}...` : "";
 
     if (isWatched(bucket)) {
       const watchFile = `${logdir}/ipwatch-${bucket}_${dateStr("d")}.csv`;
@@ -181,7 +183,7 @@ const writelog = (req, json, auth = null) => {
       });
     }
 
-    let row = `${dateStr("s")},"${csvField(bucket)}","${csvField(origin)}","${csvField(latitude)}",` +
+    let row = `${dateStr("s")},"${csvField(bucket)}","${csvField(tokenPrefix)}","${csvField(origin)}","${csvField(latitude)}",` +
       `"${csvField(longitude)}","${csvField(country)}","${csvField(model)}",${
         Array.isArray(req.files) ? req.files.length : 0
       }`;
