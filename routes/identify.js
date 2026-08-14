@@ -42,29 +42,29 @@ module.exports = (app, upload) => {
   });
 
   app.post("/", idLimiter, upload.array("image"), async (req, res) => {
-    try {
-      let json = await getId(req);
+    // try {
+    //   let json = await getId(req);
 
-      writelog(req, json);
+    //   writelog(req, json);
 
-      let responseJson;
-      if (req.body.application === undefined) {
-        responseJson = simplifyJson({...json});
-        responseJson.predictions = [{}].concat(responseJson.predictions);
-      } else {
-        responseJson = {...json};
-      }
+    //   let responseJson;
+    //   if (req.body.application === undefined) {
+    //     responseJson = simplifyJson({...json});
+    //     responseJson.predictions = [{}].concat(responseJson.predictions);
+    //   } else {
+    //     responseJson = {...json};
+    //   }
 
-      responseJson.predictions[0].probability = 1;
-      responseJson.predictions[0].taxon = {
-        vernacularName: "*** Utdatert versjon ***",
-        name: "Vennligst oppdater Artsorakel via app store, eller Ctrl-Shift-R på pc",
-      };
+    //   responseJson.predictions[0].probability = 1;
+    //   responseJson.predictions[0].taxon = {
+    //     vernacularName: "*** Utdatert versjon ***",
+    //     name: "Vennligst oppdater Artsorakel via app store, eller Ctrl-Shift-R på pc",
+    //   };
 
-      res.status(200).json(responseJson);
-    } catch (error) {
-      writeErrorLog(`Error while running getId()`, error);
-      res.status(500).json({ error: "Internal server error" });
-    }
+    //   res.status(200).json(responseJson);
+    // } catch (error) {
+      writeErrorLog(`Attempted post at root`);
+      res.status(410).json({ error: "410 Gone" });
+    //}
   });
 };
