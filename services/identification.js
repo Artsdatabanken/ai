@@ -179,7 +179,8 @@ const getId = async (req) => {
             username: username,
             password: password,
           },
-          timeout: 60000,
+          // The apps give up after 60 s, so answer them before they do
+          timeout: 45000,
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
         }
