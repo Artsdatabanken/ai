@@ -110,9 +110,12 @@ const slugify = (name) =>
 
 const isPictureId = (id) => /^[a-z0-9-]{1,80}$/.test(id);
 
+const picturesRoot = path.resolve(picturesdir);
+
 const pictureFilePath = (id, size) => {
   if (!isPictureId(id) || !PICTURE_SIZES.includes(size)) return null;
-  return path.resolve(picturesdir, id, `${size}.jpg`);
+  const filePath = path.resolve(picturesRoot, id, `${size}.jpg`);
+  return filePath.startsWith(picturesRoot + path.sep) ? filePath : null;
 };
 
 const text = (value, max) => (value ? String(value).substring(0, max) : null);
@@ -341,6 +344,7 @@ module.exports = {
   INAT_LICENSES,
   normalizeName,
   pictureUrl,
+  picturesRoot,
   pictureFilePath,
   getPicture,
   getPictureUrl,

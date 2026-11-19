@@ -8,6 +8,7 @@ const {
   REQUIRED_SIZES,
   INAT_LICENSES,
   normalizeName,
+  picturesRoot,
   pictureFilePath,
   getPicture,
   describePicture,
@@ -38,13 +39,14 @@ module.exports = (app, upload) => {
   app.get("/taxon/picture/:id/:file", pictureLimiter, (req, res) => {
     const match = /^(\d+)\.jpg$/.exec(req.params.file);
     const filePath = match && pictureFilePath(req.params.id, Number(match[1]));
+    const resolved = filePath && path.resolve(picturesRoot, filePath);
 
-    if (!filePath || !fs.existsSync(filePath)) {
+    if (!resolved || !resolved.startsWith(picturesRoot + path.sep) || !fs.existsSync(resolved)) {
       return res.status(404).json({ error: "Not found" });
     }
 
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
-    res.sendFile(filePath);
+    res.sendFile(resolved);
   });
 
   app.get("/admin/pictures", adminLimiter, authenticateAdminQueryToken, sendAdminPage("pictureAdmin.html"));
