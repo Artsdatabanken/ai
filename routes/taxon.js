@@ -1,12 +1,8 @@
 const { apiLimiter, authLimiter } = require("../middleware/rateLimiters");
 const { authenticateAdminToken } = require("../middleware/auth");
 const { writeErrorLog } = require("../services/logging");
-const {
-  getName,
-  getPicture,
-  getTaxonPics,
-  reloadTaxonImages
-} = require("../services/taxon");
+const { getName, getPicture } = require("../services/taxon");
+const { getPicture: getStoredPicture, getPictureNames, pictureUrl } = require("../services/pictures");
 const {
   getDescriptionStub,
   getRandomAcceptedSpeciesId
@@ -25,7 +21,9 @@ module.exports = (app) => {
 
   app.get("/taxon/images", apiLimiter, (req, res) => {
     try {
-      res.status(200).json(getTaxonPics());
+      res.status(200).json(
+        Object.fromEntries(getPictureNames().map((name) => [name, getPicture(name)]))
+      );
     } catch (error) {
       writeErrorLog(`Error for ${req.originalUrl}`, error);
       res.status(500).json({ error: "Internal server error" });
@@ -34,22 +32,24 @@ module.exports = (app) => {
 
   app.get("/taxon/images/view", apiLimiter, (req, res) => {
     try {
-      const taxonPics = getTaxonPics();
-      let pics = Object.entries(taxonPics);
-      pics.sort();
+      const escape = (value) =>
+        String(value).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+      const names = getPictureNames();
 
-      let html = "<html><head><style>";
+      let html = "<html><head><meta charset=\"utf-8\"><style>";
       html += "img {border-radius: 50%}";
       html += "img:hover {border-radius: 0}";
       html += "</style></head><body>";
-      html += `<h1>Alle ${pics.length} "profilbilder"</h1>`;
+      html += `<h1>Alle ${names.length} "profilbilder"</h1>`;
       html += "<table>";
 
-      pics.forEach((pic) => {
-        html += `<tr><td style="padding: 20px"><a href="https://artsdatabanken.no/Media/${pic[1]}" target="_blank"><img src="https://artsdatabanken.no/Media/${pic[1]}?mode=128x128"/></a></td>`;
-        html += `<td><h3><i>${pic[0]}</i></h3></td></tr>`;
+      names.forEach((name) => {
+        const picture = getStoredPicture(name);
+        const largest = Math.max(...picture.sizes);
+        html += `<tr><td style="padding: 20px"><a href="${escape(pictureUrl(picture.id, largest))}" target="_blank"><img src="${escape(pictureUrl(picture.id, 128))}" width="128" height="128" loading="lazy"/></a></td>`;
+        html += `<td><h3><i>${escape(name)}</i></h3></td></tr>`;
       });
-      html += "</body></html>";
+      html += "</table></body></html>";
 
       res.status(200).send(html);
     } catch (error) {
@@ -147,15 +147,6 @@ module.exports = (app) => {
       res.status(200).json(name);
     } catch (error) {
       writeErrorLog(`Error for ${req.originalUrl}`, error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  app.post("/admin/taxon/reload/images", authLimiter, authenticateAdminToken, async (req, res) => {
-    try {
-      let number = await reloadTaxonImages();
-      res.status(200).send(`${number} pictures found`);
-    } catch (error) {
       res.status(500).json({ error: "Internal server error" });
     }
   });

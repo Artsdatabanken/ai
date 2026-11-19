@@ -68,9 +68,25 @@ const adminLimiter = rateLimit({
   },
 });
 
+const pictureLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: ipKey,
+  handler: (request, response, next, options) => {
+    writeErrorLog(
+      `Too many taxon picture requests`,
+      `IP ${getClientIP(request)}`
+    );
+    return response.status(options.statusCode).send(options.message);
+  },
+});
+
 module.exports = {
   idLimiter,
   apiLimiter,
   authLimiter,
-  adminLimiter
+  adminLimiter,
+  pictureLimiter
 };

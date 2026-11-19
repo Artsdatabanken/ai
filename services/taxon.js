@@ -4,13 +4,13 @@ const fsp = require("fs/promises");
 const sanitize = require("sanitize-filename");
 const {
   taxadir,
-  pictureFile,
   listVersionsFile,
   server_url,
   groupNameTranslations,
   capitalizeFirstLetter
 } = require("../config/constants");
 const { writeErrorLog } = require("./logging");
+const { getPictureUrl } = require("./pictures");
 
 const apiTimeout = 20000;
 const NEGATIVE_CACHE_TTL_MS = 60 * 60 * 1000;
@@ -61,20 +61,6 @@ const writeNegativeCache = (sciNameId, sciName, nameResult) => {
     .catch((error) => reportCacheWriteFailure(`${taxadir}/${basename}`, error));
   rememberCacheFile(sciNameId, basename);
 };
-
-let taxonPics = {};
-try {
-  if (fs.existsSync(pictureFile)) {
-    taxonPics = JSON.parse(fs.readFileSync(pictureFile));
-  }
-} catch (error) {
-  writeErrorLog(
-    `Could not read "${pictureFile}", starting without taxon pictures. ` +
-    `reloadTaxonImages() rebuilds it on startup.`,
-    error
-  );
-  taxonPics = {};
-}
 
 const LIST_URLS = {
   Redlist: (year) => `https://lister.artsdatabanken.no/odata/v1/speciesassessment${year}`,
@@ -144,19 +130,7 @@ const refreshListVersions = async () => {
   return listVersions;
 };
 
-const getPicture = (sciName) => {
-  if (!sciName) return null;
-  sciName = sciName.replaceAll("×", "x").replaceAll("ë", "e");
-
-  let pic = taxonPics[sciName];
-  if (pic) {
-    return `https://artsdatabanken.no/Media/${pic}?mode=128x128`;
-  }
-
-  return null;
-};
-
-const getTaxonPics = () => taxonPics;
+const getPicture = (sciName) => (sciName ? getPictureUrl(sciName, 128) : null);
 
 const TARGET_LANGUAGES = ['sv', 'nl', 'en', 'es'];
 
@@ -818,57 +792,14 @@ const maybeRecache = async (sciNameId, sciName) => {
   return true;
 };
 
-const reloadTaxonImages = async () => {
-  const pages = [342548, 342550, 342551, 342552, 342553, 342554];
-  let taxa = {};
-
-  for (let index = 0; index < pages.length; index++) {
-    let pageId = pages[index];
-    let url = encodeURI(`https://www.artsdatabanken.no/api/Content/${pageId}`);
-    let page = await axios
-      .get(url, {
-        timeout: 10000,
-        headers: {
-          'Accept-Encoding': 'gzip',
-          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0'
-        }
-      })
-      .catch((error) => {
-        writeErrorLog(
-          `Error getting "${url}" while running reloadTaxonImages`,
-          error
-        );
-        throw error;
-      });
-
-    if (page) {
-      page.data.Files.forEach((f) => {
-        if (f.FileUrl) {
-          let name = f.Title.split(".")[0].replaceAll("_", " ");
-          let value = f.Id.split("/")[1];
-          taxa[name] = value;
-        }
-      });
-    }
-  }
-
-  taxonPics = taxa;
-  const tmpFile = `${pictureFile}.tmp`;
-  await fsp.writeFile(tmpFile, JSON.stringify(taxa));
-  await fsp.rename(tmpFile, pictureFile);
-  return Object.keys(taxa).length;
-};
-
 module.exports = {
   getName,
   getPicture,
-  getTaxonPics,
   maybeRecache,
   pruneTaxonCache,
   refreshListVersions,
   getListVersions,
   resetTaxaIndex,
-  reloadTaxonImages,
   newDeadline,
   ENRICHMENT_BUDGET_MS,
   taxadir

@@ -11,6 +11,12 @@ const ENRICHMENT_GRACE_MS = 250;
 
 const COUNTRY_FOR_MODEL = { Norwegian: "NO", Swedish: "SE" };
 
+const getMapUrl = (scientificNameId) => {
+  const [prefix, id] = (scientificNameId || "").split(":");
+  if (prefix !== "NBIC" || !id) return undefined;
+  return `https://artskart2.artsdatabanken.no/appapi/api/raster/distribution/?BBOX=-350770,6400000,1100000,9000000&height=800&width=500&ScientificNameId=${id}`;
+};
+
 const enrichTaxon = async (pred, req, country, deadline) => {
   try {
     if (
@@ -179,7 +185,8 @@ const getId = async (req) => {
             username: username,
             password: password,
           },
-          timeout: 60000,
+          // The apps give up after 60 s, so answer them before they do
+          timeout: 45000,
           maxContentLength: Infinity,
           maxBodyLength: Infinity,
         }
@@ -221,6 +228,7 @@ const getId = async (req) => {
         pred.scientificName = pred.scientific_name;
         pred.name = pred.scientific_name;
         pred.picture = getPicture(pred.scientific_name);
+        pred.mapUrl = getMapUrl(pred.scientific_name_id);
       }
     }
 

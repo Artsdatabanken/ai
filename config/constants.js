@@ -27,7 +27,6 @@ if (!probeCacheDir(cachedir)) {
 }
 
 const taxadir = `${cachedir}/taxa`;
-const pictureFile = `${cachedir}/taxonPictures.json`;
 const uploadsdir = "./uploads";
 const listVersionsFile = `${cachedir}/listversions.json`;
 const TOKENS_FILE = "./auth/tokens.json";
@@ -116,7 +115,6 @@ module.exports = {
   cacheIsPersistent,
   preferredCacheDir,
   taxadir,
-  pictureFile,
   uploadsdir,
   listVersionsFile,
   TOKENS_FILE,

@@ -295,6 +295,27 @@ module.exports = (app, upload) => {
     }
   });
 
+  // Temporary: shows what the Azure front end does with an answer that takes long
+  app.get("/admin/wait/:seconds", adminLimiter, authenticateAdminToken, (req, res) => {
+    const seconds = Math.min(Math.max(parseInt(req.params.seconds, 10) || 0, 0), 300);
+    const started = Date.now();
+
+    const timer = setTimeout(() => {
+      res.status(200).json({ waited: seconds });
+    }, seconds * 1000);
+
+    res.on("close", () => {
+      clearTimeout(timer);
+      const elapsed = ((Date.now() - started) / 1000).toFixed(1);
+      writeAdminLog(
+        "Wait test",
+        res.writableFinished
+          ? `Answered after ${elapsed} s`
+          : `Connection closed after ${elapsed} s, before the ${seconds} s answer`
+      );
+    });
+  });
+
   app.post("/admin/tokens/:tokenPrefix/secret", authLimiter, authenticateAdminToken, (req, res) => {
     try {
       const validTokens = getValidTokens();
