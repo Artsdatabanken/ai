@@ -87,6 +87,24 @@ const authenticateAdminToken = (req, res, next) => {
   });
 };
 
+const authenticateAdminQueryToken = (req, res, next) => {
+  const token = typeof req.query?.token === "string" ? req.query.token : "";
+
+  if (ADMIN_TOKEN && token === ADMIN_TOKEN) {
+    req.auth = { type: "admin", token: token, application: "admin" };
+    return next();
+  }
+
+  writeErrorLog(
+    token ? "Authentication failed: Invalid admin token in URL" : "Authentication failed: No token in URL",
+    token ? `IP ${req.ip}, Token: ${token.substring(0, 10)}...` : `IP ${req.ip}`
+  );
+  return res
+    .status(token ? 403 : 401)
+    .type("text/plain")
+    .send("Add ?token=<admin token> to the address.");
+};
+
 const authenticateApiToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -163,6 +181,7 @@ module.exports = {
   generateSecureToken,
   getValidTokens,
   authenticateAdminToken,
+  authenticateAdminQueryToken,
   authenticateApiToken,
   verifyAllowedOrigin
 };

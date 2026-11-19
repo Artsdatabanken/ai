@@ -26,13 +26,14 @@ process.on("unhandledRejection", (reason) => {
 });
 
 const { initializeIpLookup } = require("./services/geolocation");
-const { reloadTaxonImages, refreshListVersions } = require("./services/taxon");
+const { refreshListVersions } = require("./services/taxon");
 const { setupCronJobs } = require("./jobs/cron");
 
 const identifyRoutes = require("./routes/identify");
 const adminRoutes = require("./routes/admin");
 const taxonRoutes = require("./routes/taxon");
 const miscRoutes = require("./routes/misc");
+const pictureRoutes = require("./routes/pictures");
 
 let appInsights = require("applicationinsights");
 const { SpanKind } = require("@opentelemetry/api");
@@ -111,6 +112,7 @@ const upload = multer({ storage: storage, limits: { fileSize: 20 * 1024 * 1024, 
 identifyRoutes(app, upload);
 adminRoutes(app, upload);
 taxonRoutes(app);
+pictureRoutes(app, upload);
 miscRoutes(app, upload);
 
 app.use((error, req, res, next) => {
@@ -181,10 +183,6 @@ writeErrorLog(
 );
 
 fs.writeFileSync(persistenceStamp, String(Date.now()));
-
-reloadTaxonImages().catch((error) =>
-  writeErrorLog("Failed to reload taxon images on startup", error)
-);
 
 refreshListVersions().catch((error) =>
   writeErrorLog("Failed to determine the published list versions on startup", error)

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Import taxon pictures</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+  :root {
+    --bg: #f6f6f3; --panel: #ffffff; --text: #1d1f1c; --muted: #686c66; --line: #dcddd8;
+    --accent: #2f6b3a; --accent-text: #ffffff; --danger: #a12a2a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151714; --panel: #1f221e; --text: #e8e9e4; --muted: #a0a49c; --line: #353a33;
+      --accent: #6fb27b; --accent-text: #0e140f; --danger: #e07a7a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  button {
+    font: inherit; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-text);
+    border-radius: 6px; padding: 7px 14px; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .muted { color: var(--muted); }
+  .error { color: var(--danger); }
+  progress { width: 100%; height: 14px; margin: 16px 0 8px; }
+  #failures { margin-top: 16px; font-size: 13px; }
+  #failures div { padding: 2px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Import taxon pictures</h1>
+  <p class="muted">Copies every picture on the profile picture pages of artsdatabanken.no to this server, as a centered square in all sizes. Species that already have a picture here are left alone, so this can be run again to pick up what failed.</p>
+  <button id="start" disabled>Loading the list…</button>
+  <progress id="progress" value="0" max="1"></progress>
+  <div id="status" class="muted"></div>
+  <div id="summary"></div>
+  <div id="failures"></div>
+</main>
+<script src="/admin/pictures/tools.js"></script>
+<script>
+(() => {
+  const tools = window.PictureTools;
+  const $ = (id) => document.getElementById(id);
+  let items = [];
+
+  const loadList = async () => {
+    $("start").disabled = true;
+    $("start").textContent = "Loading the list…";
+    try {
+      await tools.loadConfig();
+      ({ items } = await tools.apiJson("/admin/pictures/import/list"));
+      const todo = items.filter((item) => !item.hasPicture).length;
+      $("status").textContent = `${items.length} pictures on the website, ${items.length - todo} already here, ${todo} to import`;
+      $("start").textContent = todo ? `Import ${todo} pictures` : "Nothing to import";
+      $("start").disabled = !todo;
+      $("progress").max = Math.max(todo, 1);
+      $("progress").value = todo ? 0 : 1;
+    } catch (error) {
+      $("status").replaceChildren(Object.assign(document.createElement("span"), { className: "error", textContent: `Could not load the list: ${error.message}` }));
+      $("start").textContent = "Import";
+    }
+  };
+
+  const importOne = async (item) => {
+    const blob = await tools.fetchPhoto(item.url);
+    const { image, url } = await tools.loadImage(blob);
+    try {
+      const result = await tools.savePicture(item.name, image, tools.centeredSquare(image), {
+        type: "artsdatabanken",
+        mediaId: item.mediaId,
+        license: item.license,
+        url: item.url
+      }, { onlyIfMissing: true });
+      return result.skipped ? "skipped" : "imported";
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  $("start").addEventListener("click", async () => {
+    const queue = items.filter((item) => !item.hasPicture);
+    const counts = { imported: 0, skipped: 0, failed: 0 };
+    const started = Date.now();
+    $("start").disabled = true;
+    $("start").textContent = "Importing…";
+    $("failures").replaceChildren();
+
+    const update = () => {
+      const done = counts.imported + counts.skipped + counts.failed;
+      $("progress").value = done;
+      const seconds = Math.round((Date.now() - started) / 1000);
+      $("summary").textContent = `${done} of ${queue.length} done in ${seconds} s: ${counts.imported} imported, ${counts.skipped} already had one, ${counts.failed} failed`;
+    };
+
+    let next = 0;
+    const worker = async () => {
+      while (next < queue.length) {
+        const item = queue[next++];
+        try {
+          counts[await importOne(item)]++;
+        } catch (error) {
+          counts.failed++;
+          const line = document.createElement("div");
+          line.className = "error";
+          line.textContent = `${item.name} (${item.mediaId}): ${error.message}`;
+          $("failures").append(line);
+        }
+        update();
+      }
+    };
+
+    await Promise.all([worker(), worker(), worker()]);
+    update();
+    $("summary").textContent += ". Finished.";
+    await loadList();
+  });
+
+  loadList();
+})();
+</script>
+</body>
+</html>

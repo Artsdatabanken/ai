@@ -84,6 +84,7 @@ node server.js
 | GET | `/taxon/image/{name}` | Get profile image URL for taxon |
 | GET | `/taxon/images` | Get all taxon profile images |
 | GET | `/taxon/images/view` | HTML view of taxon profile images |
+| GET | `/taxon/picture/{id}/{size}.jpg` | Taxon picture file (64, 128, 256, 512 or 1024 px) |
 | GET | `/taxon/description/{sciNameId}` | Cached name record for a scientific name id |
 | GET | `/taxon/description/random/id` | Cached name record for a random taxon |
 | GET | `/taxon/description/view` | HTML view of cached taxon descriptions |
@@ -108,7 +109,8 @@ node server.js
 | DELETE | `/admin/ipwatch/{bucket}` | Stop logging them |
 | POST | `/admin/taxon/reload/name/{name}` | Reload cached taxon by name |
 | POST | `/admin/taxon/reload/id/{id}` | Reload cached taxon by ID |
-| POST | `/admin/taxon/reload/images` | Reload taxon profile images |
+| GET | `/admin/pictures?token={admin token}` | Page to view, add and change taxon pictures |
+| GET | `/admin/pictures/import?token={admin token}` | Page that copies the pictures on artsdatabanken.no to this server |
 | DELETE | `/admin/taxon/cache` | Clear taxon cache |
 | GET | `/admin/logs` | List log files |
 | GET | `/admin/logs/{filename}` | Download log file |

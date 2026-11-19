@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Taxon pictures</title>
+<link rel="icon" href="/favicon.ico">
+<style>
+  :root {
+    --bg: #f6f6f3;
+    --panel: #ffffff;
+    --text: #1d1f1c;
+    --muted: #686c66;
+    --line: #dcddd8;
+    --accent: #2f6b3a;
+    --accent-text: #ffffff;
+    --warn: #9a5b00;
+    --danger: #a12a2a;
+    --placeholder: #e9eae5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151714;
+      --panel: #1f221e;
+      --text: #e8e9e4;
+      --muted: #a0a49c;
+      --line: #353a33;
+      --accent: #6fb27b;
+      --accent-text: #0e140f;
+      --warn: #e0a64a;
+      --danger: #e07a7a;
+      --placeholder: #2a2e28;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 16px; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button {
+    border: 1px solid var(--line); background: var(--panel); border-radius: 6px;
+    padding: 7px 14px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  button.link { border: none; background: none; padding: 0; color: var(--muted); text-decoration: underline; }
+  button.link.danger { color: var(--danger); }
+  a { color: var(--accent); }
+  textarea {
+    width: 100%; min-height: 110px; padding: 10px; border: 1px solid var(--line);
+    border-radius: 6px; background: var(--panel); resize: vertical;
+  }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  .muted { color: var(--muted); }
+  .warn { color: var(--warn); }
+  .error { color: var(--danger); }
+  #grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px; margin-top: 24px;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .card .pic {
+    width: 100%; aspect-ratio: 1; border-radius: 50%; overflow: hidden; background: var(--placeholder);
+    display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px;
+  }
+  .card .pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .pic:hover { border-radius: 6px; }
+  .card .name { font-style: italic; font-weight: 600; word-break: break-word; }
+  .card .source { font-size: 13px; color: var(--muted); word-break: break-word; }
+  .card .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: auto; }
+
+  dialog {
+    width: min(1180px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
+    border: 1px solid var(--line); border-radius: 10px; padding: 0;
+    background: var(--panel); color: var(--text); overflow: auto;
+  }
+  dialog::backdrop { background: rgba(0, 0, 0, .55); }
+  .dlg-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+    padding: 16px 20px; border-bottom: 1px solid var(--line); position: sticky; top: 0;
+    background: var(--panel); z-index: 2;
+  }
+  .dlg-head h2 { margin: 0; font-size: 19px; font-style: italic; }
+  .dlg-body { padding: 16px 20px 24px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+  .license-section { margin-bottom: 24px; }
+  .license-section h3 { font-size: 16px; margin: 0 0 8px; }
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .thumb {
+    border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--panel);
+    display: flex; flex-direction: column;
+  }
+  .thumb button.pick {
+    border: none; border-radius: 0; padding: 0; position: relative; aspect-ratio: 1; display: block; width: 100%;
+    background: var(--placeholder);
+  }
+  .thumb button.pick img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .faves {
+    position: absolute; left: 6px; top: 6px; background: rgba(0, 0, 0, .65); color: #fff;
+    font-size: 12px; padding: 1px 7px; border-radius: 10px;
+  }
+  .thumb .meta { font-size: 12px; padding: 6px 8px; color: var(--muted); }
+  .thumb .meta .attr { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .drop {
+    border: 2px dashed var(--line); border-radius: 10px; padding: 48px 16px; text-align: center;
+    color: var(--muted);
+  }
+  .drop.over { border-color: var(--accent); color: var(--text); }
+
+  .crop-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 20px; align-items: start; }
+  @media (max-width: 800px) { .crop-layout { grid-template-columns: 1fr; } }
+  .stage-wrap { display: flex; justify-content: center; background: var(--placeholder); border-radius: 8px; padding: 10px; }
+  .stage { position: relative; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .stage img { display: block; pointer-events: none; }
+  .cropbox {
+    position: absolute; border: 2px solid #fff; box-shadow: 0 0 0 9999px rgba(0, 0, 0, .55);
+    cursor: move;
+  }
+  .cropbox::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1px dashed rgba(255, 255, 255, .7);
+    pointer-events: none;
+  }
+  .handle {
+    position: absolute; width: 18px; height: 18px; background: #fff; border: 2px solid #222; border-radius: 3px;
+  }
+  .handle.nw { left: -10px; top: -10px; cursor: nwse-resize; }
+  .handle.ne { right: -10px; top: -10px; cursor: nesw-resize; }
+  .handle.sw { left: -10px; bottom: -10px; cursor: nesw-resize; }
+  .handle.se { right: -10px; bottom: -10px; cursor: nwse-resize; }
+  .previews { display: flex; gap: 12px; align-items: flex-end; }
+  .previews canvas { background: var(--placeholder); display: block; }
+  .previews canvas.round { border-radius: 50%; }
+  .side { display: flex; flex-direction: column; gap: 12px; }
+  .side .info { font-size: 13px; word-break: break-word; }
+  .side .info div + div { margin-top: 4px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Taxon pictures</h1>
+  <label for="names" class="muted">Scientific names, one per line (commas and semicolons also separate)</label>
+  <textarea id="names" spellcheck="false" placeholder="Parus major&#10;Pica pica"></textarea>
+  <div class="row">
+    <button id="show" class="primary">Show pictures</button>
+    <span id="status" class="muted"></span>
+  </div>
+  <div id="grid"></div>
+</main>
+
+<dialog id="editor">
+  <div class="dlg-head">
+    <div>
+      <h2 id="ed-name"></h2>
+      <div id="ed-taxon" class="muted"></div>
+    </div>
+    <button id="ed-close" aria-label="Close">Close</button>
+  </div>
+  <div class="dlg-body">
+    <div id="choose">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tab-inat" aria-selected="true">iNaturalist (research grade)</button>
+        <button role="tab" id="tab-upload" aria-selected="false">Upload a file</button>
+      </div>
+      <div id="panel-inat"></div>
+      <div id="panel-upload" class="hidden">
+        <label class="drop" id="drop">
+          <div>Drop an image here, or click to choose a file</div>
+          <input type="file" id="file" accept="image/*" class="hidden">
+        </label>
+        <div class="row">
+          <label for="credit" class="muted">Credit (optional)</label>
+          <input id="credit" type="text" placeholder="Photographer, license" style="flex:1; min-width:220px; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--panel)">
+        </div>
+      </div>
+    </div>
+
+    <div id="crop" class="hidden">
+      <div class="crop-layout">
+        <div class="stage-wrap" id="stage-wrap">
+          <div class="stage" id="stage">
+            <img id="crop-img" alt="">
+            <div class="cropbox" id="cropbox">
+              <div class="handle nw" data-handle="nw"></div>
+              <div class="handle ne" data-handle="ne"></div>
+              <div class="handle sw" data-handle="sw"></div>
+              <div class="handle se" data-handle="se"></div>
+            </div>
+          </div>
+        </div>
+        <div class="side">
+          <div class="previews">
+            <canvas id="prev-round" class="round" width="128" height="128"></canvas>
+            <canvas id="prev-square" width="128" height="128"></canvas>
+          </div>
+          <div class="info" id="crop-info"></div>
+          <div class="info" id="crop-source"></div>
+          <div class="row">
+            <button id="crop-max">Largest square</button>
+          </div>
+          <div class="row">
+            <button id="crop-save" class="primary">Save</button>
+            <button id="crop-back">Back</button>
+          </div>
+          <div id="crop-msg" class="info"></div>
+          <div class="muted info">Drag the square to move it, drag a corner or scroll to resize.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<script src="/admin/pictures/tools.js"></script>
+<script>
+(() => {
+  const tools = window.PictureTools;
+  const { api, apiJson, postJson, sizesFor } = tools;
+  const LICENSE_LABELS = { "cc0": "CC0", "cc-by": "CC BY", "cc-by-sa": "CC BY-SA" };
+  const STORAGE_KEY = "taxonPictures.names";
+
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, props = {}, ...children) => {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props)) {
+      if (key === "class") node.className = value;
+      else if (key === "text") node.textContent = value;
+      else if (key.startsWith("on")) node.addEventListener(key.slice(2), value);
+      else node.setAttribute(key, value);
+    }
+    for (const child of children) if (child != null) node.append(child);
+    return node;
+  };
+
+  const parseNames = (text) => text.split(/[\n,;\t]+/).map((s) => s.trim()).filter(Boolean);
+
+  try { $("names").value = localStorage.getItem(STORAGE_KEY) || ""; } catch {}
+
+  const cards = new Map();
+  const entries = new Map();
+
+  const updateStatus = () => {
+    const all = [...entries.values()];
+    const withPicture = all.filter((r) => r.picture).length;
+    $("status").textContent = `${all.length} species: ${withPicture} with a picture, ${all.length - withPicture} without`;
+  };
+
+  const describeSource = (picture) => {
+    const s = picture.source || {};
+    const parts = [];
+    if (s.type === "inaturalist") parts.push("iNaturalist");
+    if (s.type === "upload") parts.push("Uploaded" + (s.filename ? ` (${s.filename})` : ""));
+    if (s.type === "artsdatabanken") parts.push(`Imported (${s.mediaId})`);
+    if (s.license) parts.push(LICENSE_LABELS[s.license] || s.license);
+    if (s.attribution) parts.push(s.attribution);
+    if (s.photographer && !(s.attribution || "").includes(s.photographer)) parts.push(s.photographer);
+    return parts.join(" · ");
+  };
+
+  const renderCard = (entry) => {
+    const pic = el("div", { class: "pic" });
+    const source = el("div", { class: "source" });
+    const actions = el("div", { class: "actions" });
+
+    if (entry.picture) {
+      const largest = Math.max(...entry.picture.sizes);
+      pic.append(el("a", { href: entry.picture.urls[largest], target: "_blank", rel: "noreferrer" },
+        el("img", { src: entry.picture.urls[256], alt: entry.name, loading: "lazy" })));
+      source.textContent = describeSource(entry.picture);
+      if (entry.picture.source?.url) {
+        source.append(" ", el("a", { href: entry.picture.source.url, target: "_blank", rel: "noreferrer", text: "source" }));
+      }
+    } else {
+      pic.textContent = "No picture";
+    }
+
+    actions.append(el("button", {
+      text: entry.picture ? "Change" : "Add",
+      onclick: () => openEditor(entry.name)
+    }));
+
+    if (entry.picture) {
+      actions.append(el("button", {
+        class: "link danger",
+        text: "Remove",
+        onclick: async () => {
+          if (!confirm(`Remove the picture for ${entry.name}?`)) return;
+          try {
+            await postJson("/admin/pictures/remove", { name: entry.name });
+            await refreshCard(entry.name);
+          } catch (error) {
+            alert(error.message);
+          }
+        }
+      }));
+    }
+
+    const card = el("div", { class: "card" }, pic, el("div", { class: "name", text: entry.name }), source, actions);
+    const existing = cards.get(entry.name);
+    if (existing) existing.replaceWith(card);
+    cards.set(entry.name, card);
+    entries.set(entry.name, entry);
+    return card;
+  };
+
+  const refreshCard = async (name) => {
+    const { results } = await postJson("/admin/pictures/lookup", { names: [name] });
+    if (results[0]) renderCard(results[0]);
+    updateStatus();
+  };
+
+  const showPictures = async () => {
+    const names = parseNames($("names").value);
+    try { localStorage.setItem(STORAGE_KEY, $("names").value); } catch {}
+    $("grid").replaceChildren();
+    cards.clear();
+    entries.clear();
+    if (!names.length) { $("status").textContent = ""; return; }
+    $("status").textContent = "Loading…";
+    try {
+      const { results } = await postJson("/admin/pictures/lookup", { names });
+      for (const entry of results) $("grid").append(renderCard(entry));
+      updateStatus();
+    } catch (error) {
+      $("status").innerHTML = "";
+      $("status").append(el("span", { class: "error", text: `Could not load: ${error.message}` }));
+    }
+  };
+
+  $("show").addEventListener("click", showPictures);
+  $("names").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) showPictures();
+  });
+
+  const editor = $("editor");
+  let current = null;
+
+  const selectTab = (which) => {
+    $("tab-inat").setAttribute("aria-selected", String(which === "inat"));
+    $("tab-upload").setAttribute("aria-selected", String(which === "upload"));
+    $("panel-inat").classList.toggle("hidden", which !== "inat");
+    $("panel-upload").classList.toggle("hidden", which !== "upload");
+  };
+  $("tab-inat").addEventListener("click", () => selectTab("inat"));
+  $("tab-upload").addEventListener("click", () => selectTab("upload"));
+
+  const showChooser = () => {
+    $("choose").classList.remove("hidden");
+    $("crop").classList.add("hidden");
+  };
+
+  const openEditor = (name) => {
+    current = { name, session: Symbol(name) };
+    $("ed-name").textContent = name;
+    $("ed-taxon").textContent = "";
+    $("credit").value = "";
+    $("file").value = "";
+    selectTab("inat");
+    showChooser();
+    releaseImage();
+    buildInatPanel();
+    editor.showModal();
+  };
+
+  $("ed-close").addEventListener("click", () => editor.close());
+  editor.addEventListener("close", () => {
+    if (editor.open) return;
+    current = null;
+    releaseImage();
+  });
+
+  const buildInatPanel = (taxonId = null) => {
+    const panel = $("panel-inat");
+    panel.replaceChildren();
+    $("ed-taxon").textContent = "";
+    const session = current.session;
+    const sections = tools.config.licenses.map((license) => {
+      const thumbs = el("div", { class: "thumbs" });
+      const heading = el("h3", { text: LICENSE_LABELS[license] || license });
+      const note = el("div", { class: "muted", text: "Loading…" });
+      const more = el("button", { class: "hidden", text: "Load more" });
+      const section = el("section", { class: "license-section" }, heading, note, thumbs, el("div", { class: "row" }, more));
+      panel.append(section);
+      return { license, thumbs, heading, note, more, page: 0 };
+    });
+
+    const loadPage = async (section) => {
+      section.more.disabled = true;
+      section.page += 1;
+      try {
+        const url = `/admin/pictures/inat?name=${encodeURIComponent(current.name)}&license=${section.license}&page=${section.page}` +
+          (taxonId ? `&taxonId=${taxonId}` : "");
+        const data = await apiJson(url);
+        if (!current || current.session !== session) return null;
+        if (!data.taxon) {
+          showSuggestions(data.suggestions || []);
+          return null;
+        }
+        if (!$("ed-taxon").textContent) showTaxon(data.taxon);
+        section.heading.textContent = `${LICENSE_LABELS[section.license]} · ${data.totalObservations} observation${data.totalObservations === 1 ? "" : "s"}`;
+        for (const photo of data.photos) section.thumbs.append(renderThumb(photo));
+        section.note.textContent = section.thumbs.children.length ? "" : "No photos with this license.";
+        section.more.classList.toggle("hidden", !data.hasMore);
+      } catch (error) {
+        section.page -= 1;
+        section.note.textContent = `Could not load: ${error.message}`;
+        section.note.className = "error";
+      } finally {
+        section.more.disabled = false;
+      }
+      return true;
+    };
+
+    for (const section of sections) section.more.addEventListener("click", () => loadPage(section));
+    loadPage(sections[0]).then((found) => {
+      if (found) for (const section of sections.slice(1)) loadPage(section);
+    });
+  };
+
+  const showSuggestions = (suggestions) => {
+    $("ed-taxon").replaceChildren(el("span", { class: "warn", text: `iNaturalist has no taxon with exactly this name` }));
+    const panel = $("panel-inat");
+    panel.replaceChildren();
+    if (!suggestions.length) {
+      panel.append(el("p", { class: "muted", text: "No similar names either. Use “Upload a file” instead." }));
+      return;
+    }
+    panel.append(el("p", { class: "muted", text: "If one of these is the same species under another name, pick it:" }));
+    const list = el("div", { class: "row" });
+    for (const taxon of suggestions) {
+      list.append(el("button", {
+        text: `${taxon.name} (${taxon.rank}${taxon.commonName ? `, ${taxon.commonName}` : ""})`,
+        onclick: () => buildInatPanel(taxon.id)
+      }));
+    }
+    panel.append(list);
+  };
+
+  const showTaxon = (taxon) => {
+    const box = $("ed-taxon");
+    box.replaceChildren("iNaturalist: ",
+      el("a", { href: taxon.url, target: "_blank", rel: "noreferrer", text: taxon.name }),
+      ` (${taxon.rank}${taxon.commonName ? `, ${taxon.commonName}` : ""})`);
+    if (taxon.match === "synonym") {
+      box.append(" ", el("span", { class: "warn", text: `· iNaturalist's current name for ${current.name}` }));
+    } else if (taxon.match === "chosen") {
+      box.append(" ", el("span", { class: "warn", text: "· picked by you" }));
+    }
+  };
+
+  const renderThumb = (photo) => {
+    const pick = el("button", { class: "pick", title: "Crop this photo", onclick: () => pickInatPhoto(photo) },
+      el("img", { src: photo.thumbUrl, alt: "", loading: "lazy" }),
+      el("span", { class: "faves", text: `♥ ${photo.faves}` }));
+    const size = photo.width && photo.height ? `${photo.width}×${photo.height}` : "";
+    const meta = el("div", { class: "meta" },
+      el("div", { class: "attr", text: [photo.attribution, photo.attribution?.includes(photo.photographer) ? null : photo.photographer].filter(Boolean).join(" · ") }),
+      el("div", {}, el("a", { href: photo.observationUrl, target: "_blank", rel: "noreferrer", text: "observation" }), size ? ` · ${size}` : ""));
+    return el("div", { class: "thumb" }, pick, meta);
+  };
+
+  const pickInatPhoto = async (photo) => {
+    const session = current.session;
+    $("crop-msg").textContent = "";
+    try {
+      showCropper("Loading the full photo…");
+      const blob = await tools.fetchPhoto(photo.originalUrl);
+      if (!current || current.session !== session) return;
+      await loadIntoCropper(blob, {
+        type: "inaturalist",
+        license: photo.license,
+        attribution: photo.attribution,
+        photographer: photo.photographer,
+        url: photo.observationUrl,
+        photoId: photo.photoId,
+        observationId: photo.observationId
+      });
+    } catch (error) {
+      $("crop-msg").replaceChildren(el("span", { class: "error", text: `Could not load the photo: ${error.message}` }));
+    }
+  };
+
+  const drop = $("drop");
+  $("file").addEventListener("change", () => {
+    if ($("file").files[0]) useFile($("file").files[0]);
+  });
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault();
+    drop.classList.remove("over");
+    const file = e.dataTransfer.files[0];
+    if (file) useFile(file);
+  });
+
+  const useFile = async (file) => {
+    $("crop-msg").textContent = "";
+    try {
+      showCropper("Loading…");
+      const credit = $("credit").value.trim();
+      await loadIntoCropper(file, { type: "upload", filename: file.name, attribution: credit || null });
+    } catch (error) {
+      $("crop-msg").replaceChildren(el("span", { class: "error", text: error.message }));
+    }
+  };
+
+  const img = $("crop-img");
+  const stage = $("stage");
+  const box = $("cropbox");
+  let objectUrl = null;
+  let source = null;
+  let crop = null;
+  let scale = 1;
+
+  const releaseImage = () => {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = null;
+    source = null;
+    crop = null;
+    img.removeAttribute("src");
+  };
+
+  const showCropper = (message) => {
+    $("choose").classList.add("hidden");
+    $("crop").classList.remove("hidden");
+    stage.classList.add("hidden");
+    $("crop-info").textContent = message || "";
+    $("crop-source").textContent = "";
+    $("crop-save").disabled = true;
+    $("crop-max").disabled = true;
+  };
+
+  const loadIntoCropper = (blob, meta) => new Promise((resolve, reject) => {
+    releaseImage();
+    objectUrl = URL.createObjectURL(blob);
+    img.onload = () => {
+      source = meta;
+      stage.classList.remove("hidden");
+      layoutStage();
+      maximizeCrop();
+      $("crop-save").disabled = false;
+      $("crop-max").disabled = false;
+      const lines = [];
+      if (meta.type === "inaturalist") {
+        lines.push(el("div", { text: [LICENSE_LABELS[meta.license] || meta.license, meta.attribution, meta.photographer].filter(Boolean).join(" · ") }));
+        lines.push(el("div", {}, el("a", { href: meta.url, target: "_blank", rel: "noreferrer", text: "iNaturalist observation" })));
+      } else {
+        lines.push(el("div", { text: `File: ${meta.filename}` }));
+        if (meta.attribution) lines.push(el("div", { text: `Credit: ${meta.attribution}` }));
+      }
+      $("crop-source").replaceChildren(...lines);
+      resolve();
+    };
+    img.onerror = () => {
+      releaseImage();
+      reject(new Error("The browser could not read this image"));
+    };
+    img.src = objectUrl;
+  });
+
+  const layoutStage = () => {
+    if (!img.naturalWidth) return;
+    const wrap = $("stage-wrap");
+    const maxWidth = Math.max(200, wrap.clientWidth - 20);
+    const maxHeight = Math.max(240, window.innerHeight * 0.68);
+    scale = Math.min(maxWidth / img.naturalWidth, maxHeight / img.naturalHeight);
+    img.style.width = `${img.naturalWidth * scale}px`;
+    img.style.height = `${img.naturalHeight * scale}px`;
+    stage.style.width = `${img.naturalWidth * scale}px`;
+    stage.style.height = `${img.naturalHeight * scale}px`;
+    if (crop) drawCrop();
+  };
+  window.addEventListener("resize", layoutStage);
+
+  const imageWidth = () => img.naturalWidth;
+  const imageHeight = () => img.naturalHeight;
+  const minSide = () => Math.min(48, imageWidth(), imageHeight());
+  const maxSide = () => Math.min(imageWidth(), imageHeight());
+  const clamp = (value, low, high) => Math.min(Math.max(value, low), high);
+
+  const clampCrop = (next) => {
+    const side = clamp(next.side, minSide(), maxSide());
+    return {
+      side,
+      x: clamp(next.x, 0, imageWidth() - side),
+      y: clamp(next.y, 0, imageHeight() - side)
+    };
+  };
+
+  const maximizeCrop = () => {
+    const side = maxSide();
+    crop = clampCrop({ side, x: (imageWidth() - side) / 2, y: (imageHeight() - side) / 2 });
+    drawCrop();
+  };
+  $("crop-max").addEventListener("click", maximizeCrop);
+
+
+  let previewQueued = false;
+  const drawCrop = () => {
+    box.style.left = `${crop.x * scale}px`;
+    box.style.top = `${crop.y * scale}px`;
+    box.style.width = `${crop.side * scale}px`;
+    box.style.height = `${crop.side * scale}px`;
+    const side = Math.round(crop.side);
+    const sizes = sizesFor(side);
+    const skipped = tools.config.sizes.filter((size) => !sizes.includes(size));
+    const upscaled = sizes.filter((size) => size > side);
+    const info = [el("div", { text: `Crop: ${side}×${side} px of ${imageWidth()}×${imageHeight()}` }),
+      el("div", { text: `Saves ${sizes.join(", ")} px` + (skipped.length ? ` (too small for ${skipped.join(", ")})` : "") })];
+    if (upscaled.length) info.push(el("div", { class: "warn", text: `${upscaled.join(", ")} px will be upscaled` }));
+    $("crop-info").replaceChildren(...info);
+    if (!previewQueued) {
+      previewQueued = true;
+      requestAnimationFrame(() => {
+        previewQueued = false;
+        if (!crop) return;
+        for (const canvas of [$("prev-round"), $("prev-square")]) {
+          const ctx = canvas.getContext("2d");
+          ctx.imageSmoothingQuality = "high";
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, crop.x, crop.y, crop.side, crop.side, 0, 0, canvas.width, canvas.height);
+        }
+      });
+    }
+  };
+
+  let drag = null;
+  stage.addEventListener("pointerdown", (e) => {
+    if (!crop) return;
+    const handle = e.target.dataset?.handle;
+    if (!handle && e.target !== box) return;
+    e.preventDefault();
+    stage.setPointerCapture(e.pointerId);
+    drag = { handle: handle || "move", startX: e.clientX, startY: e.clientY, start: { ...crop }, pointerId: e.pointerId };
+  });
+
+  stage.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const dx = (e.clientX - drag.startX) / scale;
+    const dy = (e.clientY - drag.startY) / scale;
+    const start = drag.start;
+
+    if (drag.handle === "move") {
+      crop = clampCrop({ side: start.side, x: start.x + dx, y: start.y + dy });
+    } else {
+      const corner = {
+        nw: { ax: start.x + start.side, ay: start.y + start.side, grow: -(dx + dy) / 2, sx: -1, sy: -1 },
+        ne: { ax: start.x, ay: start.y + start.side, grow: (dx - dy) / 2, sx: 1, sy: -1 },
+        sw: { ax: start.x + start.side, ay: start.y, grow: (dy - dx) / 2, sx: -1, sy: 1 },
+        se: { ax: start.x, ay: start.y, grow: (dx + dy) / 2, sx: 1, sy: 1 }
+      }[drag.handle];
+      const roomX = corner.sx > 0 ? imageWidth() - corner.ax : corner.ax;
+      const roomY = corner.sy > 0 ? imageHeight() - corner.ay : corner.ay;
+      const side = clamp(start.side + corner.grow, minSide(), Math.min(roomX, roomY));
+      crop = {
+        side,
+        x: corner.sx > 0 ? corner.ax : corner.ax - side,
+        y: corner.sy > 0 ? corner.ay : corner.ay - side
+      };
+    }
+    drawCrop();
+  });
+
+  const endDrag = (e) => {
+    if (drag && e.pointerId === drag.pointerId) drag = null;
+  };
+  stage.addEventListener("pointerup", endDrag);
+  stage.addEventListener("pointercancel", endDrag);
+
+  stage.addEventListener("wheel", (e) => {
+    if (!crop) return;
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    const centerX = crop.x + crop.side / 2;
+    const centerY = crop.y + crop.side / 2;
+    const side = clamp(crop.side * factor, minSide(), maxSide());
+    crop = clampCrop({ side, x: centerX - side / 2, y: centerY - side / 2 });
+    drawCrop();
+  }, { passive: false });
+
+  $("crop-save").addEventListener("click", async () => {
+    if (!crop || !source || !current) return;
+    const name = current.name;
+    $("crop-save").disabled = true;
+    $("crop-msg").textContent = "Saving…";
+    try {
+      const rounded = clampCrop({ x: Math.round(crop.x), y: Math.round(crop.y), side: Math.round(crop.side) });
+      crop = rounded;
+      await tools.savePicture(name, img, rounded, source);
+      if (cards.has(name)) await refreshCard(name);
+      editor.close();
+    } catch (error) {
+      $("crop-msg").replaceChildren(el("span", { class: "error", text: `Not saved: ${error.message}` }));
+      $("crop-save").disabled = false;
+    }
+  });
+
+  $("crop-back").addEventListener("click", () => {
+    releaseImage();
+    $("file").value = "";
+    $("crop-msg").textContent = "";
+    showChooser();
+  });
+
+  tools.loadConfig().then(() => {
+    if ($("names").value.trim()) showPictures();
+  });
+})();
+</script>
+</body>
+</html>
