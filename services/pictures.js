@@ -24,13 +24,6 @@ const WEBSITE_HEADERS = {
   "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:145.0) Gecko/20100101 Firefox/145.0"
 };
 
-const FETCHABLE_PHOTOS = [
-  { host: "inaturalist-open-data.s3.amazonaws.com", headers: BOT_HEADERS },
-  { host: "static.inaturalist.org", headers: BOT_HEADERS },
-  { host: "artsdatabanken.no", pathPrefix: "/Media/", headers: WEBSITE_HEADERS },
-  { host: "www.artsdatabanken.no", pathPrefix: "/Media/", headers: WEBSITE_HEADERS }
-];
-
 const publicBaseUrl = () => (process.env.PUBLIC_URL || server_url).replace(/\/+$/, "");
 
 const normalizeName = (name) => {
@@ -342,41 +335,6 @@ const findInatPhotos = async (rawName, license, page = 1, taxonId = null) => {
   };
 };
 
-const fetchPhoto = async (rawUrl) => {
-  let url;
-  try {
-    url = new URL(String(rawUrl));
-  } catch {
-    throw Object.assign(new Error("Not a valid URL"), { status: 400 });
-  }
-
-  const allowed = FETCHABLE_PHOTOS.find(
-    (rule) => rule.host === url.hostname && (!rule.pathPrefix || url.pathname.startsWith(rule.pathPrefix))
-  );
-  if (url.protocol !== "https:" || !allowed) {
-    throw Object.assign(new Error("Only iNaturalist and Artsdatabanken photo URLs can be fetched"), { status: 400 });
-  }
-
-  const response = await axios.get(url.href, {
-    responseType: "arraybuffer",
-    timeout: 30000,
-    maxContentLength: 25 * 1024 * 1024,
-    maxRedirects: 2,
-    beforeRedirect: (options) => {
-      if (!FETCHABLE_PHOTOS.some((rule) => rule.host === options.hostname)) {
-        throw Object.assign(new Error("Redirected away from an allowed host"), { status: 502 });
-      }
-    },
-    headers: allowed.headers
-  });
-
-  const contentType = String(response.headers["content-type"] || "");
-  if (!contentType.startsWith("image/")) {
-    throw Object.assign(new Error("That URL did not return an image"), { status: 502 });
-  }
-  return { contentType, buffer: Buffer.from(response.data) };
-};
-
 module.exports = {
   PICTURE_SIZES,
   REQUIRED_SIZES,
@@ -391,6 +349,5 @@ module.exports = {
   savePicture,
   removePicture,
   fetchWebsitePictureList,
-  findInatPhotos,
-  fetchPhoto
+  findInatPhotos
 };

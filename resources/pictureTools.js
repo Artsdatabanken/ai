@@ -46,7 +46,18 @@ window.PictureTools = (() => {
     image.src = url;
   });
 
-  const fetchPhoto = async (url) => (await api(`/admin/pictures/proxy?url=${encodeURIComponent(url)}`)).blob();
+  const fetchPhoto = async (url) => {
+    let response;
+    try {
+      response = await fetch(url, { mode: "cors", credentials: "omit", referrerPolicy: "no-referrer" });
+    } catch {
+      throw new Error(`The browser could not download ${url}`);
+    }
+    if (!response.ok) throw new Error(`${response.status} ${response.statusText} from ${new URL(url).hostname}`);
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/")) throw new Error(`${new URL(url).hostname} did not return an image`);
+    return blob;
+  };
 
   const renderSize = (image, crop, size) => {
     const side = crop.side;

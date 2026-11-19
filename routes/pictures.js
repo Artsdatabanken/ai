@@ -14,8 +14,7 @@ const {
   savePicture,
   removePicture,
   fetchWebsitePictureList,
-  findInatPhotos,
-  fetchPhoto
+  findInatPhotos
 } = require("../services/pictures");
 
 const resource = (file) => path.resolve(__dirname, "../resources", file);
@@ -94,17 +93,6 @@ module.exports = (app, upload) => {
       res.status(200).json(await findInatPhotos(req.query.name, String(req.query.license || ""), page, taxonId));
     } catch (error) {
       sendError(res, req, error, "Could not search iNaturalist");
-    }
-  });
-
-  app.get("/admin/pictures/proxy", adminLimiter, authenticateAdminToken, async (req, res) => {
-    try {
-      const { contentType, buffer } = await fetchPhoto(req.query.url);
-      res.setHeader("Content-Type", contentType);
-      res.setHeader("Cache-Control", "no-store");
-      res.status(200).send(buffer);
-    } catch (error) {
-      sendError(res, req, error, "Could not fetch that photo");
     }
   });
 
