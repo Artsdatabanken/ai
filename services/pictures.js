@@ -59,7 +59,8 @@ const saveIndex = () => {
   return write;
 };
 
-const pictureUrl = (id, size) => `${publicBaseUrl()}/taxon/picture/${id}/${size}.jpg`;
+const picturePath = (id, size) => `/taxon/picture/${id}/${size}x${size}.jpg`;
+const pictureUrl = (id, size) => `${publicBaseUrl()}${picturePath(id, size)}`;
 
 const getPicture = (name) => pictureIndex[normalizeName(name)] || null;
 
@@ -73,7 +74,7 @@ const getPictureNames = () => Object.keys(pictureIndex).sort();
 const describePicture = (entry) =>
   entry && {
     ...entry,
-    urls: Object.fromEntries(entry.sizes.map((size) => [size, `/taxon/picture/${entry.id}/${size}.jpg`]))
+    urls: Object.fromEntries(entry.sizes.map((size) => [size, picturePath(entry.id, size)]))
   };
 
 const jpegDimensions = (buffer) => {
@@ -112,11 +113,38 @@ const isPictureId = (id) => /^[a-z0-9-]{1,80}$/.test(id);
 
 const picturesRoot = path.resolve(picturesdir);
 
-const pictureFilePath = (id, size) => {
-  if (!isPictureId(id) || !PICTURE_SIZES.includes(size)) return null;
-  const filePath = path.resolve(picturesRoot, id, `${size}.jpg`);
-  return filePath.startsWith(picturesRoot + path.sep) ? filePath : null;
+const pictureDir = (id) => {
+  if (!isPictureId(id)) return null;
+  const dir = path.resolve(picturesRoot, id);
+  return dir.startsWith(picturesRoot + path.sep) ? dir : null;
 };
+
+const pictureFileForSize = (id, requested) => {
+  const dir = pictureDir(id);
+  if (!dir) return null;
+  let files;
+  try {
+    files = fs.readdirSync(dir);
+  } catch {
+    return null;
+  }
+  const sizes = files
+    .map((file) => /^(\d+)\.jpg$/.exec(file))
+    .filter(Boolean)
+    .map((match) => Number(match[1]))
+    .sort((a, b) => a - b);
+  if (!sizes.length) return null;
+  const size = sizes.find((candidate) => candidate >= requested) || sizes[sizes.length - 1];
+  return path.join(dir, `${size}.jpg`);
+};
+
+const MAX_FULL_SIZE = 8192;
+
+const needsWebsiteImport = (entry, mediaId) =>
+  !entry ||
+  (entry.source?.type === "artsdatabanken" &&
+    entry.source.mediaId === mediaId &&
+    Math.max(...entry.sizes) < Math.min(entry.crop?.side || 0, MAX_FULL_SIZE));
 
 const text = (value, max) => (value ? String(value).substring(0, max) : null);
 
@@ -125,7 +153,16 @@ const savePicture = async (rawName, files, meta) => {
   if (!name) throw Object.assign(new Error("A species name is required"), { status: 400 });
 
   const bySize = {};
+  let full = null;
   for (const file of files) {
+    if (file.fieldname === "full") {
+      const dimensions = jpegDimensions(file.buffer);
+      if (!dimensions || dimensions.width !== dimensions.height || dimensions.width > MAX_FULL_SIZE) {
+        throw Object.assign(new Error(`The full size file is not a square JPEG of at most ${MAX_FULL_SIZE} px`), { status: 400 });
+      }
+      full = { size: dimensions.width, buffer: file.buffer };
+      continue;
+    }
     const match = /^size-(\d+)$/.exec(file.fieldname);
     const size = match && Number(match[1]);
     if (!PICTURE_SIZES.includes(size)) {
@@ -146,8 +183,15 @@ const savePicture = async (rawName, files, meta) => {
     throw Object.assign(new Error(`Missing sizes: ${missing.join(", ")}`), { status: 400 });
   }
 
+  if (full) {
+    if (full.size <= Math.max(...Object.keys(bySize).map(Number))) {
+      throw Object.assign(new Error("The full size file must be larger than the largest standard size"), { status: 400 });
+    }
+    bySize[full.size] = full.buffer;
+  }
+
   const source = meta?.source || {};
-  if (source.type === "artsdatabanken" && meta?.onlyIfMissing && pictureIndex[name]) {
+  if (source.type === "artsdatabanken" && meta?.onlyIfMissing && !needsWebsiteImport(pictureIndex[name], source.mediaId)) {
     return { name, skipped: true, picture: describePicture(pictureIndex[name]) };
   }
 
@@ -163,6 +207,7 @@ const savePicture = async (rawName, files, meta) => {
   const entry = {
     id,
     sizes,
+    full: full ? full.size : null,
     savedAt: new Date().toISOString(),
     source: {
       type: SOURCE_TYPES.includes(source.type) ? source.type : "upload",
@@ -216,14 +261,18 @@ const fetchWebsitePictureList = async () => {
         name,
         mediaId,
         license: file.License?.Heading || null,
-        url: `https://artsdatabanken.no/Media/${mediaId}`
+        url: `https://artsdatabanken.no/Files/${mediaId.replace(/^F/, "")}`
       };
     }
   }
 
   return Object.values(pictures)
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((item) => ({ ...item, hasPicture: !!pictureIndex[item.name] }));
+    .map((item) => ({
+      ...item,
+      hasPicture: !!pictureIndex[item.name],
+      needsImport: needsWebsiteImport(pictureIndex[item.name], item.mediaId)
+    }));
 };
 
 const inatTaxonCache = new Map();
@@ -345,7 +394,7 @@ module.exports = {
   normalizeName,
   pictureUrl,
   picturesRoot,
-  pictureFilePath,
+  pictureFileForSize,
   getPicture,
   getPictureUrl,
   getPictureNames,

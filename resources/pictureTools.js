@@ -94,6 +94,25 @@ window.PictureTools = (() => {
       canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not encode the picture")), "image/jpeg", 0.9));
   };
 
+  const MAX_FULL_SIZE = 8192;
+
+  const fullSizeFor = (side) => {
+    const full = Math.min(Math.round(side), MAX_FULL_SIZE);
+    return full > Math.max(...sizesFor(side)) ? full : null;
+  };
+
+  const renderFull = (image, crop, size) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, size, size);
+    ctx.drawImage(image, crop.x, crop.y, crop.side, crop.side, 0, 0, size, size);
+    return new Promise((resolve, reject) =>
+      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("Could not encode the picture")), "image/jpeg", 0.9));
+  };
+
   const centeredSquare = (image) => {
     const side = Math.min(image.naturalWidth, image.naturalHeight);
     return {
@@ -114,6 +133,8 @@ window.PictureTools = (() => {
     for (const size of sizesFor(crop.side)) {
       form.append(`size-${size}`, await renderSize(image, crop, size), `${size}.jpg`);
     }
+    const full = fullSizeFor(crop.side);
+    if (full) form.append("full", await renderFull(image, crop, full), `${full}.jpg`);
     return apiJson("/admin/pictures/save", { method: "POST", body: form });
   };
 
@@ -124,6 +145,7 @@ window.PictureTools = (() => {
     postJson,
     loadConfig,
     sizesFor,
+    fullSizeFor,
     loadImage,
     fetchPhoto,
     centeredSquare,
