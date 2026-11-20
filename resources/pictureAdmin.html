@@ -611,8 +611,10 @@
     const sizes = sizesFor(side);
     const skipped = tools.config.sizes.filter((size) => !sizes.includes(size));
     const upscaled = sizes.filter((size) => size > side);
+    const full = tools.fullSizeFor(side);
+    const saved = full ? [...sizes, full] : sizes;
     const info = [el("div", { text: `Crop: ${side}×${side} px of ${imageWidth()}×${imageHeight()}` }),
-      el("div", { text: `Saves ${sizes.join(", ")} px` + (skipped.length ? ` (too small for ${skipped.join(", ")})` : "") })];
+      el("div", { text: `Saves ${saved.join(", ")} px` + (skipped.length ? ` (too small for ${skipped.join(", ")})` : "") })];
     if (upscaled.length) info.push(el("div", { class: "warn", text: `${upscaled.join(", ")} px will be upscaled` }));
     $("crop-info").replaceChildren(...info);
     if (!previewQueued) {

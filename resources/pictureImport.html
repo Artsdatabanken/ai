@@ -37,7 +37,7 @@
 <body>
 <main>
   <h1>Import taxon pictures</h1>
-  <p class="muted">Copies every picture on the profile picture pages of artsdatabanken.no to this server, as a centered square in all sizes. Species that already have a picture here are left alone, so this can be run again to pick up what failed.</p>
+  <p class="muted">Copies every picture on the profile picture pages of artsdatabanken.no to this server, as a centered square in all sizes. Species that already have a picture here are left alone, except earlier imports that were saved smaller than the website's picture, which are imported again. It can be run again to pick up what failed.</p>
   <button id="start" disabled>Loading the list…</button>
   <progress id="progress" value="0" max="1"></progress>
   <div id="status" class="muted"></div>
@@ -57,8 +57,10 @@
     try {
       await tools.loadConfig();
       ({ items } = await tools.apiJson("/admin/pictures/import/list"));
-      const todo = items.filter((item) => !item.hasPicture).length;
-      $("status").textContent = `${items.length} pictures on the website, ${items.length - todo} already here, ${todo} to import`;
+      const todo = items.filter((item) => item.needsImport).length;
+      const again = items.filter((item) => item.needsImport && item.hasPicture).length;
+      $("status").textContent = `${items.length} pictures on the website, ${items.length - todo} already here, ${todo} to import` +
+        (again ? ` (${again} of them are here already, but smaller)` : "");
       $("start").textContent = todo ? `Import ${todo} pictures` : "Nothing to import";
       $("start").disabled = !todo;
       $("progress").max = Math.max(todo, 1);
@@ -86,7 +88,7 @@
   };
 
   $("start").addEventListener("click", async () => {
-    const queue = items.filter((item) => !item.hasPicture);
+    const queue = items.filter((item) => item.needsImport);
     const counts = { imported: 0, skipped: 0, failed: 0 };
     const started = Date.now();
     $("start").disabled = true;

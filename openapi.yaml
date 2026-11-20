@@ -128,10 +128,10 @@ paths:
                   type: string
         '500':
           description: Internal Server Error
-  /taxon/picture/{id}/{size}.jpg:
+  /taxon/picture/{id}/{file}:
     get:
       summary: Get a taxon picture
-      description: A square JPEG of a stored taxon picture. 64, 128 and 256 always exist; 512 and 1024 when the source was large enough.
+      description: A square JPEG of a stored taxon picture, asked for as NxN.jpg (for example 128x128.jpg). Any size from 1 to 9999 can be asked for; the server sends the smallest stored size that is at least that big, or the largest stored size if none is. 64, 128 and 256 are always stored, 512 and 1024 when the crop was large enough, and the crop at its own full resolution (up to 8192 px) when that is larger than 1024.
       tags:
         - Taxon
       parameters:
@@ -141,11 +141,12 @@ paths:
           schema:
             type: string
         - in: path
-          name: size
+          name: file
           required: true
           schema:
-            type: integer
-            enum: [64, 128, 256, 512, 1024]
+            type: string
+            pattern: '^([1-9][0-9]{0,3})x\1\.jpg$'
+            example: 128x128.jpg
       responses:
         '200':
           description: The picture

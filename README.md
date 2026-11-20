@@ -84,7 +84,7 @@ node server.js
 | GET | `/taxon/image/{name}` | Get profile image URL for taxon |
 | GET | `/taxon/images` | Get all taxon profile images |
 | GET | `/taxon/images/view` | HTML view of taxon profile images |
-| GET | `/taxon/picture/{id}/{size}.jpg` | Taxon picture file (64, 128, 256, 512 or 1024 px) |
+| GET | `/taxon/picture/{id}/{N}x{N}.jpg` | Taxon picture file; sends the smallest stored size of at least N px |
 | GET | `/taxon/description/{sciNameId}` | Cached name record for a scientific name id |
 | GET | `/taxon/description/random/id` | Cached name record for a random taxon |
 | GET | `/taxon/description/view` | HTML view of cached taxon descriptions |

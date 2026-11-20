@@ -9,7 +9,7 @@ const {
   INAT_LICENSES,
   normalizeName,
   picturesRoot,
-  pictureFilePath,
+  pictureFileForSize,
   getPicture,
   describePicture,
   savePicture,
@@ -37,8 +37,8 @@ const sendAdminPage = (file) => (req, res) => {
 
 module.exports = (app, upload) => {
   app.get("/taxon/picture/:id/:file", pictureLimiter, (req, res) => {
-    const match = /^(\d+)\.jpg$/.exec(req.params.file);
-    const filePath = match && pictureFilePath(req.params.id, Number(match[1]));
+    const match = /^([1-9]\d{0,3})x\1\.jpg$/.exec(req.params.file);
+    const filePath = match && pictureFileForSize(req.params.id, Number(match[1]));
     const resolved = filePath && path.resolve(picturesRoot, filePath);
 
     if (!resolved || !resolved.startsWith(picturesRoot + path.sep) || !fs.existsSync(resolved)) {
